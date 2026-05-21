@@ -4,6 +4,8 @@ A premium, high-performance, **real-time monitoring dashboard** designed for HOR
 
 Built with a gorgeous, high-tech glassmorphic dark-mode interface, it features automatic rolling bandwidth history, persistent byte-delta tracking, MAC address table searches, on-demand optical transceiver telemetry (DDMI), and a built-in interactive API explorer.
 
+![Dashboard](https://raw.githubusercontent.com/byte4geek/switch-dashboard/refs/heads/main/images/dashboard.png)
+
 ---
 
 ## 🌟 Premium Features
@@ -23,6 +25,8 @@ Built with a gorgeous, high-tech glassmorphic dark-mode interface, it features a
 * **Dynamic Refresh Loop**: Dedicated refresh button inside the modal to re-scrape physical hardware registers on-demand.
 * **Bs4 Malformed Parsing Fix**: Custom pre-parsing sanitization engine handles malformed switch micro-controller HTML tables (like unclosed `<th>` tags closed by `</td>`), ensuring perfect parsing.
 
+![SFP_DETAILS](https://raw.githubusercontent.com/byte4geek/switch-dashboard/refs/heads/main/images/sfp_details.png)
+
 ### 3. Interactive Bandwidth History Charts
 * **Multi-Scale Sparklines**: Click any standard port speed to launch real-time bandwidth charts powered by **Chart.js**.
 * **Three-Tier Historical Ranges**:
@@ -34,6 +38,8 @@ Built with a gorgeous, high-tech glassmorphic dark-mode interface, it features a
 * **Flexible Search & Filtering**: Multi-column text filtering makes searching by VLAN, Port, MAC, or status trivial.
 * **Interactive Height Controls**: Dynamically drag to resize table heights (saves user preference to `settings.json` on disk).
 * **Manual Re-indexing**: On-demand POST request scraper forces active switches to dump fresh bridge routing entries.
+
+![MAC_TABLE](https://raw.githubusercontent.com/byte4geek/switch-dashboard/refs/heads/main/images/mac_table.png)
 
 ### 5. Configurator & Persistent Store
 * **Multi-Switch Panel**: Dynamically add, modify, or delete switches through a beautifully organized `/config` route.
