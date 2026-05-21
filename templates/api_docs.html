@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }} - API Reference</title>
+  <link rel="icon" href="/static/logo.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: 'Outfit', sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    /* Header styling */
+    .header {
+      background: rgba(22, 27, 34, 0.8);
+      border-bottom: 1px solid #30363d;
+      padding: 16px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .header-logo {
+      height: 36px;
+      width: 36px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid #30363d;
+      box-shadow: 0 0 10px rgba(88, 166, 255, 0.15);
+    }
+    .header-brand h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #f0f6fc;
+      letter-spacing: -0.5px;
+    }
+    .back-btn {
+      color: #c9d1d9;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid #30363d;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .back-btn:hover {
+      background: rgba(88, 166, 255, 0.1);
+      border-color: #58a6ff;
+      color: #58a6ff;
+      box-shadow: 0 0 12px rgba(88, 166, 255, 0.15);
+    }
+
+    /* Layout structure */
+    .layout-container {
+      display: flex;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+    
+    /* Navigation Sidebar */
+    .sidebar {
+      width: 280px;
+      position: sticky;
+      top: 80px;
+      height: calc(100vh - 100px);
+      padding: 30px 10px 30px 0;
+      overflow-y: auto;
+      border-right: 1px solid rgba(48, 54, 61, 0.4);
+    }
+    .sidebar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .sidebar::-webkit-scrollbar-thumb {
+      background: #30363d;
+      border-radius: 2px;
+    }
+    .sidebar-section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #8b949e;
+      margin-bottom: 12px;
+      font-weight: 600;
+      padding-left: 8px;
+    }
+    .sidebar-list {
+      list-style: none;
+    }
+    .sidebar-item {
+      margin-bottom: 4px;
+    }
+    .sidebar-link {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      color: #8b949e;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+    }
+    .sidebar-link:hover {
+      color: #f0f6fc;
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .sidebar-link.active {
+      color: #58a6ff;
+      background: rgba(88, 166, 255, 0.08);
+      font-weight: 600;
+    }
+    
+    /* Method Badges */
+    .badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      display: inline-block;
+      min-width: 42px;
+      text-align: center;
+      line-height: 1.2;
+    }
+    .badge-get {
+      background: rgba(56, 139, 253, 0.15);
+      color: #58a6ff;
+      border: 1px solid rgba(56, 139, 253, 0.3);
+    }
+    .badge-post {
+      background: rgba(46, 160, 67, 0.15);
+      color: #57ab5a;
+      border: 1px solid rgba(46, 160, 67, 0.3);
+    }
+
+    /* Content Area */
+    .content-area {
+      flex: 1;
+      padding: 30px 0 60px 40px;
+      max-width: 960px;
+    }
+    .doc-intro {
+      margin-bottom: 40px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #21262d;
+    }
+    .doc-intro h2 {
+      font-size: 26px;
+      font-weight: 600;
+      color: #f0f6fc;
+      margin-bottom: 10px;
+      letter-spacing: -0.5px;
+    }
+    .doc-intro p {
+      font-size: 15px;
+      color: #8b949e;
+    }
+    
+    /* API Section Cards */
+    .api-card {
+      background: rgba(22, 27, 34, 0.4);
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 32px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      scroll-margin-top: 100px;
+    }
+    .api-card:hover {
+      border-color: #444c56;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    }
+    .api-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .api-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #f0f6fc;
+      letter-spacing: -0.3px;
+    }
+    .api-route {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: #58a6ff;
+      background: rgba(88, 166, 255, 0.05);
+      padding: 3px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(88, 166, 255, 0.1);
+      display: inline-block;
+    }
+    .api-desc {
+      font-size: 14px;
+      color: #8b949e;
+      margin-bottom: 20px;
+    }
+    
+    /* Tables for Parameters */
+    .param-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #c9d1d9;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    .param-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-bottom: 20px;
+      text-align: left;
+    }
+    .param-table th, .param-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+    }
+    .param-table th {
+      color: #8b949e;
+      font-weight: 600;
+      background: rgba(0,0,0,0.15);
+    }
+    .param-name {
+      font-family: 'JetBrains Mono', monospace;
+      color: #ff7b72;
+      font-weight: 500;
+    }
+    .param-type {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #79c0ff;
+    }
+    .param-req {
+      font-size: 10px;
+      background: rgba(248, 81, 73, 0.15);
+      color: #f85149;
+      border: 1px solid rgba(248, 81, 73, 0.2);
+      padding: 1px 4px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .param-opt {
+      font-size: 10px;
+      background: rgba(255,255,255,0.05);
+      color: #8b949e;
+      padding: 1px 4px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+    
+    /* Code Blocks */
+    .code-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .code-tab-btn {
+      background: none;
+      border: none;
+      color: #8b949e;
+      font-size: 11px;
+      font-family: inherit;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .code-tab-btn:hover {
+      color: #f0f6fc;
+      background: rgba(255,255,255,0.03);
+    }
+    .code-tab-btn.active {
+      color: #58a6ff;
+      background: rgba(88, 166, 255, 0.08);
+    }
+    .code-container {
+      background: #090d13;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #e6edf3;
+      overflow-x: auto;
+      max-height: 380px;
+      margin-bottom: 24px;
+      position: relative;
+    }
+    .code-container pre {
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid #30363d;
+      color: #8b949e;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .copy-btn:hover {
+      background: rgba(255,255,255,0.1);
+      color: #f0f6fc;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-brand">
+      <img src="/static/logo.png" alt="Horaco Logo" class="header-logo">
+      <h1>{{ title }} &middot; API Docs</h1>
+    </div>
+    <a href="/" class="back-btn">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align: middle;"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+      Dashboard
+    </a>
+  </div>
+
+  <!-- Main Layout -->
+  <div class="layout-container">
+    
+    <!-- Navigation Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-section-title">REST API Endpoints</div>
+      <ul class="sidebar-list">
+        <li class="sidebar-item">
+          <a href="#switches" class="sidebar-link active" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/switches</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#transceiver" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/transceiver</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#refresh-mac" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/refresh_mac</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#speeds" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/speeds</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#history" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/history</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#notes" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/api/notes</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#get-settings" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/settings</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#post-settings" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/api/settings</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#reset" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/api/reset</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Content Area -->
+    <div class="content-area">
+      
+      <div class="doc-intro">
+        <h2>Dashboard REST API Documentation</h2>
+        <p>A reference guide to the HTTP endpoints built into the Switch Dashboard. All programmatic access runs through the local Flask server layer on port 8080.</p>
+      </div>
+
+      <!-- GET /api/switches -->
+      <div class="api-card" id="switches">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/switches</span>
+          <span class="api-title">Live Status of All Switches</span>
+        </div>
+        <p class="api-desc">Retrieves a full, live status report of all managed switches. This includes system-level parameters (Uptime, Firmware, MAC) and individual port configuration metrics.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>[
+  {
+    "name": "Switch 1",
+    "ip": "192.168.1.100",
+    "uptime": "12 days, 04:12:33",
+    "firmware": "v1.2.4 Build 2026",
+    "mac": "70:a5:6a:12:34:56",
+    "error": null,
+    "ports": [
+      {
+        "port": "1",
+        "status": "up",
+        "speed": "1000M",
+        "duplex": "Full",
+        "flow_control": "Off",
+        "tx_packets": 1284501,
+        "rx_packets": 2984551,
+        "tx_bytes": 102485920,
+        "rx_bytes": 384591024,
+        "note": "Router Uplink"
+      }
+    ]
+  }
+]</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/switches/<ip>/transceiver -->
+      <div class="api-card" id="transceiver">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/switches/&lt;ip&gt;/transceiver</span>
+          <span class="api-title">SFP Transceiver Metrics & DDMI Diagnostics</span>
+        </div>
+        <p class="api-desc">Scrapes physical optical transceiver diagnostic metrics for the switch target at the given IP. Returns standard SFP specs alongside real-time DDMI sensors.</p>
+        
+        <div class="param-title">Path Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">ip</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>The IP address of the target switch.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "bitrate": "10G",
+  "connector_type": "LC",
+  "current": "7.66 mA",
+  "current_raw": "14-244",
+  "date_code": "2018-09-10",
+  "eth_compliance_codes": "10G Base-SR",
+  "loss_of_signal": "Yes",
+  "oe_present": "Yes",
+  "rx_power": "-27.70 dBm",
+  "rxpower_raw": "0-17",
+  "temp_raw": "58-151",
+  "temperature": "58.65 °C",
+  "transceiver_type": "SFP/SFP+",
+  "transmission_media": "Unknown",
+  "tx_power": "-2.66 dBm",
+  "txpower_raw": "21-47",
+  "vendor_name": "AVAGO",
+  "vendor_oui": "00-17-6a",
+  "vendor_pn": "AFBR-709SMZ-EX1",
+  "vendor_revision": "G4.1",
+  "vendor_sn": "1837G-53920",
+  "voltage": "3.33 V",
+  "voltage_raw": "130-10",
+  "wavelength": "850nm"
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- POST /api/switches/<ip>/refresh_mac -->
+      <div class="api-card" id="refresh-mac">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/switches/&lt;ip&gt;/refresh_mac</span>
+          <span class="api-title">Force Scrape MAC Forwarding Table</span>
+        </div>
+        <p class="api-desc">Triggers an on-demand scraper thread to log into the target switch, paginate the physical MAC Forwarding table, and return a clean array of resolved bridge entries.</p>
+        
+        <div class="param-title">Path Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">ip</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>The IP address of the target switch.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>[
+  {
+    "mac": "bc:24:11:22:33:44",
+    "port": "1",
+    "type": "Dynamic",
+    "vlan": "1"
+  },
+  {
+    "mac": "70:a5:6a:ff:ee:dd",
+    "port": "9",
+    "type": "Dynamic",
+    "vlan": "10"
+  }
+]</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/speeds -->
+      <div class="api-card" id="speeds">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/speeds</span>
+          <span class="api-title">Real-Time Port Traffic Speeds</span>
+        </div>
+        <p class="api-desc">Retrieves instantaneous delta speed rates (traffic rate in bytes per second and packets per second) for all switches and ports since the previous scrape interval.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "192.168.1.100": {
+    "1": {
+      "tx_bps": 12450.5,
+      "rx_bps": 482090.2,
+      "tx_pps": 12.4,
+      "rx_pps": 450.8
+    },
+    "9": {
+      "tx_bps": 8590124.0,
+      "rx_bps": 49021945.1,
+      "tx_pps": 9012.0,
+      "rx_pps": 45120.4
+    }
+  }
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/history -->
+      <div class="api-card" id="history">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/history</span>
+          <span class="api-title">Bandwidth Graph History Data</span>
+        </div>
+        <p class="api-desc">Retrieves historical data arrays for populating bandwidth charts. Ideal for mapping out transmission graphs over time.</p>
+        
+        <div class="param-title">Query Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">ip</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>Target switch IP.</td>
+            </tr>
+            <tr>
+              <td class="param-name">port</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>Target switch port number.</td>
+            </tr>
+            <tr>
+              <td class="param-name">range</td>
+              <td class="param-type">string</td>
+              <td><span class="param-opt">Optional</span></td>
+              <td>History scale. Options: <code>live</code> (default, bits/s), <code>1h</code> (Bytes/s), or <code>24h</code> (Bytes/s).</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "timestamps": [1716280000, 1716280010, 1716280020],
+  "tx": [125000, 142000, 138000],
+  "rx": [4500000, 4820000, 4710000]
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- POST /api/notes -->
+      <div class="api-card" id="notes">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/notes</span>
+          <span class="api-title">Save Custom Port Note/Label</span>
+        </div>
+        <p class="api-desc">Appends a persistent description or note to a specific switch interface. Comments are stored on the server's local disk inside <code>notes.json</code>.</p>
+        
+        <div class="param-title">Request Payload (JSON)</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">key</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>Identifier in <code>ip_address:port_num</code> format (e.g. <code>"192.168.1.100:9"</code>).</td>
+            </tr>
+            <tr>
+              <td class="param-name">val</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>Text content of the note. Pass an empty string <code>""</code> to delete notes.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Request Payload</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "key": "192.168.1.100:9",
+  "val": "Backbone Server Rack Uplink"
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/settings -->
+      <div class="api-card" id="get-settings">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/settings</span>
+          <span class="api-title">Retrieve Global System Settings</span>
+        </div>
+        <p class="api-desc">Retrieves global dashboard settings currently stored in the backend.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "refresh": 10
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- POST /api/settings -->
+      <div class="api-card" id="post-settings">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/settings</span>
+          <span class="api-title">Update Global System Settings</span>
+        </div>
+        <p class="api-desc">Updates global settings in the dashboard environment, immediately adjusting background cycles.</p>
+        
+        <div class="param-title">Request Payload (JSON)</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">refresh</td>
+              <td class="param-type">integer</td>
+              <td><span class="param-req">Required</span></td>
+              <td>Polling interval in seconds. Minimum value is <code>5</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Request Payload</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "refresh": 15
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- POST /api/reset -->
+      <div class="api-card" id="reset">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/reset</span>
+          <span class="api-title">Reset Counters & Charts</span>
+        </div>
+        <p class="api-desc">Purges temporary memory caching logs and charts, forcing a re-alignment of base traffic stats.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "status": "ok"
+}</code></pre>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    function setActiveLink(element) {
+      document.querySelectorAll('.sidebar-link').forEach(link => {
+        link.classList.remove('active');
+      });
+      element.classList.add('active');
+    }
+
+    function copyCode(btn) {
+      const codeBlock = btn.nextElementSibling.querySelector('code');
+      const text = codeBlock.textContent;
+      
+      navigator.clipboard.writeText(text).then(() => {
+        const originalText = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.style.color = '#58a6ff';
+        btn.style.borderColor = '#58a6ff';
+        
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.color = '';
+          btn.style.borderColor = '';
+        }, 2000);
+      });
+    }
+
+    // Scroll spy for sidebar links
+    window.addEventListener('DOMContentLoaded', () => {
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          const id = entry.target.getAttribute('id');
+          if (entry.isIntersecting) {
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+              link.classList.remove('active');
+              if (link.getAttribute('href') === `#${id}`) {
+                link.classList.add('active');
+              }
+            });
+          }
+        });
+      }, {
+        rootMargin: '-20% 0px -60% 0px'
+      });
+
+      document.querySelectorAll('.api-card').forEach(card => {
+        observer.observe(card);
+      });
+    });
+  </script>
+</body>
+</html>

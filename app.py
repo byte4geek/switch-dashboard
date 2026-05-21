@@ -1,0 +1,546 @@
+import json
+import time
+import threading
+import os
+import logging
+from collections import deque
+from flask import Flask, render_template, jsonify, request, redirect, url_for, Response
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+
+BASE = os.path.dirname(__file__)
+CONFIG_PATH = os.path.join(BASE, "config.json")
+COUNTERS_PATH = os.path.join(BASE, "counters.json")
+NOTES_PATH = os.path.join(BASE, "notes.json")
+SETTINGS_PATH = os.path.join(BASE, "settings.json")
+HOURLY_PATH = os.path.join(BASE, "history_hourly.json")
+DAILY_PATH = os.path.join(BASE, "history_daily.json")
+
+config = {}
+switch_configs = []
+cached_data = {}
+cached_speeds = {}
+cache_lock = threading.Lock()
+counters_lock = threading.Lock()
+history_lock = threading.Lock()
+_cache_thread = None
+_stop_thread = False
+
+# Three-tier rolling history system
+history_live = {}   # {(ip, port): deque of {ts, tx, rx}, maxlen=120}
+history_hourly = {} # {(ip, port): list of {ts, tx, rx}, maxlen=3600/refresh_interval}
+history_daily = {}  # {(ip, port): list of {ts, tx, rx}, maxlen=96}
+
+
+def load_config():
+    global config, switch_configs
+    with open(CONFIG_PATH) as f:
+        config = json.load(f)
+    switch_configs = config.get("switches", [])
+
+
+def load_notes():
+    if os.path.exists(NOTES_PATH):
+        with open(NOTES_PATH) as f:
+            return json.load(f)
+    return {}
+
+
+def save_notes(n):
+    with open(NOTES_PATH, "w") as f:
+        json.dump(n, f, indent=2)
+
+
+def load_counters():
+    if os.path.exists(COUNTERS_PATH):
+        with open(COUNTERS_PATH) as f:
+            return json.load(f)
+    return {}
+
+
+def save_counters(c):
+    with open(COUNTERS_PATH, "w") as f:
+        json.dump(c, f, indent=2)
+
+
+def load_history():
+    global history_hourly, history_daily
+    with history_lock:
+        history_hourly = {}
+        history_daily = {}
+        
+        if os.path.exists(HOURLY_PATH):
+            try:
+                with open(HOURLY_PATH) as f:
+                    raw = json.load(f)
+                    for k, v in raw.items():
+                        parts = k.split(":")
+                        if len(parts) == 2:
+                            history_hourly[(parts[0], parts[1])] = v
+                logger.info("Loaded hourly history successfully.")
+            except Exception as e:
+                logger.error(f"Error loading hourly history: {e}")
+                
+        if os.path.exists(DAILY_PATH):
+            try:
+                with open(DAILY_PATH) as f:
+                    raw = json.load(f)
+                    for k, v in raw.items():
+                        parts = k.split(":")
+                        if len(parts) == 2:
+                            history_daily[(parts[0], parts[1])] = v
+                logger.info("Loaded daily history successfully.")
+            except Exception as e:
+                logger.error(f"Error loading daily history: {e}")
+
+
+def save_history():
+    with history_lock:
+        try:
+            raw_hourly = {f"{k[0]}:{k[1]}": list(v) for k, v in history_hourly.items()}
+            with open(HOURLY_PATH, "w") as f:
+                json.dump(raw_hourly, f, indent=2)
+                
+            raw_daily = {f"{k[0]}:{k[1]}": list(v) for k, v in history_daily.items()}
+            with open(DAILY_PATH, "w") as f:
+                json.dump(raw_daily, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving history: {e}")
+
+
+def get_avg_speed(ip, port, duration):
+    key = (ip, port)
+    hl = list(history_live.get(key, []))
+    if len(hl) < 2:
+        return 0, 0
+    
+    target_ts = time.time() - duration
+    best_idx = 0
+    min_diff = abs(hl[0]["ts"] - target_ts)
+    for idx, s in enumerate(hl):
+        diff = abs(s["ts"] - target_ts)
+        if diff < min_diff:
+            min_diff = diff
+            best_idx = idx
+            
+    s_start = hl[best_idx]
+    s_end = hl[-1]
+    dt = s_end["ts"] - s_start["ts"]
+    if dt <= 0:
+        return 0, 0
+        
+    tx_diff = s_end["tx"] - s_start["tx"]
+    rx_diff = s_end["rx"] - s_start["rx"]
+    
+    if tx_diff < 0: tx_diff = s_end["tx"]
+    if rx_diff < 0: rx_diff = s_end["rx"]
+    
+    tx_speed = tx_diff * 8 / dt
+    rx_speed = rx_diff * 8 / dt
+    return int(tx_speed), int(rx_speed)
+
+
+def update_cache():
+    global cached_data, cached_speeds, _stop_thread, history_live, history_hourly, history_daily
+    from scraper import scrape_switch
+
+    mac_tables = {}
+    last_mac_scrape_times = {}
+
+    while True:
+        if _stop_thread:
+            break
+
+        counters = load_counters()
+        now = time.time()
+        results = {}
+        speeds = {}
+        should_save = False
+
+        mac_refresh_multiplier = config.get("mac_refresh_multiplier", 5)
+
+        for sw in switch_configs:
+            ip = sw["ip"]
+            
+            # Scrape MAC table if due
+            last_scrape = last_mac_scrape_times.get(ip, 0)
+            r_interval = config.get("refresh_interval", 30)
+            if now - last_scrape >= (r_interval * mac_refresh_multiplier) or ip not in mac_tables:
+                logger.info(f"Scheduled scraping of MAC table for {ip}...")
+                try:
+                    from scraper import HCSwitchScraper
+                    scraper_obj = HCSwitchScraper(sw)
+                    mac_table = scraper_obj.scrape_mac_table()
+                    mac_tables[ip] = mac_table
+                    last_mac_scrape_times[ip] = now
+                except Exception as e:
+                    logger.error(f"Error scraping MAC table inside thread for {ip}: {e}")
+                    if ip not in mac_tables:
+                        mac_tables[ip] = []
+
+            try:
+                data = scrape_switch(sw)
+            except Exception as e:
+                data = {"name": sw["name"], "ip": ip, "ports": [], "error": str(e)}
+
+            data["mac_table"] = mac_tables.get(ip, [])
+            data["mac_timestamp"] = last_mac_scrape_times.get(ip, 0)
+
+            # Accumulate cumulative counters
+            for p in data.get("ports", []):
+                port = p["port"]
+                key = f"{ip}:{port}"
+                last = counters.get(key, {"tx": 0, "rx": 0, "cum_tx": 0, "cum_rx": 0})
+                cur_tx = p.get("tx_bytes", 0)
+                cur_rx = p.get("rx_bytes", 0)
+
+                if cur_tx >= last["tx"]:
+                    delta_tx = cur_tx - last["tx"]
+                else:
+                    delta_tx = cur_tx
+                if cur_rx >= last["rx"]:
+                    delta_rx = cur_rx - last["rx"]
+                else:
+                    delta_rx = cur_rx
+
+                cum_tx = last["cum_tx"] + delta_tx
+                cum_rx = last["cum_rx"] + delta_rx
+
+                counters[key] = {"tx": cur_tx, "rx": cur_rx,
+                                 "cum_tx": cum_tx, "cum_rx": cum_rx}
+                p["cum_tx"] = cum_tx
+                p["cum_rx"] = cum_rx
+
+                # Speed history (live)
+                hist_key = (ip, port)
+                if hist_key not in history_live:
+                    history_live[hist_key] = deque(maxlen=120)
+                history_live[hist_key].append({
+                    "ts": now, "tx": cum_tx, "rx": cum_rx
+                })
+
+                # Calculate speed from last 2 samples
+                h = history_live[hist_key]
+                if len(h) >= 2:
+                    p1 = h[-2]
+                    p2 = h[-1]
+                    dt = p2["ts"] - p1["ts"]
+                    if dt > 0:
+                        speed_tx = (p2["tx"] - p1["tx"]) * 8 / dt
+                        speed_rx = (p2["rx"] - p1["rx"]) * 8 / dt
+                        if speed_tx < 0:
+                            speed_tx = p2["tx"] * 8 / dt
+                        if speed_rx < 0:
+                            speed_rx = p2["rx"] * 8 / dt
+                        p["speed_tx_bps"] = int(speed_tx)
+                        p["speed_rx_bps"] = int(speed_rx)
+
+                # Hourly history (high-res: recorded at each refresh cycle)
+                with history_lock:
+                    if hist_key not in history_hourly:
+                        history_hourly[hist_key] = []
+                    points_h = history_hourly[hist_key]
+                    
+                    r_interval = config.get("refresh_interval", 30)
+                    max_points = max(1, int(3600 / r_interval))
+                    
+                    speed_tx = p.get("speed_tx_bps", 0)
+                    speed_rx = p.get("speed_rx_bps", 0)
+                    
+                    points_h.append({"ts": now, "tx": speed_tx, "rx": speed_rx})
+                    while len(points_h) > max_points:
+                        points_h.pop(0)
+                    should_save = True
+
+                    # Daily history (15-minute averages)
+                    if hist_key not in history_daily:
+                        history_daily[hist_key] = []
+                    points_d = history_daily[hist_key]
+                    if len(points_d) == 0 or now - points_d[-1]["ts"] >= 900:
+                        avg_tx, avg_rx = get_avg_speed(ip, port, 900)
+                        points_d.append({"ts": now, "tx": avg_tx, "rx": avg_rx})
+                        if len(points_d) > 96:
+                            points_d.pop(0)
+                        should_save = True
+
+            results[ip] = data
+
+            # Per-switch speed overview (TX max per port)
+            sw_speeds = {}
+            for p in data.get("ports", []):
+                sw_speeds[p["port"]] = {
+                    "speed_tx": p.get("speed_tx_bps", 0),
+                    "speed_rx": p.get("speed_rx_bps", 0),
+                }
+            speeds[ip] = sw_speeds
+
+        save_counters(counters)
+        if should_save:
+            save_history()
+
+        with cache_lock:
+            cached_data = results
+            cached_speeds = speeds
+
+        time.sleep(config.get("refresh_interval", 30))
+
+
+def start_cache_thread():
+    global _cache_thread, _stop_thread
+    _stop_thread = False
+    _cache_thread = threading.Thread(target=update_cache, daemon=True)
+    _cache_thread.start()
+
+
+load_config()
+load_history()
+start_cache_thread()
+
+
+def _format_bps(bps):
+    if bps >= 1_000_000_000:
+        return f"{bps/1_000_000_000:.1f} Gbps"
+    if bps >= 1_000_000:
+        return f"{bps/1_000_000:.1f} Mbps"
+    if bps >= 1_000:
+        return f"{bps/1_000:.1f} Kbps"
+    return f"{bps} bps"
+
+
+@app.route("/")
+def dashboard():
+    return render_template("index.html",
+                           title=config.get("title", "Switch Dashboard"),
+                           refresh=config.get("refresh_interval", 30))
+
+
+@app.route("/api/switches")
+def api_switches():
+    notes = load_notes()
+    with cache_lock:
+        data = list(cached_data.values())
+    for sw in data:
+        for p in sw.get("ports", []):
+            p["note"] = notes.get(f"{sw['ip']}:{p['port']}", "")
+    return jsonify(data)
+
+
+@app.route("/api/switches/<ip>/refresh_mac", methods=["POST"])
+def refresh_mac(ip):
+    sw = None
+    for s in switch_configs:
+        if s["ip"] == ip:
+            sw = s
+            break
+    if not sw:
+        return jsonify({"error": "Switch not found"}), 404
+        
+    try:
+        from scraper import HCSwitchScraper
+        scraper_obj = HCSwitchScraper(sw)
+        mac_table = scraper_obj.scrape_mac_table()
+        
+        with cache_lock:
+            if ip in cached_data:
+                cached_data[ip]["mac_table"] = mac_table
+                cached_data[ip]["mac_timestamp"] = time.time()
+                
+        return jsonify({"status": "ok", "count": len(mac_table), "mac_table": mac_table})
+    except Exception as e:
+        logger.error(f"Manual MAC scrape failed for {ip}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/switches/<ip>/transceiver")
+def get_transceiver(ip):
+    sw = None
+    for s in switch_configs:
+        if s["ip"] == ip:
+            sw = s
+            break
+    if not sw:
+        return jsonify({"error": "Switch not found"}), 404
+        
+    try:
+        from scraper import HCSwitchScraper
+        scraper_obj = HCSwitchScraper(sw)
+        transceiver_info = scraper_obj.scrape_transceiver()
+        if not transceiver_info:
+            return jsonify({"error": "No transceiver data available or SFP module not inserted"}), 404
+        return jsonify(transceiver_info)
+    except Exception as e:
+        logger.error(f"Transceiver scrape failed for {ip}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/speeds")
+def api_speeds():
+    with cache_lock:
+        return jsonify(cached_speeds)
+
+
+@app.route("/api/history")
+def api_history():
+    ip = request.args.get("ip")
+    port = request.args.get("port")
+    range_type = request.args.get("range", "live")  # live, 1h, 24h
+    
+    if not ip or not port:
+        return jsonify({"error": "Missing ip or port"}), 400
+        
+    key = (ip, port)
+    tx = []
+    rx = []
+    timestamps = []
+    
+    with history_lock:
+        if range_type == "live":
+            hl = list(history_live.get(key, []))
+            for i in range(1, len(hl)):
+                dt = hl[i]["ts"] - hl[i-1]["ts"]
+                if dt > 0:
+                    tx_diff = hl[i]["tx"] - hl[i-1]["tx"]
+                    rx_diff = hl[i]["rx"] - hl[i-1]["rx"]
+                    if tx_diff < 0: tx_diff = hl[i]["tx"]
+                    if rx_diff < 0: rx_diff = hl[i]["rx"]
+                    tx.append(int(tx_diff * 8 / dt))
+                    rx.append(int(rx_diff * 8 / dt))
+                    timestamps.append(hl[i]["ts"])
+        elif range_type == "1h":
+            points = history_hourly.get(key, [])
+            for p in points:
+                tx.append(p["tx"])
+                rx.append(p["rx"])
+                timestamps.append(p["ts"])
+        elif range_type == "24h":
+            points = history_daily.get(key, [])
+            for p in points:
+                tx.append(p["tx"])
+                rx.append(p["rx"])
+                timestamps.append(p["ts"])
+                
+    return jsonify({
+        "tx": tx,
+        "rx": rx,
+        "timestamps": timestamps
+    })
+
+
+@app.route("/api/reset", methods=["POST"])
+def api_reset():
+    with counters_lock:
+        if os.path.exists(COUNTERS_PATH):
+            os.remove(COUNTERS_PATH)
+    with history_lock:
+        if os.path.exists(HOURLY_PATH):
+            os.remove(HOURLY_PATH)
+        if os.path.exists(DAILY_PATH):
+            os.remove(DAILY_PATH)
+        global history_live, history_hourly, history_daily
+        history_live = {}
+        history_hourly = {}
+        history_daily = {}
+    return jsonify({"status": "ok"})
+
+
+NOTES_LOCK = threading.Lock()
+
+
+@app.route("/api/notes", methods=["POST"])
+def api_notes():
+    data = request.get_json(force=True, silent=True) or {}
+    key = data.get("key")
+    note = data.get("note", "")
+    if not key:
+        return jsonify({"error": "missing key"}), 400
+    with NOTES_LOCK:
+        notes = load_notes()
+        if note.strip():
+            notes[key] = note.strip()
+        else:
+            notes.pop(key, None)
+        save_notes(notes)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/config", methods=["GET", "POST"])
+def config_page():
+    if request.method == "POST":
+        new_switches = []
+        names = request.form.getlist("name[]")
+        ips = request.form.getlist("ip[]")
+        usernames = request.form.getlist("username[]")
+        passwords = request.form.getlist("password[]")
+        models = request.form.getlist("model[]")
+        port_counts = request.form.getlist("port_count[]")
+        keep = request.form.getlist("keep[]")
+
+        for i in range(len(ips)):
+            if i >= len(keep) or keep[i] != "1":
+                continue
+            new_switches.append({
+                "name": names[i] if i < len(names) else f"Switch {i+1}",
+                "ip": ips[i].strip(),
+                "username": usernames[i].strip() if i < len(usernames) else "admin",
+                "password": passwords[i].strip() if i < len(passwords) else "admin",
+                "model": models[i].strip() if i < len(models) else "",
+                "port_count": int(port_counts[i]) if i < len(port_counts) else 9,
+            })
+
+        new_title = request.form.get("title", config.get("title", ""))
+        new_refresh = int(request.form.get("refresh_interval", 30))
+        new_mac_multiplier = int(request.form.get("mac_refresh_multiplier", 5))
+
+        new_config = {
+            "title": new_title,
+            "refresh_interval": new_refresh,
+            "mac_refresh_multiplier": new_mac_multiplier,
+            "switches": new_switches,
+        }
+
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(new_config, f, indent=2)
+
+        global _stop_thread
+        _stop_thread = True
+        time.sleep(0.5)
+        load_config()
+        start_cache_thread()
+
+        return redirect(url_for("dashboard"))
+
+    return render_template("config.html", title=config.get("title", "Switch Dashboard"),
+                           switches=switch_configs,
+                           refresh=config.get("refresh_interval", 30),
+                           mac_multiplier=config.get("mac_refresh_multiplier", 5))
+
+
+@app.route("/api/settings", methods=["GET", "POST"])
+def api_settings():
+    if request.method == "POST":
+        data = request.get_json(force=True, silent=True) or {}
+        with open(SETTINGS_PATH, "w") as f:
+            json.dump(data, f, indent=2)
+        return jsonify({"status": "ok"})
+    if os.path.exists(SETTINGS_PATH):
+        with open(SETTINGS_PATH) as f:
+            return jsonify(json.load(f))
+    return jsonify({"font_size": "md"})
+
+
+@app.route("/api-docs")
+def api_docs_page():
+    return render_template("api_docs.html", title=config.get("title", "Switch Dashboard"))
+
+
+@app.route("/static/<path:path>")
+def static_files(path):
+    from flask import send_from_directory
+    return send_from_directory("static", path)
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080, debug=False)

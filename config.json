@@ -1,0 +1,22 @@
+{
+  "title": "Network Switch Dashboard",
+  "refresh_interval": 10,
+  "switches": [
+    {
+      "name": "Switch 1",
+      "ip": "192.168.1.100",
+      "username": "admin",
+      "password": "admin",
+      "model": "HC-SWTGW218AS",
+      "port_count": 9
+    },
+    {
+      "name": "Switch 2",
+      "ip": "192.168.1.101",
+      "username": "admin",
+      "password": "admin",
+      "model": "HC-SWTGW218AS",
+      "port_count": 9
+    }
+  ]
+}

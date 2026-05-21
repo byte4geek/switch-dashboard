@@ -1,0 +1,1649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<link rel="icon" href="/static/logo.png" type="image/png">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1117; color: #e1e4e8; padding: 20px;
+  }
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 24px; background: #161b22; border-radius: 12px;
+    border: 1px solid #30363d; margin-bottom: 24px;
+  }
+  .header h1 { font-size: 22px; font-weight: 600; }
+  .header .nav-links { display: flex; gap: 12px; align-items: center; }
+  .font-sizes { display: flex; gap: 2px; border: 1px solid #30363d; border-radius: 6px; overflow: hidden; }
+  .fs-btn {
+    background: none; border: none; color: #8b949e; cursor: pointer;
+    padding: 4px 8px; font-size: 11px; font-weight: 600; transition: all .15s;
+  }
+  .fs-btn:hover { color: #e1e4e8; background: #1c2128; }
+  .fs-btn.fs-active { color: #58a6ff; background: #1c2128; }
+  .header .nav-links a, .header .nav-links button {
+    color: #b1bac4; text-decoration: none; font-size: 13px; padding: 6px 12px;
+    border-radius: 6px; transition: all .2s; background: none; border: none; cursor: pointer;
+  }
+  .header .nav-links a:hover, .header .nav-links button:hover { color: #e1e4e8; background: #1c2128; }
+  .header .status { font-size: 13px; color: #b1bac4; }
+  .header .status .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: #3fb950; margin-right: 6px;
+  }
+  .switches { display: grid; grid-template-columns: repeat(auto-fit, minmax(600px, 1fr)); gap: 20px; }
+  .switch-card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 12px; overflow: visible;
+  }
+  .switch-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 20px; background: #1c2128; border-bottom: 1px solid #30363d;
+    flex-wrap: wrap; gap: 12px;
+  }
+  .switch-header h2 { font-size: 16px; font-weight: 600; }
+  .switch-header .meta { font-size: 11px; color: #8b949e; text-align: right; }
+  .port-table { width: 100%; border-collapse: collapse; }
+  .port-table th {
+    font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px;
+    padding: 8px 6px; text-align: left; border-bottom: 1px solid #30363d;
+    font-weight: 600;
+  }
+  .port-table td {
+    padding: 8px 6px; font-size: 12px; border-bottom: 1px solid #21262d;
+    white-space: nowrap;
+  }
+  .port-table tr:hover { background: #1c2128; }
+  .port-table tr:last-child td { border-bottom: none; }
+  .port-num { font-weight: 600; }
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all .15s;
+  }
+  .status-badge:hover { filter: brightness(1.3); }
+  .status-badge.up { background: rgba(63,185,80,0.15); color: #3fb950; }
+  .status-badge.down { background: rgba(248,81,73,0.15); color: #f85149; }
+  .status-badge.unknown { background: rgba(210,153,34,0.15); color: #d29922; }
+  .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; }
+  .status-dot.up { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
+  .status-dot.down { background: #f85149; }
+  .speed-2500m { color: #d2a8ff; font-weight: 600; }
+  .speed-1000m { color: #58a6ff; }
+  .speed-2000m { color: #79c0ff; }
+  .speed-100m  { color: #b1bac4; }
+  .speed-10m   { color: #8b949e; }
+  .mono { font-size: 11px; color: #b1bac4; font-family: 'SF Mono', Monaco, monospace; }
+  .col-info { color: #8b949e; }
+  .unit-toggle {
+    display: inline-block; cursor: pointer; font-weight: 700;
+    color: #58a6ff; border: 1px solid #30363d; border-radius: 4px;
+    padding: 0 5px; font-size: 10px; line-height: 18px;
+  }
+  .unit-toggle:hover { background: #1c2128; }
+  .note-input {
+    background: transparent; border: none; color: #b1bac4; font-size: inherit;
+    font-family: inherit; width: 100%; min-width: 80px; outline: none;
+    padding: 0; transition: color .2s;
+  }
+  .note-input:focus { color: #e1e4e8; }
+  .note-input:not(:placeholder-shown) { color: #e1e4e8; }
+  .col-note { min-width: 100px; }
+  .device-bar {
+    display: flex; gap: 16px; padding: 8px 20px;
+    background: #0d1117; font-size: 11px; color: #8b949e;
+    border-bottom: 1px solid #30363d; flex-wrap: wrap;
+  }
+  .device-bar span { display: flex; align-items: center; gap: 4px; }
+  .device-bar .label { color: #b1bac4; }
+  .device-bar .value { color: #e1e4e8; }
+  .error-card {
+    background: #1c2128; border: 1px solid #f85149; border-radius: 8px;
+    padding: 20px; margin: 16px 20px; text-align: center; color: #f85149;
+  }
+  .loading {
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; font-size: 18px; color: #b1bac4;
+  }
+  .loading::after {
+    content: ''; width: 20px; height: 20px; border: 2px solid #30363d;
+    border-top-color: #58a6ff; border-radius: 50%; animation: spin .8s linear infinite;
+    margin-left: 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #8b949e; }
+  .last-update { font-size: 11px; color: #8b949e; padding: 6px 20px; text-align: right; }
+
+  /* Speed graph overlay */
+  .graph-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.85); z-index: 1000;
+    justify-content: center; align-items: center;
+  }
+  .graph-overlay.open { display: flex; }
+  .graph-box {
+    background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+    padding: 24px; max-width: 90vw; width: 900px; position: relative;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .graph-box h3 { font-size: 18px; margin-bottom: 4px; color: #e1e4e8; }
+  .graph-box .sub { font-size: 12px; color: #b1bac4; margin-bottom: 16px; }
+  .graph-box .control-group {
+    float: right; display: flex; align-items: center; gap: 12px; margin-top: -2px;
+  }
+  .graph-box .close-btn {
+    background: none; border: none; color: #b1bac4;
+    font-size: 24px; cursor: pointer; padding: 0 4px; transition: color 0.15s;
+    line-height: 1; display: flex; align-items: center; justify-content: center;
+  }
+  .graph-box .close-btn:hover { color: #f85149; }
+  .graph-box .maximize-btn {
+    background: none; border: none; color: #b1bac4;
+    font-size: 16px; cursor: pointer; padding: 4px; transition: color 0.15s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .graph-box .maximize-btn:hover { color: #58a6ff; }
+  .graph-box.maximized {
+    width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh;
+    border-radius: 0; border: none; padding: 32px;
+    display: flex; flex-direction: column;
+  }
+  .graph-box.maximized .graph-tabs { margin-bottom: 24px; }
+  .graph-box.maximized .graph-svg-container {
+    flex: 1; min-height: 0; margin: 20px 0;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .graph-box.maximized #graph-svg { height: 100% !important; min-height: 0; }
+  .graph-box.maximized .graph-stats { margin-top: 24px; }
+  .graph-stats { display: flex; gap: 20px; margin-top: 16px; font-size: 12px; flex-wrap: wrap; }
+  .graph-stats div { color: #b1bac4; background: #0d1117; padding: 8px 12px; border-radius: 6px; border: 1px solid #21262d; }
+  .graph-stats .val { color: #e1e4e8; font-weight: 600; font-family: 'SF Mono', Monaco, monospace; margin-left: 4px; }
+  
+  /* Tabs design */
+  .graph-tabs {
+    display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid #30363d; padding-bottom: 8px;
+  }
+  .graph-tab-btn {
+    background: none; border: 1px solid transparent; color: #b1bac4;
+    padding: 6px 12px; font-size: 13px; font-weight: 600; border-radius: 6px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .graph-tab-btn:hover { color: #e1e4e8; background: #21262d; }
+  .graph-tab-btn.active { color: #58a6ff; border-color: #30363d; background: #1f242c; }
+
+  /* Interactive Hover Tooltip inside SVG parent */
+  .tooltip-panel {
+    pointer-events: none; position: absolute; background: rgba(22, 27, 34, 0.95);
+    border: 1px solid #8b949e; border-radius: 6px; padding: 8px 12px;
+    font-size: 11px; color: #e1e4e8; display: none; z-index: 10;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  .tooltip-panel .time { font-weight: 600; margin-bottom: 4px; border-bottom: 1px solid #30363d; padding-bottom: 2px; }
+  .tooltip-panel .tx { color: #58a6ff; font-family: 'SF Mono', Monaco, monospace; }
+  .tooltip-panel .rx { color: #3fb950; font-family: 'SF Mono', Monaco, monospace; }
+
+  /* Confirm dialog */
+  .confirm-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7); z-index: 999;
+    justify-content: center; align-items: center;
+  }
+  .confirm-overlay.open { display: flex; }
+  .confirm-box {
+    background: #161b22; border: 1px solid #f85149; border-radius: 12px;
+    padding: 24px; max-width: 420px; text-align: center;
+  }
+  .confirm-box h3 { color: #f85149; font-size: 18px; margin-bottom: 8px; }
+  .confirm-box p { color: #b1bac4; font-size: 13px; margin-bottom: 20px; }
+  .confirm-box .btn-row { display: flex; gap: 12px; justify-content: center; }
+  .confirm-box .btn-row button {
+    padding: 8px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  .confirm-box .btn-danger { background: #f85149; color: #fff; }
+  .confirm-box .btn-danger:hover { background: #da3633; }
+  .confirm-box .btn-cancel { background: #21262d; color: #e1e4e8; border: 1px solid #30363d; }
+  .confirm-box .btn-cancel:hover { background: #30363d; }
+
+  [data-font-size="sm"] .port-table td { font-size: 10px; }
+  [data-font-size="sm"] .port-table th { font-size: 9px; }
+  [data-font-size="sm"] .col-info { font-size: 10px; }
+  [data-font-size="sm"] .col-note { font-size: 10px; }
+  [data-font-size="sm"] .mono { font-size: 9px; }
+  [data-font-size="sm"] .device-bar { font-size: 10px; }
+  [data-font-size="sm"] .header h1 { font-size: 18px; }
+  [data-font-size="sm"] .switch-header h2 { font-size: 14px; }
+  [data-font-size="sm"] .status-badge { font-size: 9px; }
+
+  [data-font-size="md"] .port-table td { font-size: 12px; }
+  [data-font-size="md"] .port-table th { font-size: 10px; }
+  [data-font-size="md"] .col-info { font-size: 12px; }
+  [data-font-size="md"] .col-note { font-size: 12px; }
+  [data-font-size="md"] .mono { font-size: 11px; }
+  [data-font-size="md"] .device-bar { font-size: 11px; }
+
+  [data-font-size="lg"] .port-table td { font-size: 14px; }
+  [data-font-size="lg"] .port-table th { font-size: 12px; }
+  [data-font-size="lg"] .col-info { font-size: 14px; }
+  [data-font-size="lg"] .col-note { font-size: 14px; }
+  [data-font-size="lg"] .mono { font-size: 13px; }
+  [data-font-size="lg"] .device-bar { font-size: 13px; }
+  [data-font-size="lg"] .header h1 { font-size: 24px; }
+  [data-font-size="lg"] .switch-header h2 { font-size: 18px; }
+  [data-font-size="lg"] .status-badge { font-size: 13px; }
+
+  [data-font-size="xl"] .port-table td { font-size: 16px; }
+  [data-font-size="xl"] .port-table th { font-size: 13px; }
+  [data-font-size="xl"] .col-info { font-size: 16px; }
+  [data-font-size="xl"] .col-note { font-size: 16px; }
+  [data-font-size="xl"] .mono { font-size: 14px; }
+  [data-font-size="xl"] .device-bar { font-size: 14px; }
+  [data-font-size="xl"] .header h1 { font-size: 26px; }
+  [data-font-size="xl"] .switch-header h2 { font-size: 20px; }
+  [data-font-size="xl"] .status-badge { font-size: 14px; }
+
+  @media (max-width: 600px) {
+    .switches { grid-template-columns: 1fr; }
+    .port-table th, .port-table td { padding: 4px 4px; font-size: 10px; }
+  }
+
+  /* ========================================== */
+  /* Sleek Premium Dark-Mode Scrollbars & Resizer */
+  /* ========================================== */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0d1117;
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 6px;
+    border: 2px solid #0d1117;
+    transition: background 0.2s ease;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #58a6ff;
+  }
+  ::-webkit-resizer {
+    background: #161b22;
+    border-left: 2px solid #30363d;
+    border-top: 2px solid #30363d;
+  }
+
+  /* ========================================== */
+  /* Transceiver Overlay Backdrop & Layout CSS */
+  /* ========================================== */
+  .transceiver-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(10, 12, 16, 0.85);
+    z-index: 1100;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: opacity 0.25s ease;
+  }
+  .transceiver-overlay.open {
+    display: flex;
+  }
+  .transceiver-box {
+    background: rgba(22, 27, 34, 0.95);
+    border: 1px solid #30363d;
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 90vw;
+    width: 720px;
+    position: relative;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+    display: flex;
+    flex-direction: column;
+  }
+  .transceiver-box h3 {
+    font-size: 18px;
+    margin-bottom: 4px;
+    color: #f0f6fc;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .transceiver-box .sub {
+    font-size: 12px;
+    color: #8b949e;
+    margin-bottom: 20px;
+  }
+  .transceiver-box .close-btn {
+    background: none;
+    border: none;
+    color: #8b949e;
+    font-size: 26px;
+    cursor: pointer;
+    padding: 0 4px;
+    transition: color 0.15s;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 20px;
+    right: 20px;
+  }
+  .transceiver-box .close-btn:hover {
+    color: #f85149;
+  }
+  .transceiver-box .refresh-btn {
+    background: none;
+    border: none;
+    color: #8b949e;
+    cursor: pointer;
+    padding: 4px;
+    transition: color 0.15s, transform 0.25s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 22px;
+    right: 50px;
+  }
+  .transceiver-box .refresh-btn:hover {
+    color: #58a6ff;
+  }
+  .transceiver-box .refresh-btn:active {
+    transform: rotate(180deg);
+  }
+  .transceiver-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 650px) {
+    .transceiver-grid {
+      grid-template-columns: 1fr;
+    }
+    .transceiver-box {
+      width: 95vw;
+      padding: 16px;
+    }
+  }
+  .transceiver-card {
+    background: rgba(13, 17, 23, 0.6);
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+  }
+  .transceiver-card h4 {
+    font-size: 13px;
+    color: #58a6ff;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #21262d;
+    padding-bottom: 6px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .transceiver-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px dashed rgba(48, 54, 61, 0.5);
+    font-size: 12px;
+  }
+  .transceiver-item:last-child {
+    border-bottom: none;
+  }
+  .transceiver-item .label {
+    color: #8b949e;
+  }
+  .transceiver-item .val {
+    color: #c9d1d9;
+    font-weight: 500;
+    font-family: 'SF Mono', Monaco, monospace;
+  }
+  
+  /* Telemetry meters design */
+  .telemetry-row {
+    margin-bottom: 12px;
+  }
+  .telemetry-row:last-child {
+    margin-bottom: 0;
+  }
+  .telemetry-row .header-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+  .telemetry-row .label {
+    color: #8b949e;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .telemetry-row .val {
+    color: #f0f6fc;
+    font-weight: 600;
+    font-family: 'SF Mono', Monaco, monospace;
+  }
+  .telemetry-bar-bg {
+    height: 8px;
+    background: #21262d;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid #30363d;
+  }
+  .telemetry-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s cubic-bezier(0.1, 0.8, 0.25, 1);
+  }
+  
+  /* Link Styling for Clickable Speed Cell */
+  .sfp-speed-link {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: inherit;
+    transition: color 0.15s ease;
+  }
+  .sfp-speed-link:hover {
+    color: #58a6ff;
+  }
+</style>
+</head>
+<body data-font-size="md">
+<div class="header">
+  <div style="display: flex; align-items: center; gap: 14px;">
+    <img src="/static/logo.png" alt="Horaco Logo" style="height: 38px; width: 38px; border-radius: 8px; object-fit: cover; border: 1px solid #30363d; box-shadow: 0 0 10px rgba(88, 166, 255, 0.15);">
+    <h1>{{ title }}</h1>
+  </div>
+  <div class="nav-links">
+    <span class="status"><span class="dot" id="live-dot"></span><span id="live-text">Live</span></span>
+    <span class="font-sizes" title="Font size">
+      <button class="fs-btn" data-size="sm" onclick="setFontSize('sm')">S</button>
+      <button class="fs-btn fs-active" data-size="md" onclick="setFontSize('md')">M</button>
+      <button class="fs-btn" data-size="lg" onclick="setFontSize('lg')">L</button>
+      <button class="fs-btn" data-size="xl" onclick="setFontSize('xl')">XL</button>
+    </span>
+    <a href="/config">&#9881; Config</a>
+    <button onclick="showResetConfirm()">&#128260; Reset</button>
+  </div>
+</div>
+<div class="legend-bar" style="display: flex; align-items: center; justify-content: center; gap: 16px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 8px 16px; margin-bottom: 24px; font-size: 11px; color: #8b949e; flex-wrap: wrap; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+  <span style="font-weight: 600; color: #e1e4e8;">PORT STATUS:</span>
+  <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #1f6feb; border-radius: 2px;"></span> 10G</span>
+  <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #58a6ff; border-radius: 2px;"></span> 2.5G / 2G</span>
+  <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #3fb950; border-radius: 2px;"></span> 1G (1000M)</span>
+  <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #f08a24; border-radius: 2px;"></span> 100M / 10M</span>
+  <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #57606a; border-radius: 2px;"></span> Down</span>
+  <span style="display: flex; align-items: center; gap: 6px; border-left: 1px solid #30363d; padding-left: 12px; margin-left: 4px;">
+    <svg viewBox="0 0 24 24" style="width: 12px; height: 12px; fill: #8b949e; margin-right: 2px; display: inline-block; vertical-align: middle;"><path d="M 4,8 h 5 v -3 h 6 v 3 h 5 v 11 h -16 z" /></svg> Copper (RJ45)
+  </span>
+  <span style="display: flex; align-items: center; gap: 6px;">
+    <svg viewBox="0 0 24 24" style="width: 12px; height: 12px; fill: #8b949e; margin-right: 2px; display: inline-block; vertical-align: middle;"><path d="M 4,5 h 3 v 3 h 10 v -3 h 3 v 14 h -16 z" /></svg> Fiber (SFP+)
+  </span>
+</div>
+<div id="app" class="loading">Loading dashboard</div>
+<div class="footer">
+  <div>Refreshes every {{ refresh }} seconds &middot; <a href="/config" style="color:#8b949e">Configure switches</a> &middot; <a href="/api-docs" style="color:#8b949e">API Reference</a></div>
+  <div style="margin-top: 6px; font-size: 11px; color: #8b949e;">Created by <a href="https://github.com/byte4geek/switch-dashboard" target="_blank" style="color: #58a6ff; text-decoration: none; font-weight: 500;">Byte4Geek</a> for the community</div>
+</div>
+
+<!-- Speed graph overlay -->
+<div class="graph-overlay" id="graph-overlay" onclick="if(event.target===this)closeGraph()">
+  <div class="graph-box" id="graph-box">
+    <div class="control-group">
+      <button class="maximize-btn" id="graph-maximize-btn" onclick="toggleMaximizeGraph()" title="Toggle Fullscreen">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 1 0v-2h2a.5.5 0 0 0 0-1h-2.5zM11.5 1a.5.5 0 0 0 0 1h2v2a.5.5 0 0 0 1 0v-3a.5.5 0 0 0-.5-.5h-2.5zM1 11.5a.5.5 0 0 0 .5.5h2a.5.5 0 0 0 0-1h-2v-2a.5.5 0 0 0-1 0v3zM14 11.5a.5.5 0 0 0-.5-.5h-2a.5.5 0 0 0 0 1h2v2a.5.5 0 0 0 1 0v-3z"/></svg>
+      </button>
+      <button class="close-btn" onclick="closeGraph()">&times;</button>
+    </div>
+    <h3 id="graph-title">Port Speed</h3>
+    <div class="sub" id="graph-sub">Switching parameters...</div>
+    
+    <div class="graph-tabs">
+      <button class="graph-tab-btn active" id="tab-live" onclick="setGraphRange('live')">Live (Real-time)</button>
+      <button class="graph-tab-btn" id="tab-1h" onclick="setGraphRange('1h')">1 Hour (High-res)</button>
+      <button class="graph-tab-btn" id="tab-24h" onclick="setGraphRange('24h')">24 Hours (15m avg)</button>
+    </div>
+
+    <div class="graph-svg-container" style="position:relative;width:100%">
+      <svg id="graph-svg" style="width:100%;height:35vh;min-height:200px" preserveAspectRatio="xMidYMid meet"></svg>
+      <div id="graph-tooltip" class="tooltip-panel"></div>
+    </div>
+    
+    <div class="graph-stats">
+      <div>TX Peak <span class="val" id="graph-peak-tx">0</span></div>
+      <div>RX Peak <span class="val" id="graph-peak-rx">0</span></div>
+      <div>Current TX <span class="val" id="graph-now-tx">0</span></div>
+      <div>Current RX <span class="val" id="graph-now-rx">0</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Reset confirm dialog -->
+<div class="confirm-overlay" id="confirm-overlay" onclick="if(event.target===this)hideResetConfirm()">
+  <div class="confirm-box">
+    <h3>&#9888; Reset Traffic Counters</h3>
+    <p>This will permanently reset all cumulative byte counters and histories for all switches. This action <strong>cannot be undone</strong>.</p>
+    <div class="btn-row">
+      <button class="btn-cancel" onclick="hideResetConfirm()">Cancel</button>
+      <button class="btn-danger" onclick="doReset()">Reset Now</button>
+    </div>
+  </div>
+</div>
+
+<!-- Transceiver diagnostics overlay -->
+<div class="transceiver-overlay" id="transceiver-overlay" onclick="if(event.target===this)closeTransceiver()">
+  <div class="transceiver-box" id="transceiver-box">
+    <button class="refresh-btn" onclick="refreshTransceiver()" title="Refresh telemetry">
+      <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: currentColor;"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+    </button>
+    <button class="close-btn" onclick="closeTransceiver()">&times;</button>
+    <h3 id="transceiver-title">SFP+ Transceiver Status</h3>
+    <div class="sub" id="transceiver-sub">Reading DDMI diagnostic telemetry...</div>
+    <div id="transceiver-content">
+      <!-- Loaded dynamically via JS -->
+    </div>
+  </div>
+</div>
+
+<script>
+const REFRESH_SECONDS = {{ refresh }};
+let currentGraphIp = null;
+let currentGraphPort = null;
+let currentGraphRange = 'live'; // 'live', '1h', '24h'
+let currentGraphSwitchName = '';
+let currentGraphPortLabel = '';
+let speedUnit = 'Bps'; // 'bps' or 'Bps' (bytes per second)
+let pollingPaused = false;
+
+let currentTransceiverIp = null;
+let currentTransceiverPort = null;
+let currentTransceiverSwitchName = '';
+
+function refreshTransceiver() {
+  if (currentTransceiverIp && currentTransceiverPort) {
+    openTransceiver(currentTransceiverIp, currentTransceiverPort, currentTransceiverSwitchName);
+  }
+}
+
+let macTableStates = {};
+try {
+  const stored = localStorage.getItem('macTableStates');
+  if (stored) {
+    macTableStates = JSON.parse(stored);
+  }
+} catch (e) {
+  console.error("Failed to load macTableStates from localStorage", e);
+}
+
+function saveMacStatesToStorage() {
+  const prunedStates = {};
+  for (const ip in macTableStates) {
+    if (macTableStates.hasOwnProperty(ip)) {
+      const s = macTableStates[ip];
+      prunedStates[ip] = {
+        expanded: s.expanded,
+        filters: s.filters || { mac: '', type: '', port: '', vlan: '' },
+        sortBy: s.sortBy || 'port',
+        sortAsc: s.sortAsc !== undefined ? s.sortAsc : true,
+        scrollTop: s.scrollTop || 0,
+        height: s.height || '450px'
+      };
+    }
+  }
+  localStorage.setItem('macTableStates', JSON.stringify(prunedStates));
+}
+
+function getMacState(ip) {
+  if (!macTableStates[ip]) {
+    macTableStates[ip] = {};
+  }
+  const state = macTableStates[ip];
+  if (state.expanded === undefined) state.expanded = false;
+  if (!state.filters) {
+    state.filters = {
+      mac: '',
+      type: '',
+      port: '',
+      vlan: ''
+    };
+  }
+  if (state.sortBy === undefined) state.sortBy = 'port';
+  if (state.sortAsc === undefined) state.sortAsc = true;
+  if (!state.data) state.data = [];
+  if (state.scrollTop === undefined) state.scrollTop = 0;
+  if (state.height === undefined) state.height = '450px';
+  return state;
+}
+
+function parsePortForSort(portStr) {
+  if (!portStr) return 0;
+  if (!isNaN(portStr)) return parseInt(portStr);
+  const m = portStr.match(/\d+/);
+  if (m) return parseInt(m[0]);
+  return portStr.toString().toLowerCase();
+}
+
+function parseVlanForSort(vlanStr) {
+  if (!vlanStr) return 0;
+  const parsed = parseInt(vlanStr);
+  return isNaN(parsed) ? vlanStr.toString().toLowerCase() : parsed;
+}
+
+function focusMacSearch() {
+  pausePolling();
+}
+
+function blurMacSearch() {
+  pollingPaused = false;
+  document.getElementById('live-dot').style.background = '#3fb950';
+  document.getElementById('live-text').textContent = 'Live';
+}
+
+let scrollSaveTimeout = null;
+function saveMacScroll(ip, element) {
+  const state = getMacState(ip);
+  state.scrollTop = element.scrollTop;
+  
+  clearTimeout(scrollSaveTimeout);
+  scrollSaveTimeout = setTimeout(() => {
+    saveMacStatesToStorage();
+  }, 500);
+}
+
+function saveMacHeight(ip, element) {
+  if (element && element.style.height) {
+    const state = getMacState(ip);
+    state.height = element.style.height;
+    saveMacStatesToStorage();
+  }
+}
+
+function toggleMacTable(ip) {
+  const state = getMacState(ip);
+  state.expanded = !state.expanded;
+  saveMacStatesToStorage();
+  
+  const content = document.querySelector(`.mac-content-${CSS.escape(ip)}`);
+  const arrow = document.querySelector(`.mac-toggle-arrow-${CSS.escape(ip)}`);
+  
+  if (content && arrow) {
+    if (state.expanded) {
+      content.style.display = 'block';
+      arrow.style.transform = 'rotate(90deg)';
+      renderMacTable(ip);
+    } else {
+      content.style.display = 'none';
+      arrow.style.transform = 'rotate(0deg)';
+    }
+  }
+}
+
+function filterMacTable(ip) {
+  const state = getMacState(ip);
+  const fMac = document.querySelector(`.mac-filter-mac-${CSS.escape(ip)}`);
+  const fType = document.querySelector(`.mac-filter-type-${CSS.escape(ip)}`);
+  const fPort = document.querySelector(`.mac-filter-port-${CSS.escape(ip)}`);
+  const fVlan = document.querySelector(`.mac-filter-vlan-${CSS.escape(ip)}`);
+  
+  if (fMac) state.filters.mac = fMac.value.trim().toLowerCase();
+  if (fType) state.filters.type = fType.value.trim().toLowerCase();
+  if (fPort) state.filters.port = fPort.value.trim().toLowerCase();
+  if (fVlan) state.filters.vlan = fVlan.value.trim().toLowerCase();
+  
+  saveMacStatesToStorage();
+  renderMacTable(ip);
+}
+
+function sortMac(ip, col) {
+  const state = getMacState(ip);
+  if (state.sortBy === col) {
+    state.sortAsc = !state.sortAsc;
+  } else {
+    state.sortBy = col;
+    state.sortAsc = true;
+  }
+  saveMacStatesToStorage();
+  renderMacTable(ip);
+}
+
+function manualRefreshMac(ip) {
+  const state = getMacState(ip);
+  const spinner = document.querySelector(`.mac-spinner-${CSS.escape(ip)}`);
+  const btnText = document.querySelector(`.mac-refresh-btn-${CSS.escape(ip)} span:not(.mac-spinner-${CSS.escape(ip)})`);
+  
+  if (spinner) spinner.style.display = 'inline-block';
+  if (btnText) btnText.textContent = 'Refreshing...';
+  
+  fetch(`/api/switches/${ip}/refresh_mac`, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok') {
+        state.data = data.mac_table || [];
+        const headerTime = document.querySelector(`.mac-time-${CSS.escape(ip)}`);
+        if (headerTime) {
+          headerTime.textContent = 'Last Scraped: ' + formatTime(Date.now() / 1000);
+        }
+        const titleCount = document.querySelector(`.mac-count-${CSS.escape(ip)}`);
+        if (titleCount) {
+          titleCount.textContent = `${state.data.length} entries`;
+        }
+        renderMacTable(ip);
+      } else {
+        alert('Failed to refresh MAC table: ' + (data.error || 'Unknown error'));
+      }
+    })
+    .catch(err => {
+      alert('Error refreshing MAC table: ' + err.message);
+    })
+    .finally(() => {
+      if (spinner) spinner.style.display = 'none';
+      if (btnText) btnText.textContent = 'Refresh MACs';
+    });
+}
+
+function renderMacTable(ip) {
+  const state = getMacState(ip);
+  const tbody = document.querySelector(`.mac-tbody-${CSS.escape(ip)}`);
+  if (!tbody) return;
+  
+  ['mac', 'type', 'port', 'vlan'].forEach(col => {
+    const indicator = document.querySelector(`.sort-indicator-${CSS.escape(ip)}-${col}`);
+    if (indicator) {
+      if (state.sortBy === col) {
+        indicator.textContent = state.sortAsc ? ' ▴' : ' ▾';
+        indicator.style.color = '#58a6ff';
+      } else {
+        indicator.textContent = '';
+      }
+    }
+  });
+
+  let rows = state.data;
+  const filters = state.filters || { mac: '', type: '', port: '', vlan: '' };
+  if (filters.mac || filters.type || filters.port || filters.vlan) {
+    rows = rows.filter(r => {
+      const matchMac = !filters.mac || (r.mac || '').toLowerCase().includes(filters.mac);
+      const matchType = !filters.type || (r.type || '').toLowerCase().includes(filters.type);
+      const matchPort = !filters.port || (r.port || '').toString().toLowerCase().includes(filters.port);
+      const matchVlan = !filters.vlan || (r.vlan || '').toString().toLowerCase().includes(filters.vlan);
+      return matchMac && matchType && matchPort && matchVlan;
+    });
+  }
+
+  rows.sort((a, b) => {
+    let valA = a[state.sortBy] || '';
+    let valB = b[state.sortBy] || '';
+    
+    if (state.sortBy === 'port') {
+      valA = parsePortForSort(valA);
+      valB = parsePortForSort(valB);
+    } else if (state.sortBy === 'vlan') {
+      valA = parseVlanForSort(valA);
+      valB = parseVlanForSort(valB);
+    } else {
+      valA = valA.toString().toLowerCase();
+      valB = valB.toString().toLowerCase();
+    }
+    
+    if (valA < valB) return state.sortAsc ? -1 : 1;
+    if (valA > valB) return state.sortAsc ? 1 : -1;
+    return 0;
+  });
+
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" style="padding: 12px; text-align: center; color: #8b949e;">No MAC entries found</td></tr>`;
+    const container = document.querySelector(`.mac-scroll-container-${CSS.escape(ip)}`);
+    if (container) {
+      container.scrollTop = state.scrollTop || 0;
+    }
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    return `
+      <tr style="border-bottom: 1px solid #21262d; transition: background 0.15s;" onmouseover="this.style.background='#1c2128'" onmouseout="this.style.background='transparent'">
+        <td style="padding: 8px 12px; font-family: 'SF Mono', Monaco, monospace; color: #c9d1d9;">${r.mac}</td>
+        <td style="padding: 8px 12px; color: #8b949e;">${r.type}</td>
+        <td style="padding: 8px 12px; font-weight: 600; color: #58a6ff;">${r.port}</td>
+        <td style="padding: 8px 12px; color: #b1bac4;">VLAN ${r.vlan}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const container = document.querySelector(`.mac-scroll-container-${CSS.escape(ip)}`);
+  if (container) {
+    container.scrollTop = state.scrollTop || 0;
+  }
+}
+
+function pausePolling() {
+  pollingPaused = true;
+  document.getElementById('live-dot').style.background = '#d29922';
+  document.getElementById('live-text').textContent = 'Paused';
+}
+
+async function saveNote(input) {
+  const key = input.dataset.key;
+  const note = input.value;
+  await fetch('/api/notes', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({key, note})
+  });
+  pollingPaused = false;
+  document.getElementById('live-dot').style.background = '#3fb950';
+  document.getElementById('live-text').textContent = 'Live';
+  updateDashboard();
+}
+
+function formatBytes(n) {
+  if (n === undefined || n === null) return '';
+  if (n >= 1e12) return (n / 1e12).toFixed(1) + ' TB';
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + ' GB';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + ' MB';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + ' KB';
+  return n + ' B';
+}
+
+function formatBps(n, unit) {
+  if (!n) return unit === 'Bps' ? '0 B/s' : '0 bps';
+  const v = unit === 'Bps' ? n / 8 : n;
+  const suf = unit === 'Bps' ? ['B/s', 'KB/s', 'MB/s', 'GB/s'] : ['bps', 'Kbps', 'Mbps', 'Gbps'];
+  const thresholds = [1e9, 1e6, 1e3];
+  if (v >= thresholds[0]) return (v / thresholds[0]).toFixed(1) + ' ' + suf[3];
+  if (v >= thresholds[1]) return (v / thresholds[1]).toFixed(1) + ' ' + suf[2];
+  if (v >= thresholds[2]) return (v / thresholds[2]).toFixed(1) + ' ' + suf[1];
+  return v.toFixed(0) + ' ' + suf[0];
+}
+
+function toggleSpeedUnit() {
+  speedUnit = speedUnit === 'bps' ? 'Bps' : 'bps';
+  document.getElementById('speed-unit-toggle').textContent = speedUnit;
+  updateDashboard();
+}
+
+function formatPkts(n) {
+  if (!n) return '0';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return n;
+}
+
+function speedClass(speed) {
+  if (!speed) return '';
+  const s = speed.toLowerCase();
+  if (s.includes('2500') || s.includes('2.5g')) return 'speed-2500m';
+  if (s.includes('2000') || s.includes('2g')) return 'speed-2000m';
+  if (s.includes('1000') || s.includes('1g')) return 'speed-1000m';
+  if (s.includes('100')) return 'speed-100m';
+  if (s.includes('10')) return 'speed-10m';
+  return '';
+}
+
+function formatTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  return d.toLocaleTimeString();
+}
+
+function renderSwitch(sw) {
+  const getPortColor = (p) => {
+    if (!p || (p.status || '').toLowerCase() !== 'up') {
+      return '#57606a'; // Down (grey)
+    }
+    const speed = (p.speed || '').toLowerCase();
+    if (speed.includes('10g')) return '#1f6feb'; // 10G (dark blue)
+    if (speed.includes('2.5g') || speed.includes('2500') || speed.includes('2g') || speed.includes('2000')) {
+      return '#58a6ff'; // 2.5G/2G (medium blue)
+    }
+    if (speed.includes('1g') || speed.includes('1000')) {
+      return '#3fb950'; // 1G (green)
+    }
+    if (speed.includes('100') || speed.includes('10')) {
+      return '#f08a24'; // 100M/10M (orange)
+    }
+    return '#57606a'; // Down/fallback (grey)
+  };
+
+  const portIndicators = (sw.ports || []).map(p => {
+    const isSfp = (p.port === '9' || (p.speed || '').toLowerCase().includes('10g') || p.port === 'SFP' || p.port === '9/SFP');
+    const color = getPortColor(p);
+    const titleText = `Port ${p.port}: ${p.status.toUpperCase()} ${p.speed || ''} (${p.duplex || ''}) - Click to view graph`;
+    const path = isSfp 
+      ? 'M 4,5 h 3 v 3 h 10 v -3 h 3 v 14 h -16 z' // SFP (Fiber)
+      : 'M 4,8 h 5 v -3 h 6 v 3 h 5 v 11 h -16 z'; // RJ45 (Copper)
+      
+    return `
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;" 
+           title="${titleText}"
+           onclick="openGraph('${sw.ip}','${p.port}','${sw.name}','Port ${p.port}')">
+        <span style="font-size: 10px; color: #8b949e; font-weight: 700; margin-bottom: 2px;">${p.port}</span>
+        <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: ${color}; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4)); transition: all 0.15s ease-in-out; transform: scale(1);"
+             onmouseover="this.style.transform='scale(1.2)';"
+             onmouseout="this.style.transform='scale(1)';">
+          <path d="${path}" />
+        </svg>
+      </div>
+    `;
+  }).join('');
+
+  const portBar = (sw.ports && sw.ports.length > 0) ? `
+    <div style="background: rgba(13, 17, 23, 0.75); border: 1px solid #30363d; border-radius: 20px; padding: 6px 18px; display: inline-flex; gap: 10px; align-items: center; justify-content: center; box-shadow: inset 0 2px 4px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.3); margin: 4px 0;">
+      ${portIndicators}
+    </div>
+  ` : '';
+
+  const portRows = (sw.ports || []).map(p => {
+    const status = (p.status || 'unknown').toLowerCase();
+    const speed = p.speed || 'Auto';
+    const duplex = p.duplex || '';
+    const tx = p.tx_packets || 0;
+    const rx = p.rx_packets || 0;
+    const cumTx = p.cum_tx || p.tx_bytes || 0;
+    const cumRx = p.cum_rx || p.rx_bytes || 0;
+    const speedNow = (p.speed_tx_bps ? formatBps(p.speed_tx_bps, speedUnit) + ' / ' + (p.speed_rx_bps ? formatBps(p.speed_rx_bps, speedUnit) : '0') : '');
+    
+    // Check if the port is an SFP/SFP+ port
+    const isSfp = (p.port === '9' || (p.speed || '').toLowerCase().includes('10g') || p.port === 'SFP' || p.port === '9/SFP');
+    
+    let speedHtml = '';
+    if (isSfp) {
+      speedHtml = `<span class="sfp-speed-link" onclick="openTransceiver('${sw.ip}','${p.port}','${sw.name}')" title="Click to view SFP+ Transceiver Diagnostics">${speed} <svg viewBox="0 0 24 24" style="width: 10px; height: 10px; fill: currentColor; display: inline-block;"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0-7C7 2 2.73 5.11 1 9.5 2.73 13.89 7 17 12 17s9.27-3.11 11-7.5C21.27 5.11 17 2 12 2zm0 13a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/></svg></span>`;
+    } else {
+      speedHtml = speed;
+    }
+
+    return `<tr>
+      <td class="port-num">${p.port}</td>
+      <td><span class="status-badge ${status}" onclick="openGraph('${sw.ip}','${p.port}','${sw.name}','Port ${p.port}')"><span class="status-dot ${status}"></span>${status.toUpperCase()}</span></td>
+      <td class="${speedClass(speed)}" title="${duplex}">${speedHtml}</td>
+      <td class="mono" title="TX / RX packets">TX ${formatPkts(tx)}<br>RX ${formatPkts(rx)}</td>
+      <td class="mono" title="TX / RX bytes formatted">${formatBytes(cumTx)}<br>${formatBytes(cumRx)}</td>
+      <td class="mono" title="RAW bytes">${cumTx.toLocaleString()}<br>${cumRx.toLocaleString()}</td>
+      <td class="col-info">${duplex}${p.flow_control && p.flow_control !== 'Off' ? ' FC:'+p.flow_control : ''}${speedNow ? '<br><span style="color:#58a6ff">' + speedNow + '</span>' : ''}</td>
+      <td class="col-note"><input class="note-input" type="text" placeholder="-" value="${p.note || ''}" data-key="${sw.ip}:${p.port}" onfocus="pausePolling()" onblur="saveNote(this)"></td>
+    </tr>`;
+  }).join('');
+
+  const errorBlock = sw.error ? `<div class="error-card">Error: ${sw.error}</div>` : '';
+  const uptime = sw.uptime ? `<span><span class="label">Uptime:</span> <span class="value">${sw.uptime}</span></span>` : '';
+  const mac = sw.mac ? `<span><span class="label">MAC:</span> <span class="value">${sw.mac}</span></span>` : '';
+  const fw = sw.firmware ? `<span><span class="label">Firmware:</span> <span class="value">${sw.firmware}</span></span>` : '';
+
+  const macState = getMacState(sw.ip);
+  const isExpanded = macState.expanded;
+  const displayStyle = isExpanded ? 'block' : 'none';
+  const arrowTransform = isExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
+  const macCount = sw.mac_table ? sw.mac_table.length : 0;
+  const lastScrapedStr = sw.mac_timestamp ? formatTime(sw.mac_timestamp) : 'Never';
+
+  const macSectionHtml = `
+    <div class="mac-section" style="border-top: 1px solid #30363d; padding: 12px 20px; background: rgba(22, 27, 34, 0.2);">
+      <div class="mac-header" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;" onclick="toggleMacTable('${sw.ip}')">
+        <h4 style="font-size: 12px; font-weight: 600; color: #8b949e; display: flex; align-items: center; gap: 6px; margin: 0;">
+          <span class="mac-toggle-arrow-${sw.ip}" style="display: inline-block; transition: transform 0.2s; transform: ${arrowTransform}; font-size: 10px;">&gt;</span>
+          <span>📁 MAC Address Table (<span class="mac-count-${sw.ip}">${macCount} entries</span>)</span>
+        </h4>
+        <span class="mac-time-${sw.ip}" style="font-size: 10px; color: #8b949e;">Last Scraped: ${lastScrapedStr}</span>
+      </div>
+      
+      <div class="mac-content-${sw.ip}" style="display: ${displayStyle}; margin-top: 12px;">
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+          <button class="mac-refresh-btn-${sw.ip}" onclick="manualRefreshMac('${sw.ip}')" style="background: #21262d; border: 1px solid #30363d; border-radius: 6px; padding: 6px 12px; color: #c9d1d9; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#30363d'; this.style.borderColor='#8b949e';" onmouseout="this.style.background='#21262d'; this.style.borderColor='#30363d';">
+            <span class="mac-spinner-${sw.ip}" style="display: none; width: 12px; height: 12px; border: 2px solid transparent; border-top-color: #58a6ff; border-radius: 50%; animation: spin .8s linear infinite; box-sizing: border-box;"></span>
+            <span>Refresh MACs</span>
+          </button>
+        </div>
+        <div class="mac-scroll-container-${sw.ip}" onscroll="saveMacScroll('${sw.ip}', this)" onmouseup="saveMacHeight('${sw.ip}', this)" ontouchend="saveMacHeight('${sw.ip}', this)" style="height: ${macState.height || '450px'}; min-height: 150px; max-height: 1200px; resize: vertical; overflow-y: auto; border: 1px solid #30363d; border-radius: 8px; background: #0d1117; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
+          <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+            <thead>
+              <tr style="background: #161b22; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid #30363d;">
+                <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'mac')">MAC Address <span class="sort-indicator-${sw.ip}-mac"></span></th>
+                <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'type')">Type <span class="sort-indicator-${sw.ip}-type"></span></th>
+                <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'port')">Port <span class="sort-indicator-${sw.ip}-port"></span></th>
+                <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'vlan')">VLAN <span class="sort-indicator-${sw.ip}-vlan"></span></th>
+              </tr>
+              <tr style="background: #0d1117; position: sticky; top: 31px; z-index: 2; border-bottom: 1px solid #30363d;">
+                <th style="padding: 4px 6px;"><input type="text" class="mac-filter-mac-${sw.ip}" placeholder="Filter MAC..." value="${macState.filters ? macState.filters.mac : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
+                <th style="padding: 4px 6px;"><input type="text" class="mac-filter-type-${sw.ip}" placeholder="Filter Type..." value="${macState.filters ? macState.filters.type : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
+                <th style="padding: 4px 6px;"><input type="text" class="mac-filter-port-${sw.ip}" placeholder="Port..." value="${macState.filters ? macState.filters.port : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
+                <th style="padding: 4px 6px;"><input type="text" class="mac-filter-vlan-${sw.ip}" placeholder="VLAN..." value="${macState.filters ? macState.filters.vlan : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
+              </tr>
+            </thead>
+            <tbody class="mac-tbody-${sw.ip}">
+              <!-- Populate via Javascript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return `<div class="switch-card">
+    <div class="switch-header">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <img src="/static/switch_icon.png" alt="Switch" style="height: 24px; width: auto; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">
+        <div>
+          <h2>${sw.name}</h2>
+          <span style="font-size:12px;color:#b1bac4"><a href="http://${sw.ip}/" target="_blank" style="color:#58a6ff;text-decoration:none" title="Open switch web UI">${sw.ip}</a></span>
+        </div>
+      </div>
+      
+      <!-- Port Panel Graphic -->
+      ${portBar}
+      
+      <div class="meta">${sw.model || ''}</div>
+    </div>
+    <div class="device-bar">
+      ${uptime}
+      ${fw}
+      ${mac}
+    </div>
+    <table class="port-table">
+      <thead><tr>
+        <th style="width:55px">Port</th>
+        <th style="width:75px">Status</th>
+        <th style="width:55px">Speed</th>
+        <th style="width:90px">Traffic<br><span style="font-weight:400;color:#8b949e">(packets)</span></th>
+        <th style="width:90px">Traffic<br><span style="font-weight:400;color:#8b949e">(bytes)</span></th>
+        <th style="width:110px" title="RAW cumulative bytes">TRAFFIC<br><span style="font-weight:400;color:#8b949e">(RAW bytes)</span></th>
+        <th>Info <span id="speed-unit-toggle" class="unit-toggle" onclick="toggleSpeedUnit()" title="Toggle speed unit">Bps</span></th>
+        <th class="col-note">Notes</th>
+      </tr></thead>
+      <tbody>${portRows || '<tr><td colspan="8" style="padding:20px;text-align:center;color:#b1bac4">No data</td></tr>'}</tbody>
+    </table>
+    ${errorBlock}
+    ${macSectionHtml}
+    <div class="last-update">Last update: ${formatTime(sw.timestamp)}</div>
+  </div>`;
+}
+
+async function updateDashboard() {
+  if (pollingPaused) return;
+  const liveDot = document.getElementById('live-dot');
+  const liveText = document.getElementById('live-text');
+  liveDot.style.background = '#d29922';
+  liveText.textContent = 'Updating...';
+  try {
+    const r = await fetch('/api/switches');
+    const data = await r.json();
+    const app = document.getElementById('app');
+    if (!data || data.length === 0) {
+      app.innerHTML = '<div style="text-align:center;padding:40px;color:#b1bac4">No switches configured. <a href="/config" style="color:#58a6ff">Configure now</a></div>';
+      app.className = '';
+      liveDot.style.background = '#f85149';
+      liveText.textContent = 'No switches';
+      return;
+    }
+    
+    // Save scroll position and height of active MAC tables before recreating elements
+    data.forEach(sw => {
+      const container = document.querySelector(`.mac-scroll-container-${CSS.escape(sw.ip)}`);
+      if (container) {
+        const state = getMacState(sw.ip);
+        state.scrollTop = container.scrollTop;
+        if (container.style.height) {
+          state.height = container.style.height;
+        }
+      }
+    });
+    saveMacStatesToStorage();
+
+    app.className = 'switches';
+    app.innerHTML = data.map(renderSwitch).join('');
+    
+    // Initialize states and render active MAC tables
+    data.forEach(sw => {
+      const state = getMacState(sw.ip);
+      state.data = sw.mac_table || [];
+      if (state.expanded) {
+        renderMacTable(sw.ip);
+      }
+    });
+
+    if (document.getElementById('graph-overlay').classList.contains('open') && currentGraphIp && currentGraphPort) {
+      renderGraph(currentGraphIp, currentGraphPort);
+    }
+    liveDot.style.background = '#3fb950';
+    liveText.textContent = 'Live';
+  } catch (e) {
+    document.getElementById('app').innerHTML =
+      `<div style="text-align:center;padding:40px;color:#f85149">Connection error: ${e.message}</div>`;
+    liveDot.style.background = '#f85149';
+    liveText.textContent = 'Error';
+  }
+}
+
+/* ---- Graph ---- */
+function openGraph(ip, port, name, label) {
+  currentGraphIp = ip;
+  currentGraphPort = port;
+  currentGraphSwitchName = name;
+  currentGraphPortLabel = label;
+  
+  document.getElementById('graph-title').textContent = label + ' Speed (' + name + ')';
+  document.getElementById('graph-overlay').classList.add('open');
+  setGraphRange(currentGraphRange); // trigger render
+}
+
+function setGraphRange(range) {
+  currentGraphRange = range;
+  
+  // Update Active Tab Button styling
+  document.querySelectorAll('.graph-tab-btn').forEach(btn => btn.classList.remove('active'));
+  if (range === 'live') {
+    document.getElementById('tab-live').classList.add('active');
+    document.getElementById('graph-sub').textContent = `Real-time speed at ${REFRESH_SECONDS}s polling intervals`;
+  } else if (range === '1h') {
+    document.getElementById('tab-1h').classList.add('active');
+    document.getElementById('graph-sub').textContent = `Last 1 hour speed history (at ${REFRESH_SECONDS}s polling intervals)`;
+  } else if (range === '24h') {
+    document.getElementById('tab-24h').classList.add('active');
+    document.getElementById('graph-sub').textContent = 'Last 24 hours speed history (15-minute averages)';
+  }
+  
+  renderGraph(currentGraphIp, currentGraphPort);
+}
+
+function closeGraph() {
+  document.getElementById('graph-overlay').classList.remove('open');
+  const box = document.getElementById('graph-box');
+  if (box.classList.contains('maximized')) {
+    box.classList.remove('maximized');
+    const btn = document.getElementById('graph-maximize-btn');
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 1 0v-2h2a.5.5 0 0 0 0-1h-2.5zM11.5 1a.5.5 0 0 0 0 1h2v2a.5.5 0 0 0 1 0v-3a.5.5 0 0 0-.5-.5h-2.5zM1 11.5a.5.5 0 0 0 .5.5h2a.5.5 0 0 0 0-1h-2v-2a.5.5 0 0 0-1 0v3zM14 11.5a.5.5 0 0 0-.5-.5h-2a.5.5 0 0 0 0 1h2v2a.5.5 0 0 0 1 0v-3z"/></svg>`;
+    btn.title = "Toggle Fullscreen";
+  }
+  currentGraphIp = null;
+  currentGraphPort = null;
+  document.getElementById('graph-tooltip').style.display = 'none';
+}
+
+function toggleMaximizeGraph() {
+  const box = document.getElementById('graph-box');
+  box.classList.toggle('maximized');
+  
+  const btn = document.getElementById('graph-maximize-btn');
+  if (box.classList.contains('maximized')) {
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 1.5a.5.5 0 0 0-1 0v2h-2a.5.5 0 0 0 0 1h2.5a.5.5 0 0 0 .5-.5v-2.5zM11.5 1.5a.5.5 0 0 0-1 0v2.5a.5.5 0 0 0 .5.5h2.5a.5.5 0 0 0 0-1h-2v-2zM4.5 11.5v2a.5.5 0 0 0 1 0v-2.5a.5.5 0 0 0-.5-.5h-2.5a.5.5 0 0 0 0 1h2zM12.5 11.5h-2a.5.5 0 0 0-.5.5v2.5a.5.5 0 0 0 1 0v-2h2a.5.5 0 0 0 0-1z"/></svg>`;
+    btn.title = "Restore Size";
+  } else {
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 1 0v-2h2a.5.5 0 0 0 0-1h-2.5zM11.5 1a.5.5 0 0 0 0 1h2v2a.5.5 0 0 0 1 0v-3a.5.5 0 0 0-.5-.5h-2.5zM1 11.5a.5.5 0 0 0 .5.5h2a.5.5 0 0 0 0-1h-2v-2a.5.5 0 0 0-1 0v3zM14 11.5a.5.5 0 0 0-.5-.5h-2a.5.5 0 0 0 0 1h2v2a.5.5 0 0 0 1 0v-3z"/></svg>`;
+    btn.title = "Toggle Fullscreen";
+  }
+  
+  if (currentGraphIp && currentGraphPort) {
+    renderGraph(currentGraphIp, currentGraphPort);
+  }
+}
+
+function renderGraph(ip, port) {
+  const svg = document.getElementById('graph-svg');
+  const box = document.getElementById('graph-box');
+  const isMax = box.classList.contains('maximized');
+  const W = Math.max(500, box.clientWidth - (isMax ? 64 : 48));
+  let H = window.innerHeight * 0.35;
+  if (isMax) {
+    H = window.innerHeight - 250;
+  }
+  H = Math.max(240, H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = ''; // clear
+
+  const pad = { top: 20, bottom: 40, left: 70, right: 30 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+
+  fetch(`/api/history?ip=${ip}&port=${port}&range=${currentGraphRange}`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data || !data.tx || data.tx.length < 2) {
+        svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#b1bac4" font-size="14">No history data available for this range yet</text>`;
+        document.getElementById('graph-peak-tx').textContent = '-';
+        document.getElementById('graph-peak-rx').textContent = '-';
+        document.getElementById('graph-now-tx').textContent = '-';
+        document.getElementById('graph-now-rx').textContent = '-';
+        return;
+      }
+
+      const txPoints = data.tx;
+      const rxPoints = data.rx;
+      const tss = data.timestamps;
+      const len = txPoints.length;
+
+      let maxVal = 0;
+      for (let i = 0; i < len; i++) {
+        if (txPoints[i] > maxVal) maxVal = txPoints[i];
+        if (rxPoints[i] > maxVal) maxVal = rxPoints[i];
+      }
+      if (maxVal === 0) maxVal = 1000; // fallback scale
+      maxVal *= 1.15; // padding top
+
+      const peakTx = Math.max(...txPoints);
+      const peakRx = Math.max(...rxPoints);
+      const nowTx = txPoints[len - 1];
+      const nowRx = rxPoints[len - 1];
+
+      document.getElementById('graph-peak-tx').textContent = formatBps(peakTx, speedUnit);
+      document.getElementById('graph-peak-rx').textContent = formatBps(peakRx, speedUnit);
+      document.getElementById('graph-now-tx').textContent = formatBps(nowTx, speedUnit);
+      document.getElementById('graph-now-rx').textContent = formatBps(nowRx, speedUnit);
+
+      function toX(i) { return pad.left + (i / (len - 1)) * plotW; }
+      function toY(v) { return pad.top + plotH - (v / maxVal) * plotH; }
+
+      // Build SVG grid lines
+      let yTicks = 4;
+      let gridSvg = '';
+      for (let i = 0; i <= yTicks; i++) {
+        const v = (maxVal / yTicks) * i;
+        const y = toY(v);
+        gridSvg += `<line x1="${pad.left}" y1="${y}" x2="${W - pad.right}" y2="${y}" stroke="#21262d" stroke-width="1" stroke-dasharray="${i === 0 ? '0' : '4 4'}"/>`;
+        gridSvg += `<text x="${pad.left - 10}" y="${y + 4}" text-anchor="end" fill="#b1bac4" font-size="11" font-family="'SF Mono', Monaco, monospace">${formatBps(v, speedUnit)}</text>`;
+      }
+
+      // X Axis Time ticks
+      let xTicks = [];
+      const tickCount = Math.min(5, len);
+      const step = Math.max(1, Math.floor((len - 1) / (tickCount - 1)));
+      for (let i = 0; i < len; i += step) {
+        xTicks.push(i);
+      }
+      if (xTicks[xTicks.length - 1] !== len - 1) {
+        xTicks.push(len - 1);
+      }
+
+      const xTicksSvg = xTicks.map(idx => {
+        const x = toX(idx);
+        const date = new Date(tss[idx] * 1000);
+        let timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'});
+        if (currentGraphRange === '24h') {
+          timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) + '<br>' + (date.getMonth()+1) + '/' + date.getDate();
+        }
+        return `
+          <line x1="${x}" y1="${pad.top}" x2="${x}" y2="${pad.top + plotH}" stroke="#21262d" stroke-dasharray="4 4" stroke-width="0.5"/>
+          <text x="${x}" y="${H - 12}" text-anchor="middle" fill="#b1bac4" font-size="10">${timeStr}</text>
+        `;
+      }).join('');
+
+      // Paths building
+      let txD = '', rxD = '';
+      let txAreaD = `M ${toX(0)} ${toY(0)} `;
+      let rxAreaD = `M ${toX(0)} ${toY(0)} `;
+
+      for (let i = 0; i < len; i++) {
+        const x = toX(i).toFixed(1);
+        const yTx = toY(txPoints[i]).toFixed(1);
+        const yRx = toY(rxPoints[i]).toFixed(1);
+        
+        if (i === 0) {
+          txD += `M ${x} ${yTx}`;
+          rxD += `M ${x} ${yRx}`;
+          txAreaD = `M ${x} ${pad.top + plotH} L ${x} ${yTx}`;
+          rxAreaD = `M ${x} ${pad.top + plotH} L ${x} ${yRx}`;
+        } else {
+          txD += ` L ${x} ${yTx}`;
+          rxD += ` L ${x} ${yRx}`;
+          txAreaD += ` L ${x} ${yTx}`;
+          rxAreaD += ` L ${x} ${yRx}`;
+        }
+      }
+      txAreaD += ` L ${toX(len - 1).toFixed(1)} ${pad.top + plotH} Z`;
+      rxAreaD += ` L ${toX(len - 1).toFixed(1)} ${pad.top + plotH} Z`;
+
+      // Full HTML Render inside SVG
+      svg.innerHTML = `
+        <defs>
+          <linearGradient id="tx-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#58a6ff" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#58a6ff" stop-opacity="0.0"/>
+          </linearGradient>
+          <linearGradient id="rx-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#3fb950" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#3fb950" stop-opacity="0.0"/>
+          </linearGradient>
+        </defs>
+        
+        <!-- Grid and Axes -->
+        ${gridSvg}
+        ${xTicksSvg}
+
+        <!-- Filled Areas (Gradients) -->
+        <path d="${txAreaD}" fill="url(#tx-grad)" />
+        <path d="${rxAreaD}" fill="url(#rx-grad)" />
+
+        <!-- Line curves -->
+        <path d="${txD}" fill="none" stroke="#58a6ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="${rxD}" fill="none" stroke="#3fb950" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        
+        <!-- Legend labels -->
+        <g transform="translate(${W - pad.right - 90}, ${pad.top + 5})">
+          <rect x="0" y="0" width="12" height="12" fill="#58a6ff" rx="3"/>
+          <text x="18" y="10" fill="#b1bac4" font-size="11" font-weight="600">TX Speed</text>
+        </g>
+        <g transform="translate(${W - pad.right - 90}, ${pad.top + 22})">
+          <rect x="0" y="0" width="12" height="12" fill="#3fb950" rx="3"/>
+          <text x="18" y="10" fill="#b1bac4" font-size="11" font-weight="600">RX Speed</text>
+        </g>
+
+        <!-- Hover Guideline / Interactive Crosshair components -->
+        <line id="hover-line" x1="0" y1="${pad.top}" x2="0" y2="${pad.top + plotH}" stroke="#b1bac4" stroke-width="1" stroke-dasharray="3 3" style="display:none; pointer-events:none;"/>
+        <circle id="hover-dot-tx" r="5" fill="#58a6ff" stroke="#161b22" stroke-width="2" style="display:none; pointer-events:none;"/>
+        <circle id="hover-dot-rx" r="5" fill="#3fb950" stroke="#161b22" stroke-width="2" style="display:none; pointer-events:none;"/>
+
+        <!-- Invisible Overlay rect for hover detection -->
+        <rect id="hover-overlay-rect" x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}" fill="transparent" style="cursor: crosshair;"/>
+      `;
+
+      // Set up mouse events on the overlay
+      const rect = document.getElementById('hover-overlay-rect');
+      const hoverLine = document.getElementById('hover-line');
+      const hoverDotTx = document.getElementById('hover-dot-tx');
+      const hoverDotRx = document.getElementById('hover-dot-rx');
+      const tooltip = document.getElementById('graph-tooltip');
+
+      rect.addEventListener('mousemove', (e) => {
+        // Calculate index closest to mouse position
+        const rectBounds = svg.getBoundingClientRect();
+        const mouseX = e.clientX - rectBounds.left;
+        
+        // Translate client mouseX to SVG internal coordinate W
+        const internalX = (mouseX / rectBounds.width) * W;
+        const relativeX = internalX - pad.left;
+        
+        // Find index
+        let idx = Math.round((relativeX / plotW) * (len - 1));
+        if (idx < 0) idx = 0;
+        if (idx >= len) idx = len - 1;
+
+        const xPos = toX(idx);
+        const yTx = toY(txPoints[idx]);
+        const yRx = toY(rxPoints[idx]);
+
+        // Draw guideline and dots
+        hoverLine.setAttribute('x1', xPos);
+        hoverLine.setAttribute('x2', xPos);
+        hoverLine.style.display = 'block';
+
+        hoverDotTx.setAttribute('cx', xPos);
+        hoverDotTx.setAttribute('cy', yTx);
+        hoverDotTx.style.display = 'block';
+
+        hoverDotRx.setAttribute('cx', xPos);
+        hoverDotRx.setAttribute('cy', yRx);
+        hoverDotRx.style.display = 'block';
+
+        // Position & Show Tooltip Panel
+        const date = new Date(tss[idx] * 1000);
+        let timeStr = date.toLocaleTimeString();
+        if (currentGraphRange === '24h') {
+          timeStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        tooltip.innerHTML = `
+          <div class="time">${timeStr}</div>
+          <div class="tx">TX: ${formatBps(txPoints[idx], speedUnit)}</div>
+          <div class="rx">RX: ${formatBps(rxPoints[idx], speedUnit)}</div>
+        `;
+
+        // Position tooltip relatively to the cursor position
+        const svgContainerRect = svg.parentElement.getBoundingClientRect();
+        const tipX = e.clientX - svgContainerRect.left + 15;
+        const tipY = e.clientY - svgContainerRect.top - 60;
+        
+        tooltip.style.left = `${tipX}px`;
+        tooltip.style.top = `${tipY}px`;
+        tooltip.style.display = 'block';
+      });
+
+      rect.addEventListener('mouseleave', () => {
+        hoverLine.style.display = 'none';
+        hoverDotTx.style.display = 'none';
+        hoverDotRx.style.display = 'none';
+        tooltip.style.display = 'none';
+      });
+    })
+    .catch(e => {
+      svg.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#f85149" font-size="14">Error loading history: ${e.message}</text>`;
+    });
+}
+
+/* ---- Transceiver ---- */
+function closeTransceiver() {
+  document.getElementById('transceiver-overlay').classList.remove('open');
+}
+
+function openTransceiver(ip, port, switchName) {
+  currentTransceiverIp = ip;
+  currentTransceiverPort = port;
+  currentTransceiverSwitchName = switchName;
+
+  const overlay = document.getElementById('transceiver-overlay');
+  const title = document.getElementById('transceiver-title');
+  const sub = document.getElementById('transceiver-sub');
+  const content = document.getElementById('transceiver-content');
+  
+  title.textContent = `Port ${port} SFP+ Transceiver Status`;
+  sub.textContent = `DDMI Diagnostics & Telemetry (${switchName})`;
+  
+  // Show loading state
+  content.innerHTML = `
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; gap: 12px; color: #8b949e;">
+      <div style="width: 24px; height: 24px; border: 2px solid transparent; border-top-color: #58a6ff; border-radius: 50%; animation: spin .8s linear infinite; box-sizing: border-box;"></div>
+      <span>Fetching transceiver data from switch...</span>
+    </div>
+  `;
+  
+  overlay.classList.add('open');
+  
+  fetch(`/api/switches/${ip}/transceiver`)
+    .then(r => {
+      if (!r.ok) {
+        return r.json().then(err => { throw new Error(err.error || 'Request failed'); });
+      }
+      return r.json();
+    })
+    .then(data => {
+      renderTransceiverData(data, content);
+    })
+    .catch(err => {
+      content.innerHTML = `
+        <div class="error-card" style="margin: 20px 0; font-size: 13px;">
+          <strong>No SFP module detected or telemetry unavailable</strong><br>
+          <span style="opacity: 0.8; font-size: 11px;">${err.message}</span>
+        </div>
+      `;
+    });
+}
+
+function renderTransceiverData(data, container) {
+  // Parsing helpers for telemetry bars
+  function parseVal(valStr) {
+    if (!valStr) return 0;
+    const match = valStr.toString().match(/[-+]?[0-9]*\.?[0-9]+/);
+    return match ? parseFloat(match[0]) : 0;
+  }
+  
+  const temp = parseVal(data.temperature);
+  const volt = parseVal(data.voltage);
+  const curr = parseVal(data.current);
+  
+  let txDbm = -99;
+  let rxDbm = -99;
+  if (data.tx_power && !data.tx_power.includes('-inf')) {
+    txDbm = parseVal(data.tx_power);
+  }
+  if (data.rx_power && !data.rx_power.includes('-inf')) {
+    rxDbm = parseVal(data.rx_power);
+  }
+
+  // Calculate percentages for telemetry bars
+  // Temperature range: 0 to 80 C
+  const tempPct = Math.min(100, Math.max(0, (temp / 80) * 100));
+  // Voltage range: 3.0V to 3.6V (centered around 3.3V)
+  const voltPct = Math.min(100, Math.max(0, ((volt - 2.8) / (3.8 - 2.8)) * 100));
+  // Current range: 0 to 40 mA (typical is 5-20 mA)
+  const currPct = Math.min(100, Math.max(0, (curr / 40) * 100));
+  // TX Power range: -20 dBm to +5 dBm
+  const txPct = txDbm === -99 ? 0 : Math.min(100, Math.max(0, ((txDbm - (-20)) / (5 - (-20))) * 100));
+  // RX Power range: -30 dBm to +5 dBm
+  const rxPct = rxDbm === -99 ? 0 : Math.min(100, Math.max(0, ((rxDbm - (-30)) / (5 - (-30))) * 100));
+
+  // Visual status colors
+  const tempColor = temp > 65 || temp < 5 ? '#f85149' : (temp > 55 ? '#d29922' : '#3fb950');
+  const voltColor = volt > 3.5 || volt < 3.1 ? '#f85149' : '#3fb950';
+  const currColor = curr > 30 ? '#f85149' : '#3fb950';
+  const txColor = txDbm === -99 ? '#57606a' : (txDbm < -12 ? '#d29922' : '#3fb950');
+  const rxColor = rxDbm === -99 ? '#57606a' : (rxDbm < -18 ? '#d29922' : '#3fb950');
+
+  container.innerHTML = `
+    <div class="transceiver-grid">
+      <!-- SFP Module Details Card -->
+      <div class="transceiver-card">
+        <h4>
+          <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; fill: currentColor; display: inline-block; vertical-align: middle;"><path d="M4,5 h3 v3 h10 v -3 h 3 v 14 h -16 z" /></svg>
+          SFP Module Details
+        </h4>
+        <div class="transceiver-item"><span class="label">OE Present</span><span class="val">${data.oe_present || 'Unknown'}</span></div>
+        <div class="transceiver-item"><span class="label">Loss of Signal</span><span class="val">${data.loss_of_signal || 'Unknown'}</span></div>
+        <div class="transceiver-item"><span class="label">Transceiver Type</span><span class="val">${data.transceiver_type || 'Unknown'}</span></div>
+        <div class="transceiver-item"><span class="label">Connector Type</span><span class="val">${data.connector_type || 'Unknown'}</span></div>
+        <div class="transceiver-item"><span class="label">Compliance Codes</span><span class="val">${data.eth_compliance_codes || 'Unknown'}</span></div>
+        <div class="transceiver-item"><span class="label">Wavelength</span><span class="val">${data.wavelength || 'Unknown'}</span></div>
+        <div class="transceiver-item"><span class="label">Bitrate</span><span class="val">${data.bitrate || 'Unknown'}</span></div>
+        <div class="transceiver-item"><span class="label">Vendor Name</span><span class="val">${(data.vendor_name || 'Unknown').trim()}</span></div>
+        <div class="transceiver-item"><span class="label">Vendor OUI</span><span class="val">${data.vendor_oui || 'Unknown'}</span></div>
+        <div class="transceiver-item"><span class="label">Part Number</span><span class="val">${(data.vendor_pn || 'Unknown').trim()}</span></div>
+        <div class="transceiver-item"><span class="label">Revision</span><span class="val">${(data.vendor_revision || 'Unknown').trim()}</span></div>
+        <div class="transceiver-item"><span class="label">Serial Number</span><span class="val">${(data.vendor_sn || 'Unknown').trim()}</span></div>
+        <div class="transceiver-item"><span class="label">Date Code</span><span class="val">${data.date_code || 'Unknown'}</span></div>
+      </div>
+      
+      <!-- DDMI Real-Time Telemetry Card -->
+      <div class="transceiver-card">
+        <h4>
+          <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; fill: currentColor; display: inline-block; vertical-align: middle;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h-2v-2h4v8zm0-10h-2V5h2v2z"/></svg>
+          DDMI Diagnostics
+        </h4>
+        
+        <!-- Temperature -->
+        <div class="telemetry-row">
+          <div class="header-row">
+            <span class="label">🌡️ Temperature</span>
+            <span class="val" style="color: ${tempColor};">${data.temperature || 'N/A'}</span>
+          </div>
+          <div class="telemetry-bar-bg">
+            <div class="telemetry-bar-fill" style="width: ${tempPct}%; background: ${tempColor};"></div>
+          </div>
+        </div>
+        
+        <!-- Voltage -->
+        <div class="telemetry-row">
+          <div class="header-row">
+            <span class="label">⚡ Supply Voltage</span>
+            <span class="val" style="color: ${voltColor};">${data.voltage || 'N/A'}</span>
+          </div>
+          <div class="telemetry-bar-bg">
+            <div class="telemetry-bar-fill" style="width: ${voltPct}%; background: ${voltColor};"></div>
+          </div>
+        </div>
+        
+        <!-- Current -->
+        <div class="telemetry-row">
+          <div class="header-row">
+            <span class="label">🔋 Bias Current</span>
+            <span class="val" style="color: ${currColor};">${data.current || 'N/A'}</span>
+          </div>
+          <div class="telemetry-bar-bg">
+            <div class="telemetry-bar-fill" style="width: ${currPct}%; background: ${currColor};"></div>
+          </div>
+        </div>
+        
+        <!-- TX Power -->
+        <div class="telemetry-row">
+          <div class="header-row">
+            <span class="label">📤 Optical TX Power</span>
+            <span class="val" style="color: ${txColor};">${data.tx_power || 'N/A'}</span>
+          </div>
+          <div class="telemetry-bar-bg">
+            <div class="telemetry-bar-fill" style="width: ${txPct}%; background: ${txColor};"></div>
+          </div>
+        </div>
+        
+        <!-- RX Power -->
+        <div class="telemetry-row">
+          <div class="header-row">
+            <span class="label">📥 Optical RX Power</span>
+            <span class="val" style="color: ${rxColor};">${data.rx_power || 'N/A'}</span>
+          </div>
+          <div class="telemetry-bar-bg">
+            <div class="telemetry-bar-fill" style="width: ${rxPct}%; background: ${rxColor};"></div>
+          </div>
+        </div>
+        
+        <div style="margin-top: 18px; padding: 10px; background: rgba(88,166,255,0.05); border: 1px solid rgba(88,166,255,0.15); border-radius: 6px; font-size: 11px; color: #8b949e; line-height: 1.4;">
+          💡 Telemetry values are updated directly from the switch's internal SFP micro-controller registers using DDMI.
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---- Reset ---- */
+function showResetConfirm() {
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+function hideResetConfirm() {
+  document.getElementById('confirm-overlay').classList.remove('open');
+}
+async function doReset() {
+  hideResetConfirm();
+  await fetch('/api/reset', { method: 'POST' });
+  updateDashboard();
+}
+
+/* ---- Font size ---- */
+function setFontSize(size) {
+  document.body.dataset.fontSize = size;
+  document.querySelectorAll('.fs-btn').forEach(b => b.classList.toggle('fs-active', b.dataset.size === size));
+  fetch('/api/settings', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({font_size: size})
+  });
+}
+
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/settings');
+    const s = await r.json();
+    if (s.font_size) {
+      setFontSize(s.font_size);
+    }
+  } catch(e) {}
+}
+
+loadSettings();
+updateDashboard();
+setInterval(updateDashboard, REFRESH_SECONDS * 1000);
+window.addEventListener('resize', () => {
+  if (document.getElementById('graph-overlay').classList.contains('open') && currentGraphIp && currentGraphPort) {
+    renderGraph(currentGraphIp, currentGraphPort);
+  }
+});
+</script>
+</body>
+</html>

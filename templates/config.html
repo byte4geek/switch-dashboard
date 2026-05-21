@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} - Settings</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#128252;</text></svg>">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1117; color: #e1e4e8; padding: 20px;
+  }
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 24px; background: #161b22; border-radius: 12px;
+    border: 1px solid #30363d; margin-bottom: 24px;
+  }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header a {
+    color: #8b949e; text-decoration: none; font-size: 13px; padding: 6px 12px;
+    border-radius: 6px; transition: all .2s;
+  }
+  .header a:hover { color: #e1e4e8; background: #1c2128; }
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+    padding: 24px; margin-bottom: 20px; max-width: 800px;
+  }
+  .card h2 { font-size: 16px; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #30363d; }
+  .switch-group {
+    background: #1c2128; border: 1px solid #30363d; border-radius: 8px;
+    padding: 16px; margin-bottom: 16px; position: relative;
+  }
+  .switch-group h3 { font-size: 14px; margin-bottom: 12px; color: #8b949e; }
+  .form-row { display: flex; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+  .form-row label { font-size: 12px; color: #8b949e; min-width: 70px; }
+  .form-row input[type="text"],
+  .form-row input[type="password"],
+  .form-row input[type="number"] {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    padding: 8px 12px; color: #e1e4e8; font-size: 13px; flex: 1; min-width: 120px;
+  }
+  .form-row input:focus { outline: none; border-color: #58a6ff; }
+  .form-row input[type="checkbox"] { margin-left: 4px; }
+  .remove-btn {
+    background: none; border: 1px solid #f85149; color: #f85149;
+    padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    position: absolute; top: 12px; right: 12px;
+  }
+  .remove-btn:hover { background: rgba(248,81,73,0.15); }
+  .add-btn {
+    background: none; border: 1px dashed #30363d; color: #8b949e;
+    padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%;
+  }
+  .add-btn:hover { border-color: #58a6ff; color: #58a6ff; }
+  .btn-row { display: flex; gap: 12px; margin-top: 20px; }
+  .btn-row input[type="submit"] {
+    background: #238636; border: none; color: #fff; padding: 10px 24px;
+    border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;
+  }
+  .btn-row input[type="submit"]:hover { background: #2ea043; }
+  .btn-row a {
+    background: #21262d; border: 1px solid #30363d; color: #e1e4e8;
+    padding: 10px 24px; border-radius: 8px; text-decoration: none; font-size: 14px;
+  }
+  .btn-row a:hover { background: #30363d; }
+  .note { font-size: 11px; color: #484f58; margin-top: 4px; }
+  .global-row { margin-bottom: 12px; }
+  .global-row label { font-size: 12px; color: #8b949e; display: block; margin-bottom: 4px; }
+  .global-row input[type="text"],
+  .global-row input[type="number"] {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    padding: 8px 12px; color: #e1e4e8; font-size: 13px; width: 100%; max-width: 300px;
+  }
+  .global-row input:focus { outline: none; border-color: #58a6ff; }
+  .success-msg {
+    background: rgba(63,185,80,0.15); color: #3fb950; border: 1px solid #3fb950;
+    padding: 12px 20px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>&#9881; Switch Settings</h1>
+  <a href="/">&larr; Back to Dashboard</a>
+</div>
+
+{% if saved %}
+<div class="card" style="max-width:800px">
+  <div class="success-msg">&#10003; Configuration saved. Dashboard is reloading with new settings...</div>
+  <div class="btn-row">
+    <a href="/">Return to Dashboard</a>
+  </div>
+</div>
+{% endif %}
+
+<form method="post" action="/config" id="config-form">
+  <div class="card">
+    <h2>General Settings</h2>
+    <div class="global-row">
+      <label>Dashboard Title</label>
+      <input type="text" name="title" value="{{ title }}" style="max-width:400px">
+    </div>
+    <div class="global-row">
+      <label>Refresh Interval (seconds)</label>
+      <input type="number" name="refresh_interval" value="{{ refresh }}" min="1" max="300">
+    </div>
+    <div class="global-row">
+      <label>MAC Table Refresh Multiplier (x polling cycles)</label>
+      <input type="number" name="mac_refresh_multiplier" value="{{ mac_multiplier }}" min="1" max="100" style="max-width:120px">
+      <span class="note" style="display:block; margin-top:2px;">e.g., if set to 5, the MAC table is fetched every 5 dashboard refreshes to reduce switch load.</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Switches</h2>
+    <div id="switch-list">
+      {% for sw in switches %}
+      <div class="switch-group" data-index="{{ loop.index0 }}">
+        <input type="hidden" name="keep[]" value="1">
+        <button type="button" class="remove-btn" onclick="removeSwitch(this)">Delete</button>
+        <h3>Switch {{ loop.index }}</h3>
+        <div class="form-row">
+          <label>Name</label>
+          <input type="text" name="name[]" value="{{ sw.name }}" placeholder="Switch 1">
+        </div>
+        <div class="form-row">
+          <label>IP Address</label>
+          <input type="text" name="ip[]" value="{{ sw.ip }}" placeholder="192.168.1.100">
+        </div>
+        <div class="form-row">
+          <label>Username</label>
+          <input type="text" name="username[]" value="{{ sw.username }}" placeholder="admin">
+        </div>
+        <div class="form-row">
+          <label>Password</label>
+          <input type="password" name="password[]" value="{{ sw.password }}" placeholder="admin">
+        </div>
+        <div class="form-row">
+          <label>Model</label>
+          <input type="text" name="model[]" value="{{ sw.get('model', '') }}" placeholder="HC-SWTGW218AS">
+          <span class="note">Optional, for display only</span>
+        </div>
+        <div class="form-row">
+          <label>Port Count</label>
+          <input type="number" name="port_count[]" value="{{ sw.get('port_count', 9) }}" min="1" max="52" style="max-width:80px">
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <button type="button" class="add-btn" onclick="addSwitch()">+ Add Switch</button>
+  </div>
+
+  <div class="card">
+    <div class="btn-row">
+      <input type="submit" value="Save Configuration">
+      <a href="/">Cancel</a>
+    </div>
+  </div>
+</form>
+
+<script>
+function addSwitch() {
+  const list = document.getElementById('switch-list');
+  const count = list.children.length + 1;
+  const div = document.createElement('div');
+  div.className = 'switch-group';
+  div.innerHTML = `
+    <input type="hidden" name="keep[]" value="1">
+    <button type="button" class="remove-btn" onclick="removeSwitch(this)">Delete</button>
+    <h3>Switch ${count}</h3>
+    <div class="form-row">
+      <label>Name</label>
+      <input type="text" name="name[]" value="Switch ${count}" placeholder="Switch ${count}">
+    </div>
+    <div class="form-row">
+      <label>IP Address</label>
+      <input type="text" name="ip[]" value="" placeholder="192.168.1.x">
+    </div>
+    <div class="form-row">
+      <label>Username</label>
+      <input type="text" name="username[]" value="admin" placeholder="admin">
+    </div>
+    <div class="form-row">
+      <label>Password</label>
+      <input type="password" name="password[]" value="admin" placeholder="password">
+    </div>
+    <div class="form-row">
+      <label>Model</label>
+      <input type="text" name="model[]" value="" placeholder="HC-SWTGW218AS">
+    </div>
+    <div class="form-row">
+      <label>Port Count</label>
+      <input type="number" name="port_count[]" value="9" min="1" max="52" style="max-width:80px">
+    </div>`;
+  list.appendChild(div);
+  // Renumber
+  renumber();
+}
+
+function removeSwitch(btn) {
+  const group = btn.closest('.switch-group');
+  const hidden = group.querySelector('input[name="keep[]"]');
+  hidden.value = '0';
+  group.style.display = 'none';
+}
+
+function renumber() {
+  const groups = document.querySelectorAll('.switch-group');
+  groups.forEach((g, i) => {
+    const h3 = g.querySelector('h3');
+    if (h3 && g.style.display !== 'none') {
+      h3.textContent = 'Switch ' + (i + 1);
+    }
+  });
+}
+</script>
+</body>
+</html>
+
