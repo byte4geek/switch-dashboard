@@ -60,22 +60,41 @@
   .port-table tr:last-child td { border-bottom: none; }
   .port-num { font-weight: 600; }
   .status-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
     cursor: pointer; transition: all .15s;
+    width: 85px; justify-content: flex-start;
   }
   .status-badge:hover { filter: brightness(1.3); }
   .status-badge.up { background: rgba(63,185,80,0.15); color: #3fb950; }
   .status-badge.down { background: rgba(248,81,73,0.15); color: #f85149; }
   .status-badge.unknown { background: rgba(210,153,34,0.15); color: #d29922; }
+  .status-badge.disabled, .status-badge.disable { background: rgba(139,148,150,0.15); color: #8b949e; }
+  .trust-badge {
+    display: inline-flex; align-items: center; font-size: 9px; font-weight: 700;
+    padding: 2px 6px; border-radius: 4px; margin-left: 8px;
+    text-transform: uppercase; letter-spacing: 0.5px; vertical-align: middle;
+  }
+  .trust-badge.trusted {
+    background: rgba(63, 185, 80, 0.15); color: #56d364;
+    border: 1px solid rgba(63, 185, 80, 0.3);
+  }
+  .trust-badge.untrusted {
+    background: rgba(240, 138, 36, 0.15); color: #f08a24;
+    border: 1px solid rgba(240, 138, 36, 0.3);
+  }
   .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; }
   .status-dot.up { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
   .status-dot.down { background: #f85149; }
-  .speed-2500m { color: #d2a8ff; font-weight: 600; }
-  .speed-1000m { color: #58a6ff; }
-  .speed-2000m { color: #79c0ff; }
-  .speed-100m  { color: #b1bac4; }
-  .speed-10m   { color: #8b949e; }
+  .status-dot.unknown { background: #d29922; }
+  .status-dot.disabled, .status-dot.disable { background: #8b949e; }
+  .speed-10g   { color: #1f6feb; font-weight: 600; }
+  .speed-2500m { color: #58a6ff; font-weight: 600; }
+  .speed-2000m { color: #58a6ff; font-weight: 600; }
+  .speed-1000m { color: #3fb950; font-weight: 600; }
+  .speed-100m  { color: #f08a24; font-weight: 600; }
+  .speed-10m   { color: #f08a24; font-weight: 600; }
+  .speed-down  { color: #57606a; font-weight: 500; }
   .mono { font-size: 11px; color: #b1bac4; font-family: 'SF Mono', Monaco, monospace; }
   .col-info { color: #8b949e; }
   .unit-toggle {
@@ -115,6 +134,15 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #8b949e; }
+  .version-badge {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: #c9d1d9;
+    font-family: 'SF Mono', Monaco, monospace;
+    font-weight: 600;
+  }
   .last-update { font-size: 11px; color: #8b949e; padding: 6px 20px; text-align: right; }
 
   /* Speed graph overlay */
@@ -476,6 +504,7 @@
       <button class="fs-btn" data-size="xl" onclick="setFontSize('xl')">XL</button>
     </span>
     <a href="/config">&#9881; Config</a>
+    <a href="/backups">💾 Backups</a>
     <button onclick="showResetConfirm()">&#128260; Reset</button>
   </div>
 </div>
@@ -486,6 +515,7 @@
   <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #3fb950; border-radius: 2px;"></span> 1G (1000M)</span>
   <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #f08a24; border-radius: 2px;"></span> 100M / 10M</span>
   <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #57606a; border-radius: 2px;"></span> Down</span>
+  <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #353c45; border-radius: 2px;"></span> Disabled</span>
   <span style="display: flex; align-items: center; gap: 6px; border-left: 1px solid #30363d; padding-left: 12px; margin-left: 4px;">
     <svg viewBox="0 0 24 24" style="width: 12px; height: 12px; fill: #8b949e; margin-right: 2px; display: inline-block; vertical-align: middle;"><path d="M 4,8 h 5 v -3 h 6 v 3 h 5 v 11 h -16 z" /></svg> Copper (RJ45)
   </span>
@@ -495,7 +525,7 @@
 </div>
 <div id="app" class="loading">Loading dashboard</div>
 <div class="footer">
-  <div>Refreshes every {{ refresh }} seconds &middot; <a href="/config" style="color:#8b949e">Configure switches</a> &middot; <a href="/api-docs" style="color:#8b949e">API Reference</a></div>
+  <div>Refreshes every {{ refresh }} seconds &middot; <a href="/config" style="color:#8b949e">Configure switches</a> &middot; <a href="/api-docs" style="color:#8b949e">API Reference</a> &middot; <span class="version-badge">v{{ version }}</span></div>
   <div style="margin-top: 6px; font-size: 11px; color: #8b949e;">Created by <a href="https://github.com/byte4geek/switch-dashboard" target="_blank" style="color: #58a6ff; text-decoration: none; font-weight: 500;">Byte4Geek</a> for the community</div>
 </div>
 
@@ -691,6 +721,46 @@ function toggleMacTable(ip) {
   }
 }
 
+function getIgmpState(ip) {
+  let states = {};
+  try {
+    const stored = localStorage.getItem('igmp_states');
+    if (stored) states = JSON.parse(stored);
+  } catch (e) {
+    console.error("Failed to load igmp_states from localStorage", e);
+  }
+  if (!states[ip]) {
+    states[ip] = { expanded: false };
+  }
+  return states[ip];
+}
+
+function toggleIgmpTable(ip) {
+  let states = {};
+  try {
+    const stored = localStorage.getItem('igmp_states');
+    if (stored) states = JSON.parse(stored);
+  } catch (e) {
+    console.error("Failed to load igmp_states from localStorage", e);
+  }
+  if (!states[ip]) states[ip] = { expanded: false };
+  states[ip].expanded = !states[ip].expanded;
+  localStorage.setItem('igmp_states', JSON.stringify(states));
+  
+  const content = document.querySelector(`.igmp-content-${CSS.escape(ip)}`);
+  const arrow = document.querySelector(`.igmp-toggle-arrow-${CSS.escape(ip)}`);
+  
+  if (content && arrow) {
+    if (states[ip].expanded) {
+      content.style.display = 'block';
+      arrow.style.transform = 'rotate(90deg)';
+    } else {
+      content.style.display = 'none';
+      arrow.style.transform = 'rotate(0deg)';
+    }
+  }
+}
+
 function filterMacTable(ip) {
   const state = getMacState(ip);
   const fMac = document.querySelector(`.mac-filter-mac-${CSS.escape(ip)}`);
@@ -751,6 +821,39 @@ function manualRefreshMac(ip) {
     .finally(() => {
       if (spinner) spinner.style.display = 'none';
       if (btnText) btnText.textContent = 'Refresh MACs';
+    });
+}
+
+function backupConfig(ip, element) {
+  if (element.dataset.loading === 'true') return;
+  element.dataset.loading = 'true';
+  const originalText = element.innerHTML;
+  element.innerHTML = '⏳ Backing up...';
+  element.style.color = '#8b949e';
+
+  fetch(`/api/switches/${ip}/backup`, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok') {
+        element.innerHTML = '✓ Backed up!';
+        element.style.color = '#3fb950';
+      } else {
+        alert('Failed to backup config: ' + (data.error || 'Unknown error'));
+        element.innerHTML = '❌ Failed';
+        element.style.color = '#ff7b72';
+      }
+    })
+    .catch(err => {
+      alert('Error during backup: ' + err.message);
+      element.innerHTML = '❌ Failed';
+      element.style.color = '#ff7b72';
+    })
+    .finally(() => {
+      setTimeout(() => {
+        element.innerHTML = originalText;
+        element.style.color = '#58a6ff';
+        delete element.dataset.loading;
+      }, 3000);
     });
 }
 
@@ -882,9 +985,13 @@ function formatPkts(n) {
   return n;
 }
 
-function speedClass(speed) {
+function speedClass(speed, status) {
+  if (!status || status.toLowerCase() !== 'up') {
+    return 'speed-down';
+  }
   if (!speed) return '';
   const s = speed.toLowerCase();
+  if (s.includes('10g')) return 'speed-10g';
   if (s.includes('2500') || s.includes('2.5g')) return 'speed-2500m';
   if (s.includes('2000') || s.includes('2g')) return 'speed-2000m';
   if (s.includes('1000') || s.includes('1g')) return 'speed-1000m';
@@ -901,7 +1008,12 @@ function formatTime(ts) {
 
 function renderSwitch(sw) {
   const getPortColor = (p) => {
-    if (!p || (p.status || '').toLowerCase() !== 'up') {
+    if (!p) return '#57606a';
+    const status = (p.status || '').toLowerCase();
+    if (status === 'disable' || status === 'disabled') {
+      return '#353c45'; // Disabled (darker grey)
+    }
+    if (status !== 'up') {
       return '#57606a'; // Down (grey)
     }
     const speed = (p.speed || '').toLowerCase();
@@ -966,10 +1078,28 @@ function renderSwitch(sw) {
       speedHtml = speed;
     }
 
+    // DHCP Snooping port trust badges
+    let trustBadgeHtml = '';
+    if (sw.dhcp_snooping && sw.dhcp_snooping.enabled) {
+      const portsMap = sw.dhcp_snooping.ports || {};
+      const cleanPortName = p.port.split('/')[0];
+      const trustState = portsMap[p.port] || portsMap[cleanPortName];
+      if (trustState === 'Trusted') {
+        trustBadgeHtml = `<span class="trust-badge trusted" title="DHCP Snooping: Trusted Port">Trusted</span>`;
+      } else if (trustState === 'Untrusted') {
+        trustBadgeHtml = `<span class="trust-badge untrusted" title="DHCP Snooping: Untrusted Port">Untrusted</span>`;
+      }
+    }
+
     return `<tr>
       <td class="port-num">${p.port}</td>
-      <td><span class="status-badge ${status}" onclick="openGraph('${sw.ip}','${p.port}','${sw.name}','Port ${p.port}')"><span class="status-dot ${status}"></span>${status.toUpperCase()}</span></td>
-      <td class="${speedClass(speed)}" title="${duplex}">${speedHtml}</td>
+      <td>
+        <div style="display: flex; align-items: center;">
+          <span class="status-badge ${status}" onclick="openGraph('${sw.ip}','${p.port}','${sw.name}','Port ${p.port}')"><span class="status-dot ${status}"></span>${status.toUpperCase()}</span>
+          ${trustBadgeHtml}
+        </div>
+      </td>
+      <td class="${speedClass(speed, status)}" title="${duplex}">${speedHtml}</td>
       <td class="mono" title="TX / RX packets">TX ${formatPkts(tx)}<br>RX ${formatPkts(rx)}</td>
       <td class="mono" title="TX / RX bytes formatted">${formatBytes(cumTx)}<br>${formatBytes(cumRx)}</td>
       <td class="mono" title="RAW bytes">${cumTx.toLocaleString()}<br>${cumRx.toLocaleString()}</td>
@@ -982,6 +1112,25 @@ function renderSwitch(sw) {
   const uptime = sw.uptime ? `<span><span class="label">Uptime:</span> <span class="value">${sw.uptime}</span></span>` : '';
   const mac = sw.mac ? `<span><span class="label">MAC:</span> <span class="value">${sw.mac}</span></span>` : '';
   const fw = sw.firmware ? `<span><span class="label">Firmware:</span> <span class="value">${sw.firmware}</span></span>` : '';
+
+  let dhcpBadge = '';
+  if (sw.dhcp_snooping) {
+    const isActive = sw.dhcp_snooping.enabled;
+    dhcpBadge = `<span><span class="label">DHCP Snooping:</span> <span class="value" style="color: ${isActive ? '#56d364' : '#8b949e'}">${isActive ? '🟢 Active' : '⚪ Inactive'}</span></span>`;
+  }
+
+  let igmpBadge = '';
+  if (sw.igmp) {
+    const isActive = sw.igmp.enabled;
+    igmpBadge = `<span><span class="label">IGMP Snooping:</span> <span class="value" style="color: ${isActive ? '#56d364' : '#8b949e'}">${isActive ? '🟢 Active' : '⚪ Inactive'}</span></span>`;
+  }
+
+  let jumboBadge = '';
+  if (sw.jumbo_frame) {
+    const isActive = sw.jumbo_frame.enabled;
+    const sizeVal = sw.jumbo_frame.size;
+    jumboBadge = `<span><span class="label">Jumbo Frame:</span> <span class="value" style="color: ${isActive ? '#56d364' : '#8b949e'}">${isActive ? '🟢 Active (' + sizeVal + ')' : '⚪ Inactive'}</span></span>`;
+  }
 
   const macState = getMacState(sw.ip);
   const isExpanded = macState.expanded;
@@ -1032,17 +1181,67 @@ function renderSwitch(sw) {
     </div>
   `;
 
+  const igmpState = getIgmpState(sw.ip);
+  const isIgmpExpanded = igmpState.expanded;
+  const igmpDisplayStyle = isIgmpExpanded ? 'block' : 'none';
+  const igmpArrowTransform = isIgmpExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
+  const igmpEntries = sw.igmp && sw.igmp.entries ? sw.igmp.entries : [];
+  const igmpCount = igmpEntries.length;
+
+  let igmpRows = '<tr><td colspan="3" style="padding: 12px; text-align: center; color: #8b949e;">No active multicast groups detected</td></tr>';
+  if (igmpEntries.length > 0) {
+    igmpRows = igmpEntries.map(e => `
+      <tr style="border-bottom: 1px solid #21262d; transition: background 0.15s;" onmouseover="this.style.background='#1c2128'" onmouseout="this.style.background='transparent'">
+        <td style="padding: 8px 12px; color: #58a6ff; font-weight: 600; font-family: 'SF Mono', Monaco, monospace;">${e.ip}</td>
+        <td style="padding: 8px 12px; color: #c9d1d9; font-weight: 600;">${e.ports}</td>
+        <td style="padding: 8px 12px; color: #8b949e;">VLAN ${e.vlan}</td>
+      </tr>
+    `).join('');
+  }
+
+  const igmpSectionHtml = `
+    <div class="igmp-section" style="border-top: 1px solid #30363d; padding: 12px 20px; background: rgba(22, 27, 34, 0.2);">
+      <div class="igmp-header" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;" onclick="toggleIgmpTable('${sw.ip}')">
+        <h4 style="font-size: 12px; font-weight: 600; color: #8b949e; display: flex; align-items: center; gap: 6px; margin: 0;">
+          <span class="igmp-toggle-arrow-${sw.ip}" style="display: inline-block; transition: transform 0.2s; transform: ${igmpArrowTransform}; font-size: 10px;">&gt;</span>
+          <span>📁 IGMP Multicast Groups (<span class="igmp-count-${sw.ip}">${igmpCount} entries</span>)</span>
+        </h4>
+      </div>
+      
+      <div class="igmp-content-${sw.ip}" style="display: ${igmpDisplayStyle}; margin-top: 12px;">
+        <div style="border: 1px solid #30363d; border-radius: 8px; background: #0d1117; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
+          <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+            <thead>
+              <tr style="background: #161b22; border-bottom: 1px solid #30363d;">
+                <th style="padding: 8px 12px; color: #8b949e; font-weight: 600; width: 45%;">Multicast IP</th>
+                <th style="padding: 8px 12px; color: #8b949e; font-weight: 600; width: 35%;">Member Ports</th>
+                <th style="padding: 8px 12px; color: #8b949e; font-weight: 600; width: 20%;">VLAN</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${igmpRows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+
   return `<div class="switch-card">
     <div class="switch-header">
       <div style="display: flex; align-items: center; gap: 12px;">
         <img src="/static/switch_icon.png" alt="Switch" style="height: 24px; width: auto; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">
         <div>
           <h2>${sw.name}</h2>
-          <span style="font-size:12px;color:#b1bac4"><a href="http://${sw.ip}/" target="_blank" style="color:#58a6ff;text-decoration:none" title="Open switch web UI">${sw.ip}</a></span>
+          <span style="font-size:12px;color:#b1bac4;display:flex;align-items:center;gap:8px;">
+            <a href="http://${sw.ip}/" target="_blank" style="color:#58a6ff;text-decoration:none" title="Open switch web UI">${sw.ip}</a>
+            <span style="color:#30363d">|</span>
+            <a href="#" onclick="backupConfig('${sw.ip}', this); return false;" style="color:#58a6ff;text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px;" title="Backup configuration on server">💾 Backup</a>
+          </span>
         </div>
       </div>
       
-      <!-- Port Panel Graphic -->
+      <!-- Port Graphic -->
       ${portBar}
       
       <div class="meta">${sw.model || ''}</div>
@@ -1051,11 +1250,14 @@ function renderSwitch(sw) {
       ${uptime}
       ${fw}
       ${mac}
+      ${dhcpBadge}
+      ${igmpBadge}
+      ${jumboBadge}
     </div>
     <table class="port-table">
       <thead><tr>
         <th style="width:55px">Port</th>
-        <th style="width:75px">Status</th>
+        <th style="width:145px">Status</th>
         <th style="width:55px">Speed</th>
         <th style="width:90px">Traffic<br><span style="font-weight:400;color:#8b949e">(packets)</span></th>
         <th style="width:90px">Traffic<br><span style="font-weight:400;color:#8b949e">(bytes)</span></th>
@@ -1067,6 +1269,7 @@ function renderSwitch(sw) {
     </table>
     ${errorBlock}
     ${macSectionHtml}
+    ${igmpSectionHtml}
     <div class="last-update">Last update: ${formatTime(sw.timestamp)}</div>
   </div>`;
 }

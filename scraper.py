@@ -100,9 +100,45 @@ class HCSwitchScraper:
 
         info_html = self._fetch("/info.cgi")
         stats_html = self._fetch("/port.cgi?page=stats")
+        port_cfg_html = self._fetch("/port.cgi")
 
         ports = []
         device_info = {}
+        port_states = {}
+
+        # Try to parse port state configuration from /port.cgi
+        if port_cfg_html:
+            try:
+                port_soup = BeautifulSoup(port_cfg_html, "html.parser")
+                port_list_h3 = port_soup.find(lambda tag: tag.name == "h3" and "Port List" in tag.text)
+                port_table = None
+                if port_list_h3:
+                    port_table = port_list_h3.find_next("table")
+                
+                if not port_table:
+                    # Fallback: search for table with port & state headers and no select inputs
+                    for t in port_soup.find_all("table"):
+                        headers = [th.get_text(strip=True).lower() for th in t.find_all("th")]
+                        if "port" in headers and "state" in headers:
+                            first_tr = t.find("tr")
+                            if first_tr:
+                                next_tr = first_tr.find_next("tr")
+                                if next_tr and not next_tr.find("select"):
+                                    port_table = t
+                                    break
+                
+                if port_table:
+                    for row in port_table.find_all("tr"):
+                        cells = row.find_all("td")
+                        if len(cells) >= 2:
+                            port_name = cells[0].get_text(strip=True)
+                            state = cells[1].get_text(strip=True).strip().lower()
+                            match = re.search(r"\d+", port_name)
+                            if match:
+                                port_num = match.group(0)
+                                port_states[port_num] = state
+            except Exception as e:
+                logger.error(f"Error parsing port config states for {self.ip}: {e}")
 
         if info_html:
             soup = BeautifulSoup(info_html, "html.parser")
@@ -137,10 +173,19 @@ class HCSwitchScraper:
                         port_name = cells[0].get_text(strip=True)
                         match = re.match(r"Port\s*(\d+)", port_name)
                         port_num = match.group(1) if match else port_name
+                        
+                        admin_state = port_states.get(port_num, "enable")
+                        if admin_state in ["disable", "disabled"]:
+                            status_val = "disable"
+                            link_val = "Disabled"
+                        else:
+                            status_val = "up" if "Up" in cells[1].get_text(strip=True) else "down"
+                            link_val = cells[1].get_text(strip=True)
+
                         ports.append({
                             "port": port_num,
-                            "status": "up" if "Up" in cells[1].get_text(strip=True) else "down",
-                            "link": cells[1].get_text(strip=True),
+                            "status": status_val,
+                            "link": link_val,
                             "speed": cells[3].get_text(strip=True),
                             "duplex": cells[2].get_text(strip=True),
                             "flow_control": cells[4].get_text(strip=True) if len(cells) > 4 else "",
@@ -170,6 +215,15 @@ class HCSwitchScraper:
                                 p["rx_bytes"] = self._parse_counter(cells[6].get_text(strip=True))
                                 break
 
+        # Scrape DHCP Snooping
+        dhcp_snooping = self.scrape_dhcp_snooping()
+
+        # Scrape IGMP snooping
+        igmp = self.scrape_igmp()
+
+        # Scrape Jumbo Frame
+        jumbo_frame = self.scrape_jumbo_frame()
+
         return {
             "name": self.name,
             "ip": self.ip,
@@ -178,8 +232,178 @@ class HCSwitchScraper:
             "uptime": device_info.get("uptime", ""),
             "firmware": device_info.get("firmware", ""),
             "ports": ports or self._fallback_ports(),
+            "dhcp_snooping": dhcp_snooping,
+            "igmp": igmp,
+            "jumbo_frame": jumbo_frame,
             "timestamp": time.time(),
         }
+
+    def scrape_dhcp_snooping(self):
+        try:
+            html = self._fetch("/dhcp_snooping.cgi?page=dump")
+            if not html:
+                return {"enabled": False, "ports": {}}
+                
+            soup = BeautifulSoup(html, "html.parser")
+            
+            # 1. Parse whether DHCP Snooping is enabled
+            enabled = False
+            enable_input = soup.find("input", {"name": "enable_dhcpsnp"})
+            if enable_input and enable_input.has_attr("checked"):
+                enabled = True
+                
+            # 2. Parse Trusted vs Untrusted ports
+            ports_trust = {}
+            static_form = soup.find("form", action=re.compile(r"page=static"))
+            if static_form:
+                inputs = static_form.find_all("input", class_="chkp")
+                for inp in inputs:
+                    inp_id = inp.get("id")
+                    if inp_id:
+                        label = static_form.find("label", {"for": inp_id})
+                        if label:
+                            label_text = label.get_text(strip=True)
+                            port_name = label_text
+                            if label_text.startswith("Port "):
+                                port_name = label_text[5:]
+                            
+                            is_trusted = inp.has_attr("checked")
+                            ports_trust[port_name] = "Trusted" if is_trusted else "Untrusted"
+            
+            return {
+                "enabled": enabled,
+                "ports": ports_trust
+            }
+        except Exception as e:
+            logger.error(f"Failed to scrape DHCP Snooping for {self.ip}: {e}")
+            return {"enabled": False, "ports": {}}
+
+    def scrape_igmp(self):
+        try:
+            html = self._fetch("/igmp.cgi?page=dump")
+            if not html:
+                return {"enabled": False, "entries": []}
+                
+            soup = BeautifulSoup(html, "html.parser")
+            
+            # 1. Parse whether IGMP is globally enabled
+            enabled = False
+            enable_input = soup.find("input", {"name": "enable_igmp"})
+            if enable_input and enable_input.has_attr("checked"):
+                enabled = True
+                
+            # 2. Parse Dump IGMP entry table
+            entries = []
+            show_div = soup.find("div", class_="showdiv")
+            if show_div:
+                table = show_div.find("table")
+                if table:
+                    rows = table.find_all("tr")[1:] # skip header row
+                    for row in rows:
+                        cells = row.find_all("td")
+                        if len(cells) >= 3:
+                            ip = cells[0].get_text(strip=True)
+                            ports = cells[1].get_text(strip=True)
+                            vlan = cells[2].get_text(strip=True)
+                            if ip:
+                                entries.append({
+                                    "ip": ip,
+                                    "ports": ports,
+                                    "vlan": vlan
+                                })
+            return {
+                "enabled": enabled,
+                "entries": entries
+            }
+        except Exception as e:
+            logger.error(f"Failed to scrape IGMP for {self.ip}: {e}")
+            return {"enabled": False, "entries": []}
+
+    def scrape_jumbo_frame(self):
+        try:
+            html = self._fetch("/fwd.cgi?page=jumboframe")
+            if not html:
+                return {"enabled": False, "size": "Disabled"}
+                
+            soup = BeautifulSoup(html, "html.parser")
+            
+            # 1. Parse whether Jumbo Frame is globally enabled
+            enabled = False
+            enable_input = soup.find("input", {"name": "enable_jumbo"})
+            if enable_input and enable_input.has_attr("checked"):
+                enabled = True
+                
+            # 2. Parse size value
+            size_val = "Unknown"
+            select = soup.find("select", {"name": "jumboframe"})
+            if select:
+                selected_option = select.find("option", selected=True)
+                if not selected_option:
+                    for opt in select.find_all("option"):
+                        if opt.has_attr("selected"):
+                            selected_option = opt
+                            break
+                if selected_option:
+                    text_node = selected_option.find(string=True, recursive=False)
+                    size_val = text_node.strip() if text_node else selected_option.get_text(strip=True)
+                else:
+                    options = select.find_all("option")
+                    if options:
+                        text_node = options[0].find(string=True, recursive=False)
+                        size_val = text_node.strip() if text_node else options[0].get_text(strip=True)
+                        
+            return {
+                "enabled": enabled,
+                "size": size_val
+            }
+        except Exception as e:
+            logger.error(f"Failed to scrape Jumbo Frame for {self.ip}: {e}")
+            return {"enabled": False, "size": "Disabled"}
+
+    def _fallback(self):
+        return {
+            "name": self.name,
+            "ip": self.ip,
+            "model": "HC-SWTGW218AS",
+            "mac": "",
+            "uptime": "",
+            "firmware": "",
+            "ports": self._fallback_ports(),
+            "dhcp_snooping": {"enabled": False, "ports": {}},
+            "igmp": {"enabled": False, "entries": []},
+            "jumbo_frame": {"enabled": False, "size": "Disabled"},
+            "timestamp": time.time(),
+        }
+
+    def download_backup(self):
+        if not self._opener:
+            self._login()
+        headers = {"Referer": f"{self.base_url}/config_back.cgi"}
+        req = urllib.request.Request(f"{self.base_url}/config_back.cgi?cmd=conf_backup", headers=headers)
+        try:
+            r = self._opener.open(req, timeout=15)
+            return r.read()
+        except Exception as e:
+            logger.error(f"Failed to download config backup for {self.ip}: {e}")
+            raise e
+
+    def reboot_switch(self):
+        if not self._opener:
+            self._login()
+        headers = {
+            "Referer": f"{self.base_url}/reboot.cgi",
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        data = urllib.parse.urlencode({
+            "cmd": "reboot"
+        }).encode()
+        req = urllib.request.Request(f"{self.base_url}/reboot.cgi", data=data, headers=headers)
+        try:
+            r = self._opener.open(req, timeout=10)
+            return r.read().decode("utf-8", errors="replace")
+        except Exception as e:
+            logger.error(f"Failed to trigger reboot for {self.ip}: {e}")
+            raise e
 
     def scrape_mac_table(self):
         try:

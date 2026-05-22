@@ -77,6 +77,153 @@
     background: rgba(63,185,80,0.15); color: #3fb950; border: 1px solid #3fb950;
     padding: 12px 20px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;
   }
+  .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #8b949e; margin-bottom: 20px; }
+  .version-badge {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: #c9d1d9;
+    font-family: 'SF Mono', Monaco, monospace;
+    font-weight: 600;
+  }
+  
+  /* Reboot Button & Modal Styling */
+  .reboot-btn {
+    background: none; border: 1px solid #f0883e; color: #f0883e;
+    padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    position: absolute; top: 12px; right: 90px;
+    transition: all 0.2s ease;
+  }
+  .reboot-btn:hover { background: rgba(240,136,62,0.15); box-shadow: 0 0 8px rgba(240,136,62,0.2); }
+
+  .modal-backdrop {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(10, 11, 15, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .modal-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .modal-card {
+    background: rgba(22, 27, 34, 0.95);
+    border: 1px solid rgba(240, 136, 62, 0.4);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 440px;
+    width: 90%;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    transform: scale(0.92);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+  }
+  .modal-backdrop.active .modal-card {
+    transform: scale(1);
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #30363d;
+  }
+  .modal-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #e1e4e8;
+  }
+  .modal-body {
+    font-size: 13px;
+    line-height: 1.6;
+    color: #c9d1d9;
+    margin-bottom: 24px;
+  }
+  .modal-warning {
+    margin-top: 12px;
+    color: #f0883e;
+    font-weight: 500;
+    font-size: 12px;
+  }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+  .modal-footer button {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-cancel {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+  }
+  .btn-cancel:hover {
+    background: #30363d;
+    color: #fff;
+  }
+  .btn-confirm {
+    background: #f0883e;
+    border: none;
+    color: #fff;
+    box-shadow: 0 0 12px rgba(240, 136, 62, 0.3);
+  }
+  .btn-confirm:hover {
+    background: #f19754;
+    box-shadow: 0 0 16px rgba(240, 136, 62, 0.5);
+  }
+  .reboot-loading {
+    position: absolute;
+    inset: 0;
+    background: rgba(22, 27, 34, 0.95);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    font-size: 14px;
+    color: #c9d1d9;
+  }
+  .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(240, 136, 62, 0.15);
+    border-top-color: #f0883e;
+    border-radius: 50%;
+    animation: spin 1s infinite linear;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .reboot-status {
+    position: absolute;
+    inset: 0;
+    background: rgba(22, 27, 34, 0.95);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 15px;
+    font-weight: 500;
+  }
 </style>
 </head>
 <body>
@@ -118,6 +265,7 @@
       {% for sw in switches %}
       <div class="switch-group" data-index="{{ loop.index0 }}">
         <input type="hidden" name="keep[]" value="1">
+        <button type="button" class="reboot-btn" onclick="openRebootModal('{{ sw.ip }}', '{{ sw.name }}')">Reboot</button>
         <button type="button" class="remove-btn" onclick="removeSwitch(this)">Delete</button>
         <h3>Switch {{ loop.index }}</h3>
         <div class="form-row">
@@ -159,6 +307,41 @@
     </div>
   </div>
 </form>
+
+<div class="footer">
+  <div><a href="/" style="color:#8b949e">Back to Dashboard</a> &middot; <a href="/api-docs" style="color:#8b949e">API Reference</a> &middot; <span class="version-badge">v{{ version }}</span></div>
+  <div style="margin-top: 6px; font-size: 11px; color: #8b949e;">Created by <a href="https://github.com/byte4geek/switch-dashboard" target="_blank" style="color: #58a6ff; text-decoration: none; font-weight: 500;">Byte4Geek</a> for the community</div>
+</div>
+
+<!-- Reboot Confirmation Modal -->
+<div id="reboot-modal" class="modal-backdrop">
+  <div class="modal-card">
+    <div class="modal-header">
+      <svg viewBox="0 0 24 24" width="22" height="22" style="flex-shrink:0;">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" fill="#f0883e"/>
+      </svg>
+      <h3>Reboot Device</h3>
+    </div>
+    <div class="modal-body">
+      <p>Rebooting <strong id="reboot-switch-name">Switch</strong> (<span id="reboot-switch-ip">192.168.1.x</span>) will temporarily interrupt the local network connection.</p>
+      <p class="modal-warning">Confirm to proceed with reboot.</p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-cancel" onclick="closeRebootModal()">Cancel</button>
+      <button type="button" class="btn-confirm" onclick="executeReboot()">Confirm Reboot</button>
+    </div>
+    <div id="reboot-loading" class="reboot-loading" style="display:none;">
+      <div class="spinner"></div>
+      <p>Sending reboot command...</p>
+    </div>
+    <div id="reboot-success" class="reboot-status" style="display:none; color: #3fb950;">
+      <span style="font-size: 24px; margin-bottom: 8px;">✓</span> Reboot command sent. Redirecting...
+    </div>
+    <div id="reboot-error" class="reboot-status" style="display:none; color: #f85149;">
+      <span style="font-size: 24px; margin-bottom: 8px;">✗</span> Failed: <span id="reboot-error-msg" style="font-size: 13px; font-weight: normal; margin-top: 4px;"></span>
+    </div>
+  </div>
+</div>
 
 <script>
 function addSwitch() {
@@ -213,6 +396,69 @@ function renumber() {
     if (h3 && g.style.display !== 'none') {
       h3.textContent = 'Switch ' + (i + 1);
     }
+  });
+}
+
+// Reboot Modal Interactivity Handlers
+let rebootIp = '';
+let rebootName = '';
+
+function openRebootModal(ip, name) {
+  rebootIp = ip;
+  rebootName = name;
+  document.getElementById('reboot-switch-name').textContent = name;
+  document.getElementById('reboot-switch-ip').textContent = ip;
+  
+  // Reset modal overlays
+  document.getElementById('reboot-loading').style.display = 'none';
+  document.getElementById('reboot-success').style.display = 'none';
+  document.getElementById('reboot-error').style.display = 'none';
+  
+  document.getElementById('reboot-modal').classList.add('active');
+}
+
+function closeRebootModal() {
+  document.getElementById('reboot-modal').classList.remove('active');
+}
+
+function executeReboot() {
+  if (!rebootIp) return;
+  
+  const loading = document.getElementById('reboot-loading');
+  const success = document.getElementById('reboot-success');
+  const error = document.getElementById('reboot-error');
+  const errorMsg = document.getElementById('reboot-error-msg');
+  
+  loading.style.display = 'flex';
+  success.style.display = 'none';
+  error.style.display = 'none';
+  
+  fetch(`/api/switches/${rebootIp}/reboot`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+  .then(res => {
+    if (!res.ok) {
+      return res.json().then(data => { throw new Error(data.error || 'Server returned error'); });
+    }
+    return res.json();
+  })
+  .then(data => {
+    loading.style.display = 'none';
+    success.style.display = 'flex';
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 2500);
+  })
+  .catch(err => {
+    loading.style.display = 'none';
+    errorMsg.textContent = err.message;
+    error.style.display = 'flex';
+    setTimeout(() => {
+      error.style.display = 'none';
+    }, 4000);
   });
 }
 </script>

@@ -159,6 +159,11 @@
       color: #57ab5a;
       border: 1px solid rgba(46, 160, 67, 0.3);
     }
+    .badge-delete {
+      background: rgba(248, 81, 73, 0.15);
+      color: #ff7b72;
+      border: 1px solid rgba(248, 81, 73, 0.3);
+    }
 
     /* Content Area */
     .content-area {
@@ -349,7 +354,7 @@
   <div class="header">
     <div class="header-brand">
       <img src="/static/logo.png" alt="Horaco Logo" class="header-logo">
-      <h1>{{ title }} &middot; API Docs</h1>
+      <h1>{{ title }} &middot; API Docs <span class="version-badge" style="background: rgba(255, 255, 255, 0.08); padding: 2px 6px; border-radius: 4px; font-size: 10px; color: #c9d1d9; font-family: 'JetBrains Mono', monospace; font-weight: 600; vertical-align: middle; margin-left: 6px;">v{{ version }}</span></h1>
     </div>
     <a href="/" class="back-btn">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align: middle;"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
@@ -416,6 +421,36 @@
           <a href="#reset" class="sidebar-link" onclick="setActiveLink(this)">
             <span class="badge badge-post">POST</span>
             <span>/api/reset</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#backup-trigger" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/api/switches/&lt;ip&gt;/backup</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#reboot-trigger" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/api/switches/&lt;ip&gt;/reboot</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#backups-list" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/backups</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#backup-download" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/backups/&lt;filename&gt;/download</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#backup-delete" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-delete">DELETE</span>
+            <span>/api/backups/&lt;filename&gt;</span>
           </a>
         </li>
       </ul>
@@ -796,6 +831,201 @@
   "status": "ok"
 }</code></pre>
         </div>
+      </div>
+
+      <!-- POST /api/switches/<ip>/backup -->
+      <div class="api-card" id="backup-trigger">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/switches/&lt;ip&gt;/backup</span>
+          <span class="api-title">Trigger Switch Configuration Backup</span>
+        </div>
+        <p class="api-desc">Logs into the switch at the given IP address, triggers an on-demand download of the binary configuration file from the switch CGI interface, and saves it in the server's local file archive.</p>
+        
+        <div class="param-title">Path Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">ip</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>The IP address of the target switch.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "filename": "switch_cfg_192-168-1-100_20260521_1519.bin",
+  "size": 2708,
+  "status": "ok",
+  "timestamp": "20260521_1519"
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- POST /api/switches/<ip>/reboot -->
+      <div class="api-card" id="reboot-trigger">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/switches/&lt;ip&gt;/reboot</span>
+          <span class="api-title">Trigger Switch Reboot</span>
+        </div>
+        <p class="api-desc">Triggers an on-demand reboot of the target switch. The device will perform a soft reset immediately, which will temporarily disrupt connectivity on that switch.</p>
+        
+        <div class="param-title">Path Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">ip</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>The IP address of the target switch.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "message": "Reboot command sent successfully",
+  "status": "ok"
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/backups -->
+      <div class="api-card" id="backups-list">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/backups</span>
+          <span class="api-title">List Configuration Backups</span>
+        </div>
+        <p class="api-desc">Scans the server backup directory and returns a sorted list of all archived configuration files including switch IP, timestamp, human-readable file size, and exact filename metadata.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>[
+  {
+    "datetime": "2026-05-21 15:19",
+    "filename": "switch_cfg_192-168-1-100_20260521_1519.bin",
+    "ip": "192.168.1.100",
+    "mtime": 1779376740.0,
+    "size": 2708,
+    "size_str": "2.6 KB"
+  }
+]</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/backups/<filename>/download -->
+      <div class="api-card" id="backup-download">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/backups/&lt;filename&gt;/download</span>
+          <span class="api-title">Download Backup File</span>
+        </div>
+        <p class="api-desc">Downloads a specific archived configuration backup file from the server's local storage. This endpoint includes directory traversal protection to block unauthorized path accesses.</p>
+        
+        <div class="param-title">Path Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">filename</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>The target backup filename, e.g. <code>switch_cfg_192-168-1-100_20260521_1519.bin</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response Format</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" style="display:none;"></button>
+          <pre><code>Binary Stream (application/octet-stream attachment)</code></pre>
+        </div>
+      </div>
+
+      <!-- DELETE /api/backups/<filename> -->
+      <div class="api-card" id="backup-delete">
+        <div class="api-card-header">
+          <span class="badge badge-delete">DELETE</span>
+          <span class="api-route">/api/backups/&lt;filename&gt;</span>
+          <span class="api-title">Delete Backup File</span>
+        </div>
+        <p class="api-desc">Permanently purges a specific configuration backup file from the server storage disk. Includes strict path verification to prevent directory traversal exploits.</p>
+        
+        <div class="param-title">Path Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">filename</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>The target backup filename to delete.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "status": "ok"
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer" style="text-align: center; margin-top: 40px; font-size: 12px; color: #8b949e; border-top: 1px solid #21262d; padding-top: 20px;">
+        <div><a href="/" style="color:#8b949e; text-decoration: none;">Back to Dashboard</a> &middot; <a href="/config" style="color:#8b949e; text-decoration: none;">Configure switches</a> &middot; <span class="version-badge" style="background: rgba(255, 255, 255, 0.08); padding: 2px 6px; border-radius: 4px; font-size: 10px; color: #c9d1d9; font-family: 'JetBrains Mono', monospace; font-weight: 600;">v{{ version }}</span></div>
+        <div style="margin-top: 6px; font-size: 11px; color: #8b949e;">Created by <a href="https://github.com/byte4geek/switch-dashboard" target="_blank" style="color: #58a6ff; text-decoration: none; font-weight: 500;">Byte4Geek</a> for the community</div>
       </div>
 
     </div>
