@@ -1,0 +1,11 @@
+services:
+  switch-dashboard:
+    build: .
+    container_name: switch-dashboard
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      - DASHBOARD_DATA_DIR=/data
