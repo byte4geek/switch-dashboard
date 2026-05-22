@@ -120,6 +120,61 @@ The script will:
 Once completed, the dashboard is live at:
 * **Dashboard**: `http://<your-ip>:8080`
 * **API Documentation**: `http://<your-ip>:8080/api-docs`
+---
+
+## 🐳 Docker Deployment
+
+You can deploy the Switch Dashboard as a lightweight Docker container. All persistent configurations, history files, and switch backups are managed inside a single volume or host directory mapping.
+
+### 💾 Persistent Data Mapping
+The dashboard keeps its state in several files and a backup folder:
+* **Configurations & Settings**: `config.json`, `settings.json`, `notes.json`
+* **Bandwidth & Counters**: `counters.json`, `history_hourly.json`, `history_daily.json`
+* **Switch Backups**: `/backup/` subdirectory
+
+All of the above items are unified under the path specified by the `DASHBOARD_DATA_DIR` environment variable (defaults to `/data` in the container). You only need to mount/persist this single folder!
+
+### Option A: Using Docker Compose (Recommended)
+
+A pre-configured `docker-compose.yml` is provided in the repository.
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/yourusername/switch-dashboard.git
+   cd switch-dashboard
+   ```
+
+2. **Configure your switches**:
+   You can either edit `config.json` before running the container, or simply let the container initialize the default `config.json` inside the mounted volume directory (`./data`), and then edit it there or via the dashboard's `/config` page.
+
+3. **Start the container**:
+   ```bash
+   docker compose up -d
+   ```
+
+4. **Access the dashboard**:
+   Go to `http://<your-ip>:8080` in your web browser. All your configs, notes, backups, and charts history will be persisted in the local `./data` folder on the host.
+
+### Option B: Using Docker CLI
+
+To run the container manually with the Docker CLI:
+
+1. **Build the image**:
+   ```bash
+   docker build -t switch-dashboard .
+   ```
+
+2. **Run the container with a volume**:
+   ```bash
+   docker run -d \
+     --name switch-dashboard \
+     --restart unless-stopped \
+     -p 8080:8080 \
+     -v /absolute/path/to/your/data:/data \
+     -e DASHBOARD_DATA_DIR=/data \
+     switch-dashboard
+   ```
+   *Replace `/absolute/path/to/your/data` with the actual directory path on your host where you want to store your persistent data.*
 
 ---
 
