@@ -272,7 +272,19 @@ This project is licensed under the **MIT License**. Feel free to modify, distrib
 
 ## 📅 Release Notes & Changelog
 
-### 🚀 Release 2026.5.1 (Current)
+### 🚀 Release 2026.5.2 (Current)
+* **🐳 Docker & Docker Compose Support**:
+  - Implemented lightweight Docker containerization using a standard `Dockerfile` built on `python:3.11-slim` and a unified `docker-compose.yml`.
+* **💾 Unified Persistent Storage Mapping**:
+  - Conserved configurations, notes, speed history, and backups inside a single `/data` folder inside the container mapped to a custom environment variable `DASHBOARD_DATA_DIR`.
+* **🛡️ Auto-Initialization Safeguard**:
+  - Automatically initializes volume directories with default configuration files upon startup if mapped to empty host folders to avoid container crash loops.
+* **📦 Absolute Resource Pathing**:
+  - Configured Flask absolute template and static directories dynamically to resolve relative directory conflicts inside Docker environments.
+
+---
+
+### 🚀 Release 2026.5.1
 * **🎨 Administrative Port Contrast & Legend Integration**:
   - Outlined administratively disabled ports in the graphical representation using a unique, premium dark-grey (`#353c45`) to distinguish them from standard offline ports (`#57606a`).
   - Integrated the new **Disabled** status label and color badge directly into the central `PORT STATUS` legend.

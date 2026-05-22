@@ -37,7 +37,7 @@ SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 HOURLY_PATH = os.path.join(DATA_DIR, "history_hourly.json")
 DAILY_PATH = os.path.join(DATA_DIR, "history_daily.json")
 BACKUP_DIR = os.path.join(DATA_DIR, "backup")
-VERSION = "2026.5.1"
+VERSION = "2026.5.2"
 
 config = {}
 switch_configs = []
