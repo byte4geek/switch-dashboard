@@ -10,16 +10,34 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-
 BASE = os.path.dirname(__file__)
-CONFIG_PATH = os.path.join(BASE, "config.json")
-COUNTERS_PATH = os.path.join(BASE, "counters.json")
-NOTES_PATH = os.path.join(BASE, "notes.json")
-SETTINGS_PATH = os.path.join(BASE, "settings.json")
-HOURLY_PATH = os.path.join(BASE, "history_hourly.json")
-DAILY_PATH = os.path.join(BASE, "history_daily.json")
-VERSION = "2026.5.1"
+app = Flask(__name__,
+            template_folder=os.path.join(BASE, "templates"),
+            static_folder=os.path.join(BASE, "static"))
+DATA_DIR = os.environ.get("DASHBOARD_DATA_DIR", BASE)
+
+if DATA_DIR != BASE:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    # Copy config.json if not present in DATA_DIR
+    dest_config = os.path.join(DATA_DIR, "config.json")
+    if not os.path.exists(dest_config):
+        src_config = os.path.join(BASE, "config.json")
+        if os.path.exists(src_config):
+            import shutil
+            try:
+                shutil.copy2(src_config, dest_config)
+                logger.info(f"Initialized default config.json in {dest_config}")
+            except Exception as e:
+                logger.error(f"Failed to initialize default config.json: {e}")
+
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+COUNTERS_PATH = os.path.join(DATA_DIR, "counters.json")
+NOTES_PATH = os.path.join(DATA_DIR, "notes.json")
+SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
+HOURLY_PATH = os.path.join(DATA_DIR, "history_hourly.json")
+DAILY_PATH = os.path.join(DATA_DIR, "history_daily.json")
+BACKUP_DIR = os.path.join(DATA_DIR, "backup")
+VERSION = "2026.5.2"
 
 config = {}
 switch_configs = []
@@ -558,7 +576,7 @@ def backup_switch_config(ip):
         if not binary_data:
             return jsonify({"error": "No backup data retrieved from switch"}), 500
 
-        backup_dir = os.path.join(BASE, "backup")
+        backup_dir = BACKUP_DIR
         os.makedirs(backup_dir, exist_ok=True)
 
         ip_dashed = ip.replace(".", "-")
@@ -603,7 +621,7 @@ def reboot_switch_api(ip):
 
 @app.route("/api/backups")
 def get_backups():
-    backup_dir = os.path.join(BASE, "backup")
+    backup_dir = BACKUP_DIR
     if not os.path.exists(backup_dir):
         return jsonify([])
 
@@ -656,7 +674,7 @@ def download_backup_file(filename):
     if ".." in filename or "/" in filename or "\\" in filename:
         return jsonify({"error": "Invalid filename"}), 400
 
-    backup_dir = os.path.join(BASE, "backup")
+    backup_dir = BACKUP_DIR
     filepath = os.path.join(backup_dir, filename)
     if not os.path.exists(filepath) or not os.path.isfile(filepath):
         return jsonify({"error": "File not found"}), 404
@@ -669,7 +687,7 @@ def delete_backup_file(filename):
     if ".." in filename or "/" in filename or "\\" in filename:
         return jsonify({"error": "Invalid filename"}), 400
 
-    backup_dir = os.path.join(BASE, "backup")
+    backup_dir = BACKUP_DIR
     filepath = os.path.join(backup_dir, filename)
     if not os.path.exists(filepath) or not os.path.isfile(filepath):
         return jsonify({"error": "File not found"}), 404
