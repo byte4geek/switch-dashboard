@@ -6,6 +6,8 @@ Built with a gorgeous, high-tech glassmorphic dark-mode interface, it features a
 
 ![Dashboard](https://raw.githubusercontent.com/byte4geek/switch-dashboard/refs/heads/main/images/dashboard.png)
 
+This dashboarb was tested end built on this [switch](https://s.click.aliexpress.com/e/_c31NG1u1)
+
 ---
 
 ## 🌟 Premium Features
