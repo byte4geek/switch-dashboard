@@ -1,0 +1,26 @@
+# Python byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Project-specific state and temporary files
+counters.json
+notes.json
+settings.json
+history_hourly.json
+history_daily.json
+backup_test_temp/
+
+# Switch configuration backups
+backup/

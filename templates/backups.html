@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} - Backups Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💾</text></svg>">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0b0e14;
+    color: #e1e4e8;
+    padding: 24px;
+    min-height: 100vh;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(31, 111, 235, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(139, 148, 158, 0.03) 0px, transparent 50%);
+  }
+
+  /* Header Section */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 28px;
+    background: rgba(22, 27, 34, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 16px;
+    border: 1px solid rgba(48, 54, 61, 0.6);
+    margin-bottom: 28px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    animation: fadeInDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .header h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #ffffff 30%, #a5c2f4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .header a {
+    color: #8b949e;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: rgba(33, 38, 45, 0.5);
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    transition: all .25s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .header a:hover {
+    color: #ffffff;
+    background: #1c2128;
+    border-color: #58a6ff;
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.2);
+    transform: translateY(-1px);
+  }
+
+  /* Main Container */
+  .container {
+    max-width: 1000px;
+    margin: 0 auto;
+    animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+  }
+
+  /* Card */
+  .card {
+    background: rgba(22, 27, 34, 0.65);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    margin-bottom: 24px;
+  }
+
+  .card-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 17px;
+    font-weight: 600;
+    color: #e1e4e8;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Table Style */
+  .table-container {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    background: #0d1117;
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    text-align: left;
+  }
+
+  th {
+    background: #161b22;
+    padding: 14px 18px;
+    font-weight: 600;
+    color: #8b949e;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.8);
+    font-size: 12.5px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  td {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+    vertical-align: middle;
+    color: #c9d1d9;
+    transition: background 0.15s ease;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  /* IP & Filename Typography */
+  .switch-ip {
+    font-weight: 600;
+    color: #58a6ff;
+  }
+  
+  .filename {
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 12.5px;
+    color: #c9d1d9;
+    word-break: break-all;
+  }
+
+  .file-size {
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #8b949e;
+  }
+
+  .timestamp {
+    font-weight: 500;
+    color: #b1bac4;
+  }
+
+  /* Action Buttons */
+  .btn-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+  }
+
+  .btn-download {
+    background: rgba(56, 139, 253, 0.15);
+    color: #58a6ff;
+    border-color: rgba(56, 139, 253, 0.3);
+  }
+  .btn-download:hover {
+    background: #58a6ff;
+    color: #0d1117;
+    border-color: #58a6ff;
+    box-shadow: 0 0 10px rgba(88, 166, 255, 0.35);
+  }
+
+  .btn-delete {
+    background: rgba(248, 81, 73, 0.1);
+    color: #ff7b72;
+    border-color: rgba(248, 81, 73, 0.2);
+    margin-left: 8px;
+  }
+  .btn-delete:hover {
+    background: #f85149;
+    color: #ffffff;
+    border-color: #f85149;
+    box-shadow: 0 0 10px rgba(248, 81, 73, 0.35);
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 60px 40px;
+    color: #8b949e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .empty-icon {
+    font-size: 48px;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .empty-state h3 {
+    font-family: 'Outfit', sans-serif;
+    color: #e1e4e8;
+    font-size: 18px;
+    font-weight: 500;
+  }
+
+  .empty-state p {
+    font-size: 13.5px;
+    max-width: 320px;
+    line-height: 1.5;
+  }
+
+  /* Confirmation modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+  }
+  .modal-overlay.open {
+    display: flex;
+    animation: fadeIn 0.25s ease-out;
+  }
+  
+  .modal-box {
+    background: #161b22;
+    border: 1px solid rgba(248, 81, 73, 0.5);
+    border-radius: 16px;
+    padding: 28px;
+    max-width: 440px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(248, 81, 73, 0.1);
+    transform: scale(0.9);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .modal-overlay.open .modal-box {
+    transform: scale(1);
+  }
+
+  .modal-box h3 {
+    font-family: 'Outfit', sans-serif;
+    color: #ff7b72;
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .modal-box p {
+    color: #b1bac4;
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 24px;
+  }
+
+  .modal-filename {
+    background: #0d1117;
+    border: 1px solid rgba(48, 54, 61, 0.6);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin: 8px 0 16px 0;
+    font-family: 'SF Mono', monospace;
+    font-size: 11.5px;
+    color: #e1e4e8;
+    word-break: break-all;
+  }
+
+  .modal-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+  .modal-buttons button {
+    padding: 10px 22px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  .modal-btn-confirm {
+    background: #f85149;
+    color: #ffffff;
+  }
+  .modal-btn-confirm:hover {
+    background: #da3633;
+    box-shadow: 0 0 12px rgba(248, 81, 73, 0.35);
+  }
+  .modal-btn-cancel {
+    background: #21262d;
+    color: #c9d1d9;
+    border: 1px solid #30363d !important;
+  }
+  .modal-btn-cancel:hover {
+    background: #30363d;
+    color: #ffffff;
+  }
+
+  /* Toast Notification */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: rgba(22, 27, 34, 0.9);
+    backdrop-filter: blur(8px);
+    border: 1px solid #30363d;
+    border-left: 4px solid #58a6ff;
+    padding: 14px 22px;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13.5px;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  .toast.success { border-left-color: #3fb950; }
+  .toast.error { border-left-color: #f85149; }
+
+  /* Animations */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .fade-out {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+    transition: all 0.4s ease-out;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 36px;
+    font-size: 12px;
+    color: #8b949e;
+    padding-bottom: 24px;
+    animation: fadeIn 1s ease-out both;
+  }
+  .version-badge {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: #c9d1d9;
+    font-family: 'SF Mono', Monaco, monospace;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span style="font-size: 24px; line-height: 1;">💾</span>
+    <h1>Switch Backups Manager</h1>
+  </div>
+  <a href="/">&larr; Back to Dashboard</a>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="card-title">
+      <span>🗂️</span> Saved Configuration Backups
+    </div>
+    
+    <div id="table-wrapper">
+      <div style="text-align: center; padding: 40px;" id="loading-spinner">
+        <div style="display: inline-block; width: 30px; height: 30px; border: 3px solid rgba(88,166,255,0.1); border-top-color: #58a6ff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        <p style="margin-top: 12px; color: #8b949e; font-size: 13.5px;">Loading backup archives...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <div><a href="/" style="color:#8b949e">Dashboard</a> &middot; <a href="/config" style="color:#8b949e">Switch Config</a> &middot; <a href="/api-docs" style="color:#8b949e">API Reference</a> &middot; <span class="version-badge">v{{ version }}</span></div>
+  <div style="margin-top: 6px; font-size: 11px; color: #8b949e;">Created by <a href="https://github.com/byte4geek/switch-dashboard" target="_blank" style="color: #58a6ff; text-decoration: none; font-weight: 500;">Byte4Geek</a> for the community</div>
+</div>
+
+<!-- Delete Confirm Dialog -->
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal-box">
+    <h3>⚠️ Confirm Deletion</h3>
+    <p>Are you sure you want to permanently delete this configuration backup from the server? This action cannot be undone.</p>
+    <div class="modal-filename" id="modal-filename-display">switch_cfg_192-168-1-100_20260521_1519.bin</div>
+    <div class="modal-buttons">
+      <button class="modal-btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+      <button class="modal-btn-confirm" id="modal-confirm-btn" onclick="executeDelete()">Delete Permanently</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification box -->
+<div class="toast" id="toast-box">
+  <span id="toast-icon">✓</span>
+  <span id="toast-message">Action completed successfully</span>
+</div>
+
+<script>
+let fileToDelete = null;
+let rowToDelete = null;
+
+// CSS Keyframes injection for spin animation
+const styleSheet = document.createElement("style");
+styleSheet.innerText = `
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+document.head.appendChild(styleSheet);
+
+document.addEventListener("DOMContentLoaded", loadBackups);
+
+async function loadBackups() {
+  const wrapper = document.getElementById("table-wrapper");
+  try {
+    const res = await fetch("/api/backups");
+    if (!res.ok) throw new Error("HTTP error " + res.status);
+    const data = await res.json();
+    
+    if (data.error) {
+      showErrorToast("Error loading backups: " + data.error);
+      renderErrorState(data.error);
+      return;
+    }
+    
+    if (!data || data.length === 0) {
+      renderEmptyState();
+      return;
+    }
+    
+    renderTable(data);
+  } catch (err) {
+    showErrorToast("Connection error: " + err.message);
+    renderErrorState(err.message);
+  }
+}
+
+function renderTable(backups) {
+  const wrapper = document.getElementById("table-wrapper");
+  
+  let rows = backups.map(b => {
+    return `
+      <tr id="row-${b.filename.replace(/\./g, '_')}">
+        <td class="switch-ip">${b.ip}</td>
+        <td class="timestamp">${b.datetime}</td>
+        <td class="filename">${b.filename}</td>
+        <td class="file-size">${b.size_str}</td>
+        <td style="white-space: nowrap;">
+          <a class="btn-action btn-download" href="/api/backups/${b.filename}/download" title="Download backup file">
+            <span style="font-size: 13px;">⬇️</span> Download
+          </a>
+          <button class="btn-action btn-delete" onclick="confirmDelete('${b.filename}', this)" title="Delete backup file">
+            <span style="font-size: 13px;">🗑️</span> Delete
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  
+  wrapper.innerHTML = `
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 15%">Switch IP</th>
+            <th style="width: 20%">Date & Time</th>
+            <th style="width: 40%">Filename</th>
+            <th style="width: 10%">Size</th>
+            <th style="width: 15%">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderEmptyState() {
+  const wrapper = document.getElementById("table-wrapper");
+  wrapper.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">📂</div>
+      <h3>No backups archived</h3>
+      <p>Configure your switches in the settings and press the "💾 Backup" action next to any switch IP in the main dashboard to store automated binary backups here.</p>
+      <a href="/" style="margin-top: 8px;">&larr; Go to Dashboard</a>
+    </div>
+  `;
+}
+
+function renderErrorState(msg) {
+  const wrapper = document.getElementById("table-wrapper");
+  wrapper.innerHTML = `
+    <div class="empty-state" style="color: #ff7b72;">
+      <div class="empty-icon">⚠️</div>
+      <h3>System Error</h3>
+      <p>${msg}</p>
+      <button onclick="loadBackups()" class="btn-action btn-download" style="margin-top: 14px; padding: 10px 20px;">
+        🔄 Retry Connection
+      </button>
+    </div>
+  `;
+}
+
+function confirmDelete(filename, btnElement) {
+  fileToDelete = filename;
+  rowToDelete = btnElement.closest("tr");
+  
+  document.getElementById("modal-filename-display").textContent = filename;
+  document.getElementById("delete-modal").classList.add("open");
+}
+
+function closeDeleteModal() {
+  document.getElementById("delete-modal").classList.remove("open");
+  fileToDelete = null;
+  rowToDelete = null;
+}
+
+async function executeDelete() {
+  if (!fileToDelete) return;
+  
+  const confirmBtn = document.getElementById("modal-confirm-btn");
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = "Deleting...";
+  
+  try {
+    const res = await fetch(`/api/backups/${encodeURIComponent(fileToDelete)}`, {
+      method: "DELETE"
+    });
+    const data = await res.json();
+    
+    if (res.ok && data.status === "ok") {
+      showSuccessToast("Backup deleted successfully");
+      
+      // Animate row deletion
+      if (rowToDelete) {
+        rowToDelete.classList.add("fade-out");
+        setTimeout(() => {
+          rowToDelete.remove();
+          // Check if table is now empty
+          const rows = document.querySelectorAll("tbody tr");
+          if (rows.length === 0) {
+            renderEmptyState();
+          }
+        }, 400);
+      }
+    } else {
+      showErrorToast("Delete failed: " + (data.error || "Unknown error"));
+    }
+  } catch (err) {
+    showErrorToast("Error connecting to server: " + err.message);
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = "Delete Permanently";
+    closeDeleteModal();
+  }
+}
+
+// Toast Notifications helper
+function showSuccessToast(message) {
+  showToast(message, "success", "✓");
+}
+
+function showErrorToast(message) {
+  showToast(message, "error", "⚠️");
+}
+
+function showToast(message, type, icon) {
+  const toast = document.getElementById("toast-box");
+  const toastIcon = document.getElementById("toast-icon");
+  const toastMsg = document.getElementById("toast-message");
+  
+  toast.className = `toast ${type}`;
+  toastIcon.textContent = icon;
+  toastMsg.textContent = message;
+  
+  toast.classList.add("show");
+  setTimeout(() => {
+    toast.classList.remove("show");
+  }, 4000);
+}
+</script>
+</body>
+</html>

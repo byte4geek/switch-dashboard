@@ -50,6 +50,22 @@ Built with a gorgeous, high-tech glassmorphic dark-mode interface, it features a
 * **Built-in Docs**: Hosted locally at `/api-docs` with a beautiful, fast sidebar navigation.
 * **Developer Resources**: Contains interactive code cards, response payload previews, parameter grids, and copy-to-clipboard buttons for instant cURL examples.
 
+### 7. DHCP Snooping & IGMP Snooping Telemetry
+* **Global Configuration Tracking**: Scrapes global enable state for DHCP Snooping and IGMP Snooping, rendering status badges directly on the dashboard.
+* **Port-Level Trust Badges**: Real-time port trust classifications are fetched from `/port.cgi` to show customized untrusted and trusted labels.
+* **IGMP Multicast Tables**: Fully parsed multicast group database extracted from `/igmp.cgi?page=dump` displayed in an expandable glassmorphic table.
+
+### 8. Jumbo Frame Configuration Status & Size
+* **Frame Size Scraper**: Inspects `/fwd.cgi?page=jumboframe` to retrieve Jumbo Frame configuration status and parse the exact selected frame size (e.g. `9216Bytes`).
+
+### 9. Server-Side Configuration Backups Manager
+* **Config Backups**: Safely triggers configuration archive downloads via `/config_back.cgi?cmd=conf_backup`, storing them directly on the server's disk space.
+* **Interactive Manager**: Beautiful `/backups` interface listing saved configs with quick downloads and single-click deletions protected by glassmorphic modal dialogues.
+
+### 10. Secure Device Reboot Modal
+* **Remote Power Cycle**: Triggers a remote switch reboot via `/reboot.cgi` securely.
+* **Safety Confirmation**: Uses an immersive custom warning card modal using frosted glass backdrop effects, with real-time feedback loops during reboot execution.
+
 ---
 
 ## 🛠️ System Architecture
@@ -160,6 +176,12 @@ The dashboard includes a set of REST endpoints. For complete details, response p
 | `GET` | `/api/settings` | Retrieves global UI preferences (e.g., base font scale). |
 | `POST`| `/api/settings` | Updates global UI settings on the disk. |
 | `POST`| `/api/reset` | Purges cumulative logs and bandwidth cache, resetting delta Baselines. |
+| `POST`| `/api/switches/<ip>/backup` | Triggers a configuration backup and saves the binary archive to the server's disk. |
+| `POST`| `/api/switches/<ip>/reboot` | Safely sends a reboot trigger to the physical switch hardware. |
+| `GET` | `/api/backups` | Lists all configuration backups stored on the server. |
+| `GET` | `/api/backups/<filename>/download` | Downloads a specific saved switch configuration file. |
+| `DELETE`| `/api/backups/<filename>` | Deletes a specific switch configuration file from the server. |
+| `GET` | `/backups` | Returns the HTML template for the backups manager dashboard. |
 
 ---
 
@@ -190,6 +212,29 @@ The dashboard includes a set of REST endpoints. For complete details, response p
 ## 🛡️ License
 
 This project is licensed under the **MIT License**. Feel free to modify, distribute, or incorporate it into your network setup.
+
+---
+
+## 📅 Release Notes & Changelog
+
+### 🚀 Release 2026.5.1 (Current)
+* **🎨 Administrative Port Contrast & Legend Integration**:
+  - Outlined administratively disabled ports in the graphical representation using a unique, premium dark-grey (`#353c45`) to distinguish them from standard offline ports (`#57606a`).
+  - Integrated the new **Disabled** status label and color badge directly into the central `PORT STATUS` legend.
+* **🔒 Administrative Port Status Scraping**:
+  - Upgraded scraping engine to fetch `/port.cgi` and parse active configuration states, accurately reporting `DISABLE` status instead of misleading physical link states.
+* **🔄 Safe Device Reboot Modal**:
+  - Implemented secure switch reboots via `/reboot.cgi` with an immersive glassmorphic warning modal to protect users from accidental network disruption.
+* **💾 Configuration Backup Manager**:
+  - Added on-demand server-side configuration backups (`.bin` files) with an interactive dashboard to download, view, and safely delete configurations.
+* **🟢 Snooping & Multicast Telemetry Integration**:
+  - Integrated global and port-level status for **DHCP Snooping**, **IGMP Snooping** (with collapsible multicast table), and **Jumbo Frame** size properties.
+* **🎨 Visual Color Harmonization**:
+  - Aligned table port speed texts (`colonna speed`) with matching port status indicators in the graphics bar.
+* **📋 Interactive API Reference Expansion**:
+  - Documented reboot and backups endpoints in the interactive local `/api-docs` interface.
+
+---
 
 # Donation
 Buy me a coffee

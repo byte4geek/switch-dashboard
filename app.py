@@ -4,7 +4,8 @@ import threading
 import os
 import logging
 from collections import deque
-from flask import Flask, render_template, jsonify, request, redirect, url_for, Response
+from flask import Flask, render_template, jsonify, request, redirect, url_for, Response, send_from_directory
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ NOTES_PATH = os.path.join(BASE, "notes.json")
 SETTINGS_PATH = os.path.join(BASE, "settings.json")
 HOURLY_PATH = os.path.join(BASE, "history_hourly.json")
 DAILY_PATH = os.path.join(BASE, "history_daily.json")
+VERSION = "2026.5.1"
 
 config = {}
 switch_configs = []
@@ -314,7 +316,8 @@ def _format_bps(bps):
 def dashboard():
     return render_template("index.html",
                            title=config.get("title", "Switch Dashboard"),
-                           refresh=config.get("refresh_interval", 30))
+                           refresh=config.get("refresh_interval", 30),
+                           version=VERSION)
 
 
 @app.route("/api/switches")
@@ -515,7 +518,8 @@ def config_page():
     return render_template("config.html", title=config.get("title", "Switch Dashboard"),
                            switches=switch_configs,
                            refresh=config.get("refresh_interval", 30),
-                           mac_multiplier=config.get("mac_refresh_multiplier", 5))
+                           mac_multiplier=config.get("mac_refresh_multiplier", 5),
+                           version=VERSION)
 
 
 @app.route("/api/settings", methods=["GET", "POST"])
@@ -533,7 +537,155 @@ def api_settings():
 
 @app.route("/api-docs")
 def api_docs_page():
-    return render_template("api_docs.html", title=config.get("title", "Switch Dashboard"))
+    return render_template("api_docs.html", title=config.get("title", "Switch Dashboard"),
+                           version=VERSION)
+
+
+@app.route("/api/switches/<ip>/backup", methods=["POST"])
+def backup_switch_config(ip):
+    sw = None
+    for s in switch_configs:
+        if s["ip"] == ip:
+            sw = s
+            break
+    if not sw:
+        return jsonify({"error": "Switch not found"}), 404
+
+    try:
+        from scraper import HCSwitchScraper
+        scraper_obj = HCSwitchScraper(sw)
+        binary_data = scraper_obj.download_backup()
+        if not binary_data:
+            return jsonify({"error": "No backup data retrieved from switch"}), 500
+
+        backup_dir = os.path.join(BASE, "backup")
+        os.makedirs(backup_dir, exist_ok=True)
+
+        ip_dashed = ip.replace(".", "-")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        filename = f"switch_cfg_{ip_dashed}_{timestamp}.bin"
+        filepath = os.path.join(backup_dir, filename)
+
+        with open(filepath, "wb") as f:
+            f.write(binary_data)
+
+        logger.info(f"Successfully saved backup: {filename}")
+        return jsonify({
+            "status": "ok",
+            "filename": filename,
+            "size": len(binary_data),
+            "timestamp": timestamp
+        })
+    except Exception as e:
+        logger.error(f"Backup failed for {ip}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/switches/<ip>/reboot", methods=["POST"])
+def reboot_switch_api(ip):
+    sw = None
+    for s in switch_configs:
+        if s["ip"] == ip:
+            sw = s
+            break
+    if not sw:
+        return jsonify({"error": "Switch not found"}), 404
+
+    try:
+        from scraper import HCSwitchScraper
+        scraper_obj = HCSwitchScraper(sw)
+        scraper_obj.reboot_switch()
+        return jsonify({"status": "ok", "message": "Reboot command sent successfully"})
+    except Exception as e:
+        logger.error(f"Reboot failed for {ip}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/backups")
+def get_backups():
+    backup_dir = os.path.join(BASE, "backup")
+    if not os.path.exists(backup_dir):
+        return jsonify([])
+
+    backups = []
+    try:
+        for filename in os.listdir(backup_dir):
+            if filename.startswith("switch_cfg_") and filename.endswith(".bin"):
+                filepath = os.path.join(backup_dir, filename)
+                if os.path.isfile(filepath):
+                    stat = os.stat(filepath)
+                    size = stat.st_size
+                    if size >= 1048576:
+                        size_str = f"{size / 1048576:.1f} MB"
+                    elif size >= 1024:
+                        size_str = f"{size / 1024:.1f} KB"
+                    else:
+                        size_str = f"{size} B"
+
+                    parts = filename[:-4].split("_")
+                    ip = ""
+                    dt_str = ""
+                    if len(parts) >= 5:
+                        ip = parts[2].replace("-", ".")
+                        date_part = parts[3]
+                        time_part = parts[4]
+                        if len(date_part) == 8 and len(time_part) == 4:
+                            dt_str = f"{date_part[0:4]}-{date_part[4:6]}-{date_part[6:8]} {time_part[0:2]}:{time_part[2:4]}"
+                    else:
+                        ip = "Unknown"
+                        dt_str = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
+
+                    backups.append({
+                        "filename": filename,
+                        "ip": ip,
+                        "size": size,
+                        "size_str": size_str,
+                        "datetime": dt_str,
+                        "mtime": stat.st_mtime
+                    })
+        backups.sort(key=lambda x: x["mtime"], reverse=True)
+    except Exception as e:
+        logger.error(f"Failed to list backups: {e}")
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify(backups)
+
+
+@app.route("/api/backups/<filename>/download")
+def download_backup_file(filename):
+    if ".." in filename or "/" in filename or "\\" in filename:
+        return jsonify({"error": "Invalid filename"}), 400
+
+    backup_dir = os.path.join(BASE, "backup")
+    filepath = os.path.join(backup_dir, filename)
+    if not os.path.exists(filepath) or not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 404
+
+    return send_from_directory(backup_dir, filename, as_attachment=True)
+
+
+@app.route("/api/backups/<filename>", methods=["DELETE"])
+def delete_backup_file(filename):
+    if ".." in filename or "/" in filename or "\\" in filename:
+        return jsonify({"error": "Invalid filename"}), 400
+
+    backup_dir = os.path.join(BASE, "backup")
+    filepath = os.path.join(backup_dir, filename)
+    if not os.path.exists(filepath) or not os.path.isfile(filepath):
+        return jsonify({"error": "File not found"}), 404
+
+    try:
+        os.remove(filepath)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        logger.error(f"Failed to delete backup file {filename}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/backups")
+def backups_page():
+    return render_template("backups.html", title=config.get("title", "Switch Dashboard"),
+                           version=VERSION)
 
 
 @app.route("/static/<path:path>")
