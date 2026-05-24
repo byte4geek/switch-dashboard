@@ -18,7 +18,7 @@ class HCSwitchScraper:
         self.username = config.get("username", "admin")
         self.password = config.get("password", "admin")
         self.port_count = config.get("port_count", 9)
-        self.model = config.get("model", "HC-SWTGW218AS")
+        self.model = config.get("model", "Generic Model")
         self.base_url = f"http://{self.ip}"
         self._cj = None
         self._opener = None
