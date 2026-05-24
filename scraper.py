@@ -18,6 +18,7 @@ class HCSwitchScraper:
         self.username = config.get("username", "admin")
         self.password = config.get("password", "admin")
         self.port_count = config.get("port_count", 9)
+        self.model = config.get("model", "HC-SWTGW218AS")
         self.base_url = f"http://{self.ip}"
         self._cj = None
         self._opener = None
@@ -227,7 +228,7 @@ class HCSwitchScraper:
         return {
             "name": self.name,
             "ip": self.ip,
-            "model": device_info.get("model", "HC-SWTGW218AS"),
+            "model": device_info.get("model", self.model),
             "mac": device_info.get("mac", ""),
             "uptime": device_info.get("uptime", ""),
             "firmware": device_info.get("firmware", ""),
@@ -364,7 +365,7 @@ class HCSwitchScraper:
         return {
             "name": self.name,
             "ip": self.ip,
-            "model": "HC-SWTGW218AS",
+            "model": self.model,
             "mac": "",
             "uptime": "",
             "firmware": "",
