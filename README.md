@@ -6,7 +6,6 @@ Built with a gorgeous, high-tech glassmorphic dark-mode interface, it features a
 
 ![Dashboard](https://raw.githubusercontent.com/byte4geek/switch-dashboard/refs/heads/main/images/dashboard.png)
 
-
 This dashboarb was tested end built on this [switch](https://s.click.aliexpress.com/e/_c31NG1u1)
 
 ---
@@ -278,6 +277,7 @@ This project is licensed under the **MIT License**. Feel free to modify, distrib
 ### 🚀 Release 2026.5.3 (Current)
 * **🩹 Dynamic Switch Model Fallback**:
   - Fixed a bug where switches that do not explicitly report their model inside `/info.cgi` (such as `LIANGUO LG-SG5T1`) incorrectly fell back to a hardcoded `"HC-SWTGW218AS"` model name in the UI. The scraper now dynamically falls back to the exact model name specified in `config.json`.
+  - Changed the default fallback in `scraper.py` (when the `"model"` attribute is omitted from `config.json` entirely) to a clean, generic `"Generic Model"` string to avoid any brand confusion.
 
 ---
 
