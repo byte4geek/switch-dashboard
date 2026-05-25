@@ -24,6 +24,7 @@ class HCSwitchScraper:
         self._opener = None
 
     def _login(self):
+        logger.debug(f"[_login] Generating credentials MD5 hash for {self.username} on {self.ip}...")
         auth_str = self.username + self.password
         md5hash = hashlib.md5(auth_str.encode()).hexdigest()
 
@@ -54,6 +55,7 @@ class HCSwitchScraper:
             comment=None, comment_url=None, rest={}
         )
         self._cj.set_cookie(admin_c)
+        logger.debug(f"[_login] Authenticated cookie jar initialized. Admin cookie set to {md5hash}")
 
         r = self._opener.open(f"{self.base_url}/", timeout=10)
         r.read()
@@ -61,11 +63,14 @@ class HCSwitchScraper:
     def _fetch(self, path):
         if not self._opener:
             self._login()
+        logger.debug(f"[_fetch] Fetching path: {path}")
         headers = {"Referer": f"{self.base_url}/"}
         req = urllib.request.Request(f"{self.base_url}{path}", headers=headers)
         try:
             r = self._opener.open(req, timeout=10)
-            return r.read().decode("utf-8", errors="replace")
+            res = r.read().decode("utf-8", errors="replace")
+            logger.debug(f"[_fetch] Path {path} successfully fetched (size: {len(res)} characters)")
+            return res
         except Exception as e:
             logger.error(f"Failed to fetch {path}: {e}")
             return None
@@ -93,6 +98,7 @@ class HCSwitchScraper:
             return 0
 
     def scrape(self):
+        logger.debug(f"Running full telemetry scrape for switch {self.name} ({self.ip})...")
         try:
             self._login()
         except Exception as e:
@@ -138,6 +144,7 @@ class HCSwitchScraper:
                             if match:
                                 port_num = match.group(0)
                                 port_states[port_num] = state
+                logger.debug(f"Parsed port config states (admin status) from /port.cgi: {port_states}")
             except Exception as e:
                 logger.error(f"Error parsing port config states for {self.ip}: {e}")
 
@@ -165,6 +172,7 @@ class HCSwitchScraper:
                         elif "Device Model" in label or "Device Name" in label:
                             if "Model" in label or "model" in label:
                                 device_info["model"] = value
+                logger.debug(f"Parsed global device info from /info.cgi: {device_info}")
 
             # Port status from second table
             if len(tables) >= 2:
@@ -195,6 +203,90 @@ class HCSwitchScraper:
                             "tx_bytes": 0,
                             "rx_bytes": 0,
                         })
+                logger.debug(f"Parsed active port link/speed configurations: {ports}")
+
+            # Fallback: check if port status table is inside port_cfg_html (/port.cgi) Table 2 (e.g. KeepLink switch model)
+            if len(ports) == 0 and port_cfg_html:
+                try:
+                    port_soup = BeautifulSoup(port_cfg_html, "html.parser")
+                    tables_port = port_soup.find_all("table")
+                    status_table = None
+                    for t in tables_port:
+                        rows = t.find_all("tr")
+                        if len(rows) >= 3:
+                            text_content = t.get_text()
+                            if "Actual" in text_content and "Config" in text_content and "Port 1" in text_content:
+                                status_table = t
+                                break
+                    
+                    if status_table:
+                        logger.debug("Found port status table inside /port.cgi instead of /info.cgi! Parsing KeepLink style...")
+                        rows = status_table.find_all("tr")
+                        start_idx = 0
+                        for idx, r in enumerate(rows):
+                            cells = r.find_all(["td", "th"])
+                            cells_text = [c.get_text(strip=True) for c in cells]
+                            if len(cells_text) > 0 and "Port 1" in cells_text[0]:
+                                start_idx = idx
+                                break
+                        
+                        if start_idx > 0:
+                            for row in rows[start_idx:]:
+                                cells = row.find_all(["td", "th"])
+                                if len(cells) >= 4:
+                                    port_name = cells[0].get_text(strip=True)
+                                    match = re.match(r"Port\s*(\d+)", port_name)
+                                    port_num = match.group(1) if match else port_name
+                                    
+                                    admin_state = cells[1].get_text(strip=True).strip().lower()
+                                    actual_link = cells[3].get_text(strip=True).strip()
+                                    
+                                    if admin_state in ["disable", "disabled"]:
+                                        status_val = "disable"
+                                        link_val = "Disabled"
+                                        speed_val = "Disabled"
+                                        duplex_val = "Disabled"
+                                    else:
+                                        status_val = "down" if "down" in actual_link.lower() else "up"
+                                        link_val = "Link Up" if status_val == "up" else "Link Down"
+                                        
+                                        speed_val = "Auto"
+                                        duplex_val = "Full"
+                                        if status_val == "up":
+                                            speed_match = re.match(r"(\d+G?)(Full|Half)?", actual_link, re.IGNORECASE)
+                                            if speed_match:
+                                                speed_num = speed_match.group(1)
+                                                if "G" in speed_num.upper():
+                                                    speed_val = speed_num.upper()
+                                                else:
+                                                    speed_val = f"{speed_num}M"
+                                                
+                                                duplex_val = speed_match.group(2) or "Full"
+                                                if duplex_val.lower() == "full":
+                                                    duplex_val = "Full"
+                                                elif duplex_val.lower() == "half":
+                                                    duplex_val = "Half"
+                                            else:
+                                                speed_val = actual_link
+                                        else:
+                                            speed_val = "Auto"
+                                            duplex_val = "Full"
+                                    
+                                    ports.append({
+                                        "port": port_num,
+                                        "status": status_val,
+                                        "link": link_val,
+                                        "speed": speed_val,
+                                        "duplex": duplex_val,
+                                        "flow_control": cells[4].get_text(strip=True) if len(cells) > 4 else "",
+                                        "tx_packets": 0,
+                                        "rx_packets": 0,
+                                        "tx_bytes": 0,
+                                        "rx_bytes": 0,
+                                    })
+                            logger.debug(f"Parsed active port link/speed from /port.cgi status_table: {ports}")
+                except Exception as e:
+                    logger.error(f"Error parsing KeepLink port status table from /port.cgi: {e}")
 
         if stats_html:
             soup = BeautifulSoup(stats_html, "html.parser")
@@ -215,6 +307,7 @@ class HCSwitchScraper:
                                 p["tx_bytes"] = self._parse_counter(cells[5].get_text(strip=True))
                                 p["rx_bytes"] = self._parse_counter(cells[6].get_text(strip=True))
                                 break
+                logger.debug(f"Parsed port statistical counter bytes: {ports}")
 
         # Scrape DHCP Snooping
         dhcp_snooping = self.scrape_dhcp_snooping()
@@ -240,6 +333,7 @@ class HCSwitchScraper:
         }
 
     def scrape_dhcp_snooping(self):
+        logger.debug(f"Scraping DHCP Snooping configurations for {self.ip}...")
         try:
             html = self._fetch("/dhcp_snooping.cgi?page=dump")
             if not html:
@@ -271,15 +365,18 @@ class HCSwitchScraper:
                             is_trusted = inp.has_attr("checked")
                             ports_trust[port_name] = "Trusted" if is_trusted else "Untrusted"
             
-            return {
+            res = {
                 "enabled": enabled,
                 "ports": ports_trust
             }
+            logger.debug(f"DHCP Snooping scrape results: {res}")
+            return res
         except Exception as e:
             logger.error(f"Failed to scrape DHCP Snooping for {self.ip}: {e}")
             return {"enabled": False, "ports": {}}
 
     def scrape_igmp(self):
+        logger.debug(f"Scraping IGMP Snooping Multicast groups for {self.ip}...")
         try:
             html = self._fetch("/igmp.cgi?page=dump")
             if not html:
@@ -303,24 +400,26 @@ class HCSwitchScraper:
                     for row in rows:
                         cells = row.find_all("td")
                         if len(cells) >= 3:
-                            ip = cells[0].get_text(strip=True)
-                            ports = cells[1].get_text(strip=True)
-                            vlan = cells[2].get_text(strip=True)
-                            if ip:
-                                entries.append({
-                                    "ip": ip,
-                                    "ports": ports,
-                                    "vlan": vlan
-                                })
-            return {
+                            vlan = cells[0].get_text(strip=True)
+                            ip_addr = cells[1].get_text(strip=True)
+                            ports = cells[2].get_text(strip=True)
+                            entries.append({
+                                "vlan": vlan,
+                                "ip": ip_addr,
+                                "ports": ports
+                            })
+            res = {
                 "enabled": enabled,
                 "entries": entries
             }
+            logger.debug(f"IGMP Snooping scrape results: {res}")
+            return res
         except Exception as e:
             logger.error(f"Failed to scrape IGMP for {self.ip}: {e}")
             return {"enabled": False, "entries": []}
 
     def scrape_jumbo_frame(self):
+        logger.debug(f"Scraping Jumbo Frame parameters for {self.ip}...")
         try:
             html = self._fetch("/fwd.cgi?page=jumboframe")
             if not html:
@@ -353,10 +452,12 @@ class HCSwitchScraper:
                         text_node = options[0].find(string=True, recursive=False)
                         size_val = text_node.strip() if text_node else options[0].get_text(strip=True)
                         
-            return {
+            res = {
                 "enabled": enabled,
                 "size": size_val
             }
+            logger.debug(f"Jumbo Frame scrape results: {res}")
+            return res
         except Exception as e:
             logger.error(f"Failed to scrape Jumbo Frame for {self.ip}: {e}")
             return {"enabled": False, "size": "Disabled"}
@@ -407,6 +508,7 @@ class HCSwitchScraper:
             raise e
 
     def scrape_mac_table(self):
+        logger.debug(f"Scraping MAC address table for {self.ip}...")
         try:
             self._login()
         except Exception as e:
@@ -443,6 +545,7 @@ class HCSwitchScraper:
                     page_soup = BeautifulSoup(page_html, "html.parser")
                     entries.extend(self._parse_mac_table_rows(page_soup))
                     
+            logger.debug(f"Found {len(entries)} MAC table entries on {self.ip}")
         except Exception as e:
             logger.error(f"Error scraping MAC table on {self.ip}: {e}")
             
@@ -495,6 +598,7 @@ class HCSwitchScraper:
         return rows_data
 
     def scrape_transceiver(self):
+        logger.debug(f"Scraping SFP+ Transceiver diagnostics for {self.ip}...")
         try:
             self._login()
         except Exception as e:
@@ -566,6 +670,7 @@ class HCSwitchScraper:
                 raw = info["rxpower_raw"]
                 info["rx_power"] = decode_ddmi(raw, 0.0001, is_power=True)
                 
+            logger.debug(f"SFP+ Transceiver diagnostics scrape results on {self.ip}: {info}")
             return info
         except Exception as e:
             logger.error(f"Error scraping Transceiver on {self.ip}: {e}")

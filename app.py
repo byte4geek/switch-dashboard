@@ -3,18 +3,71 @@ import time
 import threading
 import os
 import logging
+from logging.handlers import RotatingFileHandler
 from collections import deque
 from flask import Flask, render_template, jsonify, request, redirect, url_for, Response, send_from_directory
 from datetime import datetime
 
-logging.basicConfig(level=logging.INFO)
+BASE = os.path.dirname(__file__)
+DATA_DIR = os.environ.get("DASHBOARD_DATA_DIR", BASE)
+SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
+LOG_FILE_PATH = os.path.join(DATA_DIR, "dashboard.log")
+
+def setup_logging(level_name=None):
+    if not level_name:
+        try:
+            if os.path.exists(SETTINGS_PATH):
+                with open(SETTINGS_PATH) as f:
+                    settings = json.load(f)
+                    level_name = settings.get("log_level", "INFO")
+            else:
+                level_name = "INFO"
+        except Exception:
+            level_name = "INFO"
+
+    levels = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARN": logging.WARNING,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR,
+        "CRITICAL": logging.CRITICAL,
+        "NONE": 99
+    }
+    level = levels.get(level_name.upper(), logging.INFO)
+
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+
+    root.setLevel(level)
+    
+    # Silence or set level for child loggers explicitly to override propagations
+    logging.getLogger('werkzeug').setLevel(level)
+    logging.getLogger('scraper').setLevel(level)
+    
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(level)
+    root.addHandler(console_handler)
+
+    try:
+        os.makedirs(os.path.dirname(LOG_FILE_PATH), exist_ok=True)
+        file_handler = RotatingFileHandler(LOG_FILE_PATH, maxBytes=1024*1024, backupCount=3, encoding='utf-8')
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(level)
+        root.addHandler(file_handler)
+    except Exception as e:
+        print(f"Error setting up RotatingFileHandler: {e}")
+
+setup_logging()
 logger = logging.getLogger(__name__)
 
-BASE = os.path.dirname(__file__)
 app = Flask(__name__,
             template_folder=os.path.join(BASE, "templates"),
             static_folder=os.path.join(BASE, "static"))
-DATA_DIR = os.environ.get("DASHBOARD_DATA_DIR", BASE)
 
 if DATA_DIR != BASE:
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -33,7 +86,6 @@ if DATA_DIR != BASE:
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 COUNTERS_PATH = os.path.join(DATA_DIR, "counters.json")
 NOTES_PATH = os.path.join(DATA_DIR, "notes.json")
-SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 HOURLY_PATH = os.path.join(DATA_DIR, "history_hourly.json")
 DAILY_PATH = os.path.join(DATA_DIR, "history_daily.json")
 BACKUP_DIR = os.path.join(DATA_DIR, "backup")
@@ -544,8 +596,16 @@ def config_page():
 def api_settings():
     if request.method == "POST":
         data = request.get_json(force=True, silent=True) or {}
+        existing = {}
+        if os.path.exists(SETTINGS_PATH):
+            try:
+                with open(SETTINGS_PATH) as f:
+                    existing = json.load(f)
+            except Exception:
+                pass
+        existing.update(data)
         with open(SETTINGS_PATH, "w") as f:
-            json.dump(data, f, indent=2)
+            json.dump(existing, f, indent=2)
         return jsonify({"status": "ok"})
     if os.path.exists(SETTINGS_PATH):
         with open(SETTINGS_PATH) as f:
@@ -698,6 +758,100 @@ def delete_backup_file(filename):
     except Exception as e:
         logger.error(f"Failed to delete backup file {filename}: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/logs")
+def logs_page():
+    log_level = "INFO"
+    if os.path.exists(SETTINGS_PATH):
+        try:
+            with open(SETTINGS_PATH) as f:
+                settings = json.load(f)
+                log_level = settings.get("log_level", "INFO")
+        except Exception:
+            pass
+    from flask import make_response
+    rendered = render_template("logs.html", 
+                               title=config.get("title", "Switch Dashboard"),
+                               version=VERSION,
+                               current_log_level=log_level)
+    response = make_response(rendered)
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
+@app.route("/api/logs")
+def api_logs():
+    lines_limit = 150
+    if not os.path.exists(LOG_FILE_PATH):
+        return jsonify([])
+    try:
+        with open(LOG_FILE_PATH, "r", encoding="utf-8", errors="replace") as f:
+            log_lines = deque(f, maxlen=lines_limit)
+        response = jsonify([line.rstrip() for line in log_lines])
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+    except Exception as e:
+        logger.error(f"Failed to read log file: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/logs/level", methods=["POST"])
+def api_logs_level():
+    data = request.get_json(force=True, silent=True) or {}
+    level_name = data.get("level", "INFO").upper()
+    valid_levels = ["DEBUG", "INFO", "WARN", "WARNING", "ERROR", "CRITICAL", "NONE"]
+    if level_name not in valid_levels:
+        return jsonify({"error": "Invalid log level"}), 400
+
+    try:
+        existing = {}
+        if os.path.exists(SETTINGS_PATH):
+            try:
+                with open(SETTINGS_PATH) as f:
+                    existing = json.load(f)
+            except Exception:
+                pass
+        existing["log_level"] = level_name
+        with open(SETTINGS_PATH, "w") as f:
+            json.dump(existing, f, indent=2)
+
+        setup_logging(level_name)
+        logger.warning(f"Log level dynamically changed to {level_name} by user request.")
+        return jsonify({"status": "ok", "level": level_name})
+    except Exception as e:
+        logger.error(f"Failed to update log level: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/logs/clear", methods=["POST"])
+def api_logs_clear():
+    try:
+        with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
+            f.truncate(0)
+        logger.warning("Log history was cleared by the administrator.")
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        logger.error(f"Failed to clear log file: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/logs/download")
+def api_logs_download():
+    if not os.path.exists(LOG_FILE_PATH):
+        try:
+            with open(LOG_FILE_PATH, "w", encoding="utf-8") as f:
+                pass
+        except Exception:
+            return jsonify({"error": "Log file not found"}), 404
+            
+    dir_name = os.path.dirname(LOG_FILE_PATH)
+    file_name = os.path.basename(LOG_FILE_PATH)
+    return send_from_directory(dir_name, file_name, as_attachment=True)
 
 
 @app.route("/backups")
