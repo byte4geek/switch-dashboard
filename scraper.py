@@ -400,9 +400,9 @@ class HCSwitchScraper:
                     for row in rows:
                         cells = row.find_all("td")
                         if len(cells) >= 3:
-                            vlan = cells[0].get_text(strip=True)
-                            ip_addr = cells[1].get_text(strip=True)
-                            ports = cells[2].get_text(strip=True)
+                            ip_addr = cells[0].get_text(strip=True)
+                            ports = cells[1].get_text(strip=True)
+                            vlan = cells[2].get_text(strip=True)
                             entries.append({
                                 "vlan": vlan,
                                 "ip": ip_addr,
