@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} - System Logs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📋</text></svg>">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0b0e14;
+    color: #e1e4e8;
+    padding: 24px;
+    min-height: 100vh;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(31, 111, 235, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(139, 148, 158, 0.03) 0px, transparent 50%);
+  }
+
+  /* Header Section */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 28px;
+    background: rgba(22, 27, 34, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 16px;
+    border: 1px solid rgba(48, 54, 61, 0.6);
+    margin-bottom: 28px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    animation: fadeInDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .header h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #ffffff 30%, #a5c2f4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .header a {
+    color: #8b949e;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: rgba(33, 38, 45, 0.5);
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    transition: all .25s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .header a:hover {
+    color: #ffffff;
+    background: #1c2128;
+    border-color: #58a6ff;
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.2);
+    transform: translateY(-1px);
+  }
+
+  /* Main Container */
+  .container {
+    max-width: 100%;
+    margin: 0 auto;
+    animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+  }
+
+  /* Card and Controls */
+  .card {
+    background: rgba(22, 27, 34, 0.65);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    margin-bottom: 24px;
+  }
+
+  .controls-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+  }
+
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #8b949e;
+  }
+
+  /* Dropdown Select Style */
+  select {
+    background: #0d1117;
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: #e1e4e8;
+    font-size: 13.5px;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  select:focus {
+    border-color: #58a6ff;
+    box-shadow: 0 0 8px rgba(88, 166, 255, 0.15);
+  }
+
+  /* Switch Toggle Button style */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    border: 1px solid transparent;
+  }
+  
+  .btn-secondary {
+    background: rgba(33, 38, 45, 0.6);
+    color: #c9d1d9;
+    border-color: rgba(48, 54, 61, 0.8);
+  }
+  .btn-secondary:hover {
+    background: #1c2128;
+    color: #ffffff;
+    border-color: #8b949e;
+  }
+
+  .btn-danger {
+    background: rgba(248, 81, 73, 0.1);
+    color: #ff7b72;
+    border-color: rgba(248, 81, 73, 0.2);
+  }
+  .btn-danger:hover {
+    background: #f85149;
+    color: #ffffff;
+    border-color: #f85149;
+    box-shadow: 0 0 12px rgba(248, 81, 73, 0.25);
+  }
+
+  .btn-primary {
+    background: rgba(56, 139, 253, 0.15);
+    color: #58a6ff;
+    border-color: rgba(56, 139, 253, 0.3);
+  }
+  .btn-primary:hover {
+    background: #58a6ff;
+    color: #0d1117;
+    border-color: #58a6ff;
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.3);
+  }
+
+  /* Terminal Log Console */
+  .terminal-console {
+    background: #07090e;
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    border-radius: 12px;
+    height: 580px;
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    resize: vertical;
+    min-height: 250px;
+    max-height: 1200px;
+    padding: 16px 20px;
+    font-family: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.6;
+    box-shadow: inset 0 4px 20px rgba(0,0,0,0.8), 0 4px 12px rgba(0,0,0,0.3);
+    position: relative;
+  }
+
+  /* Custom Scrollbar for Terminal */
+  .terminal-console::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .terminal-console::-webkit-scrollbar-track {
+    background: #07090e;
+    border-radius: 0 12px 12px 0;
+  }
+  .terminal-console::-webkit-scrollbar-thumb {
+    background: #21262d;
+    border-radius: 4px;
+  }
+  .terminal-console::-webkit-scrollbar-thumb:hover {
+    background: #30363d;
+  }
+
+  /* Log Row Highlight Colors */
+  .log-line {
+    white-space: pre-wrap;
+    word-break: break-all;
+    border-bottom: 1px solid rgba(33, 38, 45, 0.3);
+    padding: 3px 0;
+  }
+  .log-line:last-child {
+    border-bottom: none;
+  }
+
+  .log-time {
+    color: #8b949e;
+    font-size: 11px;
+    margin-right: 8px;
+  }
+  
+  .log-module {
+    color: #c9d1d9;
+    opacity: 0.65;
+    margin-right: 6px;
+    font-weight: 500;
+  }
+
+  .level-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-right: 8px;
+    letter-spacing: 0.3px;
+  }
+
+  /* Levels Styling */
+  .log-debug { color: #8b949e; }
+  .log-debug .level-tag { background: rgba(139, 148, 158, 0.15); color: #8b949e; border: 1px solid rgba(139, 148, 158, 0.2); }
+  
+  .log-info { color: #f0f6fc; }
+  .log-info .level-tag { background: rgba(56, 139, 253, 0.15); color: #58a6ff; border: 1px solid rgba(56, 139, 253, 0.2); }
+  
+  .log-warning, .log-warn { color: #ffdf7e; }
+  .log-warning .level-tag, .log-warn .level-tag { background: rgba(240, 138, 36, 0.15); color: #f08a24; border: 1px solid rgba(240, 138, 36, 0.25); }
+  
+  .log-error { color: #ff8585; }
+  .log-error .level-tag { background: rgba(248, 81, 73, 0.15); color: #ff7b72; border: 1px solid rgba(248, 81, 73, 0.25); }
+
+  .log-critical { color: #ff6e6e; font-weight: 600; text-shadow: 0 0 8px rgba(248, 81, 73, 0.3); }
+  .log-critical .level-tag { background: #f85149; color: #ffffff; }
+
+  /* Empty state */
+  .empty-logs {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #8b949e;
+    gap: 12px;
+  }
+  .empty-icon {
+    font-size: 32px;
+    opacity: 0.6;
+  }
+
+  /* Auto-refresh indicator dot */
+  .refresh-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #8b949e;
+    margin-right: 4px;
+    transition: all 0.3s ease;
+  }
+  .refresh-indicator.active {
+    background: #3fb950;
+    box-shadow: 0 0 8px #3fb950;
+    animation: pulse 2s infinite;
+  }
+
+  /* Toast Notification */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: rgba(22, 27, 34, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid #30363d;
+    border-left: 4px solid #58a6ff;
+    padding: 14px 22px;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13.5px;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  .toast.success { border-left-color: #3fb950; }
+  .toast.error { border-left-color: #f85149; }
+
+  /* Keyframe Animations */
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 36px;
+    font-size: 12px;
+    color: #8b949e;
+    padding-bottom: 24px;
+  }
+  .version-badge {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: #c9d1d9;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span style="font-size: 24px; line-height: 1;">📋</span>
+    <h1>Switch Dashboard Logs</h1>
+  </div>
+  <a href="/">&larr; Back to Dashboard</a>
+</div>
+
+<div class="container">
+  <div class="card">
+    <div class="controls-bar">
+      <!-- Left side: Log level select -->
+      <div class="control-group">
+        <label for="log-level-select">Log Level Mode:</label>
+        <select id="log-level-select" onchange="updateLogLevel(this.value)">
+          <option value="DEBUG" {% if current_log_level == 'DEBUG' %}selected{% endif %}>DEBUG (Detailed)</option>
+          <option value="INFO" {% if current_log_level == 'INFO' %}selected{% endif %}>INFO (Standard)</option>
+          <option value="WARNING" {% if current_log_level == 'WARNING' or current_log_level == 'WARN' %}selected{% endif %}>WARNING (Warnings)</option>
+          <option value="ERROR" {% if current_log_level == 'ERROR' %}selected{% endif %}>ERROR (Errors Only)</option>
+          <option value="CRITICAL" {% if current_log_level == 'CRITICAL' %}selected{% endif %}>CRITICAL (System Failures)</option>
+          <option value="NONE" {% if current_log_level == 'NONE' %}selected{% endif %}>NONE (Fully Silenced)</option>
+        </select>
+        <span style="font-size: 11px; color: #8b949e; max-width: 250px;">
+          💡 Changes apply <b>dynamically</b> to the running background crawler thread instantly.
+        </span>
+      </div>
+
+      <!-- Right side: Console Actions -->
+      <div class="control-group" style="flex-wrap: wrap;">
+        <button class="btn btn-secondary" onclick="toggleAutoRefresh()">
+          <span class="refresh-indicator active" id="refresh-dot"></span>
+          <span id="refresh-btn-text">Polling Active</span>
+        </button>
+        <a class="btn btn-primary" href="/api/logs/download" title="Download log file">
+          <span>⬇️</span> Download Log
+        </a>
+        <button class="btn btn-danger" onclick="clearLogs()" title="Clear server-side log file">
+          <span>🗑️</span> Clear Logs
+        </button>
+      </div>
+    </div>
+
+    <!-- Console display screen wrapper -->
+    <div style="position: relative;">
+      <div class="terminal-console" id="console-screen">
+        <div class="empty-logs" id="empty-state">
+          <div class="empty-icon">📂</div>
+          <h3>No log files found or log is currently empty</h3>
+          <p>Ensure background switch scraper threads are active or trigger actions to generate system telemetry events.</p>
+        </div>
+        <div id="logs-container" style="display: none;"></div>
+      </div>
+      
+      <!-- Floating Autoscroll Banner -->
+      <div id="autoscroll-banner" style="display: none; position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(33, 38, 45, 0.95); border: 1px solid #58a6ff; backdrop-filter: blur(12px); color: #58a6ff; padding: 10px 20px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 10; align-items: center; gap: 8px; transition: all 0.2s ease-in-out;" onclick="resumeAutoscrollClick()" onmouseover="this.style.background='#58a6ff'; this.style.color='#0d1117';" onmouseout="this.style.background='rgba(33, 38, 45, 0.95)'; this.style.color='#58a6ff';">
+        <span>⬇️ Auto-scroll Paused. Click to resume</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <div>
+    <a href="/" style="color:#8b949e; text-decoration: none;">Dashboard</a> &middot; 
+    <a href="/config" style="color:#8b949e; text-decoration: none;">Switch Config</a> &middot; 
+    <a href="/backups" style="color:#8b949e; text-decoration: none;">Backups Manager</a> &middot; 
+    <a href="/api-docs" style="color:#8b949e; text-decoration: none;">API Reference</a> &middot; 
+    <span class="version-badge">v{{ version }}</span>
+  </div>
+  <div style="margin-top: 6px; font-size: 11px; color: #8b949e;">Created by <a href="https://github.com/byte4geek/switch-dashboard" target="_blank" style="color: #58a6ff; text-decoration: none; font-weight: 500;">Byte4Geek</a> for the community</div>
+</div>
+
+<!-- Toast notification box -->
+<div class="toast" id="toast-box">
+  <span id="toast-icon">✓</span>
+  <span id="toast-message">Action completed successfully</span>
+</div>
+
+<script>
+let pollingInterval = null;
+let isPollingActive = true;
+let isUserScrolledUp = false;
+let isUpdatingLogs = false;
+let lastRenderedLines = [];
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Bind console scroll to check if user has scrolled up to inspect previous lines
+  const consoleScreen = document.getElementById("console-screen");
+  const banner = document.getElementById("autoscroll-banner");
+  
+  consoleScreen.addEventListener("scroll", () => {
+    // Ignore scroll events triggered programmatically during log render cycles
+    if (isUpdatingLogs) return;
+    
+    // If they are near the bottom (within 40px), auto-scroll is allowed
+    const threshold = 40;
+    const isAtBottom = (consoleScreen.scrollHeight - consoleScreen.scrollTop - consoleScreen.clientHeight) <= threshold;
+    isUserScrolledUp = !isAtBottom;
+    
+    // Toggle floating banner visibility
+    if (isUserScrolledUp) {
+      banner.style.display = "flex";
+    } else {
+      banner.style.display = "none";
+    }
+  });
+
+  // Initial fetch and start polling
+  fetchLogs();
+  startPolling();
+});
+
+function startPolling() {
+  if (pollingInterval) clearInterval(pollingInterval);
+  pollingInterval = setInterval(fetchLogs, 2000);
+  isPollingActive = true;
+  
+  const dot = document.getElementById("refresh-dot");
+  const text = document.getElementById("refresh-btn-text");
+  dot.classList.add("active");
+  text.textContent = "Polling Active";
+}
+
+function stopPolling() {
+  if (pollingInterval) clearInterval(pollingInterval);
+  isPollingActive = false;
+  
+  const dot = document.getElementById("refresh-dot");
+  const text = document.getElementById("refresh-btn-text");
+  dot.classList.remove("active");
+  text.textContent = "Polling Paused";
+}
+
+function toggleAutoRefresh() {
+  if (isPollingActive) {
+    stopPolling();
+    showToast("Auto-refresh paused", "success", "⏸️");
+  } else {
+    startPolling();
+    showToast("Auto-refresh resumed", "success", "▶️");
+  }
+}
+
+async function fetchLogs() {
+  try {
+    const res = await fetch("/api/logs");
+    if (!res.ok) throw new Error("HTTP error " + res.status);
+    const data = await res.json();
+    
+    if (data.error) {
+      showErrorToast("Failed to fetch logs: " + data.error);
+      return;
+    }
+    
+    renderLogs(data);
+  } catch (err) {
+    console.error("Error fetching logs:", err);
+  }
+}
+
+function parseLogLine(line) {
+  // Typical log line: 2026-05-25 11:14:25,123 - scraper - INFO - Log message content
+  // Or: 2026-05-25 11:14:25 - scraper - INFO - Log message content
+  const regex = /^(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}(?:,\d+)?)\s-\s([^\s]+)\s-\s([A-Z]+)\s-\s(.*)$/;
+  const match = line.match(regex);
+  
+  if (match) {
+    const [_, time, module, level, message] = match;
+    const cleanLevel = level.toLowerCase();
+    
+    return `
+      <div class="log-line log-${cleanLevel}">
+        <span class="log-time">${time}</span>
+        <span class="level-tag">${level}</span>
+        <span class="log-module">[${module}]</span>
+        <span class="log-content">${escapeHtml(message)}</span>
+      </div>
+    `;
+  }
+  
+  // Fallback for lines that don't match format perfectly
+  let cleanLine = escapeHtml(line);
+  let classLevel = "info";
+  if (line.includes("DEBUG")) classLevel = "debug";
+  else if (line.includes("WARNING") || line.includes("WARN")) classLevel = "warning";
+  else if (line.includes("ERROR")) classLevel = "error";
+  else if (line.includes("CRITICAL")) classLevel = "critical";
+  
+  return `<div class="log-line log-${classLevel}">${cleanLine}</div>`;
+}
+
+function renderLogs(lines) {
+  const emptyState = document.getElementById("empty-state");
+  const container = document.getElementById("logs-container");
+  const consoleScreen = document.getElementById("console-screen");
+  
+  if (!lines || lines.length === 0) {
+    emptyState.style.display = "flex";
+    container.style.display = "none";
+    lastRenderedLines = [];
+    container.innerHTML = "";
+    return;
+  }
+  
+  emptyState.style.display = "none";
+  container.style.display = "block";
+  
+  // Set update flag to ignore scroll events triggered by this render cycle
+  isUpdatingLogs = true;
+  
+  // Try to find if we can just append new lines to avoid destroying DOM and resetting scroll anchoring
+  let appendStartIndex = -1;
+  if (lastRenderedLines.length > 0) {
+    const matchCount = Math.min(3, lastRenderedLines.length);
+    const lastFew = lastRenderedLines.slice(-matchCount);
+    
+    for (let i = lines.length - matchCount; i >= 0; i--) {
+      let match = true;
+      for (let j = 0; j < matchCount; j++) {
+        if (lines[i + j] !== lastFew[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        appendStartIndex = i + matchCount;
+        break;
+      }
+    }
+  }
+  
+  if (appendStartIndex !== -1) {
+    const newLinesToAppend = lines.slice(appendStartIndex);
+    if (newLinesToAppend.length > 0) {
+      const savedScrollTop = consoleScreen.scrollTop;
+      const wasAtBottom = !isUserScrolledUp;
+      
+      const fragment = document.createDocumentFragment();
+      newLinesToAppend.forEach(line => {
+        const div = document.createElement("div");
+        div.innerHTML = parseLogLine(line).trim();
+        fragment.appendChild(div.firstElementChild || div);
+      });
+      container.appendChild(fragment);
+      
+      // Limit DOM size to 1000 lines for efficiency
+      const maxDomLines = 1000;
+      while (container.children.length > maxDomLines) {
+        container.removeChild(container.firstChild);
+      }
+      
+      lastRenderedLines = lastRenderedLines.concat(newLinesToAppend);
+      if (lastRenderedLines.length > maxDomLines) {
+        lastRenderedLines = lastRenderedLines.slice(-maxDomLines);
+      }
+      
+      if (wasAtBottom) {
+        consoleScreen.scrollTop = consoleScreen.scrollHeight;
+      } else {
+        consoleScreen.scrollTop = savedScrollTop;
+      }
+    }
+  } else {
+    // Fallback: render all lines
+    const parsedHtml = lines.map(parseLogLine).join('');
+    container.innerHTML = parsedHtml;
+    lastRenderedLines = [...lines];
+    
+    if (!isUserScrolledUp) {
+      consoleScreen.scrollTop = consoleScreen.scrollHeight;
+    }
+  }
+  
+  // Release update flag asynchronously to allow browser layout calculations to settle
+  setTimeout(() => {
+    isUpdatingLogs = false;
+  }, 50);
+}
+
+async function updateLogLevel(level) {
+  lastRenderedLines = []; // Force full re-render on next fetch
+  try {
+    const res = await fetch("/api/logs/level", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ level: level })
+    });
+    const data = await res.json();
+    
+    if (res.ok && data.status === "ok") {
+      showToast(`Log level dynamically changed to ${level}`, "success", "⚙️");
+      // Fetch logs immediately to display the server confirmation log
+      setTimeout(fetchLogs, 400);
+    } else {
+      showErrorToast("Failed to update log level: " + (data.error || "Unknown error"));
+    }
+  } catch (err) {
+    showErrorToast("Network error: " + err.message);
+  }
+}
+
+async function clearLogs() {
+  if (!confirm("Are you sure you want to permanently clear the log file on the server? This will truncate the file immediately.")) {
+    return;
+  }
+  
+  try {
+    const res = await fetch("/api/logs/clear", { method: "POST" });
+    const data = await res.json();
+    
+    if (res.ok && data.status === "ok") {
+      showToast("Logs successfully cleared on server", "success", "🗑️");
+      lastRenderedLines = [];
+      document.getElementById("logs-container").innerHTML = "";
+      document.getElementById("empty-state").style.display = "flex";
+      document.getElementById("logs-container").style.display = "none";
+    } else {
+      showErrorToast("Failed to clear logs: " + (data.error || "Unknown error"));
+    }
+  } catch (err) {
+    showErrorToast("Network error: " + err.message);
+  }
+}
+
+function resumeAutoscrollClick() {
+  isUserScrolledUp = false;
+  document.getElementById("autoscroll-banner").style.display = "none";
+  const consoleScreen = document.getElementById("console-screen");
+  consoleScreen.scrollTop = consoleScreen.scrollHeight;
+  showToast("Auto-scroll resumed", "success", "⬇️");
+}
+
+// Helpers
+function escapeHtml(unsafe) {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function showSuccessToast(message) {
+  showToast(message, "success", "✓");
+}
+
+function showErrorToast(message) {
+  showToast(message, "error", "⚠️");
+}
+
+function showToast(message, type, icon) {
+  const toast = document.getElementById("toast-box");
+  const toastIcon = document.getElementById("toast-icon");
+  const toastMsg = document.getElementById("toast-message");
+  
+  toast.className = `toast ${type}`;
+  toastIcon.textContent = icon;
+  toastMsg.textContent = message;
+  
+  toast.classList.add("show");
+  setTimeout(() => {
+    toast.classList.remove("show");
+  }, 4000);
+}
+</script>
+</body>
+</html>
