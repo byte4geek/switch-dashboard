@@ -11,7 +11,8 @@ from datetime import datetime
 BASE = os.path.dirname(__file__)
 DATA_DIR = os.environ.get("DASHBOARD_DATA_DIR", BASE)
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
-LOG_FILE_PATH = os.path.join(DATA_DIR, "dashboard.log")
+LOG_FILE_PATH = os.path.join(DATA_DIR, "logs", "dashboard.log")
+
 
 def setup_logging(level_name=None):
     if not level_name:
@@ -89,7 +90,9 @@ NOTES_PATH = os.path.join(DATA_DIR, "notes.json")
 HOURLY_PATH = os.path.join(DATA_DIR, "history_hourly.json")
 DAILY_PATH = os.path.join(DATA_DIR, "history_daily.json")
 BACKUP_DIR = os.path.join(DATA_DIR, "backup")
-VERSION = "2026.5.3"
+DEVICE_TEMPLATES_DIR = os.path.join(DATA_DIR, "device-templates")
+os.makedirs(DEVICE_TEMPLATES_DIR, exist_ok=True)
+VERSION = "2026.5.4"
 
 config = {}
 switch_configs = []
@@ -447,6 +450,26 @@ def get_transceiver(ip):
     except Exception as e:
         logger.error(f"Transceiver scrape failed for {ip}: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/switches/<ip>/image")
+def get_switch_image(ip):
+    sw = None
+    for s in switch_configs:
+        if s["ip"] == ip:
+            sw = s
+            break
+    if sw:
+        model = sw.get("model", "")
+        if model:
+            # Look for model-specific image files (png, jpg, jpeg) in device-templates
+            for ext in ["png", "jpg", "jpeg"]:
+                img_name = f"{model}.{ext}"
+                img_path = os.path.join(DEVICE_TEMPLATES_DIR, img_name)
+                if os.path.exists(img_path):
+                    return send_from_directory(DEVICE_TEMPLATES_DIR, img_name)
+    # Default fallback switch icon
+    return send_from_directory(os.path.join(BASE, "static"), "switch_icon.png")
 
 
 @app.route("/api/speeds")

@@ -1,0 +1,76 @@
+model: "HC-SWTGW218AS"
+manufacturer: "Horaco"
+
+# Device Global Information from /info.cgi table 0 (key-value grid)
+device_info:
+  url: "/info.cgi"
+  method: "key_value_grid"
+  mappings:
+    uptime: "Sys Uptime"
+    mac: "MAC Address"
+    ip: "IP Address"
+    firmware: "Firmware Version"
+    model: "Device Model"
+
+# Port Link Settings and Speeds from /info.cgi table 1 (standard table)
+ports:
+  url: "/info.cgi"
+  source: "info_table"   # indicates parsing table 1
+  columns:
+    port: 0
+    link: 1
+    duplex: 2
+    speed: 3
+    flow_control: 4
+
+# Port Transmission/Reception counters
+statistics:
+  url: "/port.cgi?page=stats"
+  method: "header_aware"
+  # Term search lists for dynamic column resolution
+  terms:
+    tx_packets: ["txgoodpkt", "txpackets", "tx packet", "txok", "tx_pkt", "tx pkt", "tx"]
+    rx_packets: ["rxgoodpkt", "rxpackets", "rx packet", "rxok", "rx_pkt", "rx pkt", "rx"]
+    tx_bytes: ["txbytes", "tx byte", "tx_octet", "tx octet", "txgoodbytes", "tx_bytes", "txbytes", "tx good bytes"]
+    rx_bytes: ["rxbytes", "rx byte", "rx_octet", "rx octet", "rxgoodbytes", "rx_bytes", "rxbytes", "rx good bytes"]
+
+# DHCP Snooping Status
+dhcp_snooping:
+  url: "/dhcp_snooping.cgi?page=dump"
+  enable_input_name: "enable_dhcpsnp"
+  ports_form_action: "page=static"
+  trust_checkbox_class: "chkp"
+
+# IGMP Snooping Groups Table
+igmp:
+  url: "/igmp.cgi?page=dump"
+  enable_input_name: "enable_igmp"
+  table_header_keywords: ["IP Address", "Port", "VLAN ID"]
+
+# Jumbo Frame Parameter
+jumbo_frame:
+  url: "/fwd.cgi?page=jumboframe"
+  enable_input_name: "enable_jumbo"
+  select_name: "jumboframe"
+
+# MAC Address Table settings
+mac_table:
+  url: "/mac.cgi?page=fwd_tbl"
+  page_parameter: "pageidx"
+  perpage_parameter: "perpage"
+  perpage_value: "3"
+  cmd_parameter: "cmd"
+  cmd_value: "goto"
+
+backup:
+  url: "/config_back.cgi?cmd=conf_backup"
+  referer_path: "/config_back.cgi"
+  method: "GET"
+
+reboot:
+  url: "/reboot.cgi"
+  referer_path: "/reboot.cgi"
+  method: "POST"
+  post_data:
+    cmd: "reboot"
+
