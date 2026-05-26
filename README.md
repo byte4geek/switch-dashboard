@@ -6,7 +6,10 @@ Built with a gorgeous, high-tech glassmorphic dark-mode interface, it features a
 
 ![Dashboard](https://raw.githubusercontent.com/byte4geek/switch-dashboard/refs/heads/main/images/dashboard.png)
 
-This dashboarb was tested end built on this [switch](https://s.click.aliexpress.com/e/_c31NG1u1)
+This dashboarb support these device:
+ - [HORACO HC-SWTGW218AS](https://s.click.aliexpress.com/e/_c31NG1u1)
+ - [HORACO HC-SWTGW215AS](https://s.click.aliexpress.com/e/_c3hKfeLJ)
+ - [keepLink KP9000-9XH-X](https://s.click.aliexpress.com/e/_c4UKLfOv)
 
 ---
 
