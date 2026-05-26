@@ -8,222 +8,273 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #0f1117; color: #e1e4e8; padding: 20px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d0f14; color: #e1e4e8; padding: 20px;
+    background-image: radial-gradient(circle at 10% 20%, rgba(20, 24, 33, 0.8) 0%, rgba(13, 15, 20, 1) 90.2%);
+    background-attachment: fixed;
+    min-height: 100vh;
   }
+  
+  /* Custom Monospace Scrollbars for High-End Code feel */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: rgba(22, 27, 34, 0.4); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb { background: rgba(88, 166, 255, 0.2); border-radius: 4px; border: 1px solid rgba(13, 15, 20, 0.5); }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(88, 166, 255, 0.4); }
+
   .header {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 16px 24px; background: #161b22; border-radius: 12px;
-    border: 1px solid #30363d; margin-bottom: 24px;
+    padding: 16px 24px; background: rgba(22, 27, 34, 0.7); border-radius: 16px;
+    border: 1px solid rgba(48, 54, 61, 0.6); margin-bottom: 24px;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   }
-  .header h1 { font-size: 20px; font-weight: 600; }
+  .header h1 { font-size: 20px; font-weight: 600; color: #f0f6fc; display: flex; align-items: center; gap: 8px; }
   .header a {
-    color: #8b949e; text-decoration: none; font-size: 13px; padding: 6px 12px;
-    border-radius: 6px; transition: all .2s;
+    color: #8b949e; text-decoration: none; font-size: 13px; padding: 8px 16px;
+    border-radius: 8px; transition: all .2s; border: 1px solid transparent;
+    background: rgba(255, 255, 255, 0.03);
   }
-  .header a:hover { color: #e1e4e8; background: #1c2128; }
+  .header a:hover { color: #e1e4e8; background: rgba(255, 255, 255, 0.08); border-color: rgba(255,255,255,0.1); }
+
+  /* Premium Split-Pane Grid */
+  .layout-container {
+    display: flex;
+    gap: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+    align-items: flex-start;
+  }
+  @media (max-width: 992px) {
+    .layout-container { flex-direction: column; }
+    .right-pane { width: 100% !important; position: static !important; }
+  }
+  
+  .left-pane {
+    flex: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .right-pane {
+    flex: 7;
+    position: sticky;
+    top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+  }
+
   .card {
-    background: #161b22; border: 1px solid #30363d; border-radius: 12px;
-    padding: 24px; margin-bottom: 20px; max-width: 800px;
+    background: rgba(22, 27, 34, 0.7); border: 1px solid rgba(48, 54, 61, 0.6); border-radius: 16px;
+    padding: 24px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    transition: border-color 0.3s ease;
   }
-  .card h2 { font-size: 16px; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #30363d; }
+  .card:hover { border-color: rgba(88, 166, 255, 0.2); }
+  .card h2 {
+    font-size: 15px; font-weight: 600; margin-bottom: 18px; padding-bottom: 10px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.6); color: #f0f6fc;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+
+  /* Collapsible Switch Group panels */
   .switch-group {
-    background: #1c2128; border: 1px solid #30363d; border-radius: 8px;
-    padding: 16px; margin-bottom: 16px; position: relative;
+    background: rgba(28, 33, 40, 0.5); border: 1px solid rgba(48, 54, 61, 0.6); border-radius: 12px;
+    margin-bottom: 16px; position: relative; overflow: hidden;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
-  .switch-group h3 { font-size: 14px; margin-bottom: 12px; color: #8b949e; }
-  .form-row { display: flex; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
-  .form-row label { font-size: 12px; color: #8b949e; min-width: 70px; }
+  .switch-group:hover { border-color: rgba(88, 166, 255, 0.3); }
+  
+  .switch-header {
+    background: rgba(33, 38, 45, 0.7); padding: 14px 18px; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+    user-select: none; transition: background 0.2s ease;
+  }
+  .switch-header:hover { background: rgba(33, 38, 45, 0.95); }
+  .switch-header.active {
+    border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+  }
+  .switch-title-wrap { display: flex; align-items: center; gap: 10px; }
+  .switch-chevron {
+    width: 18px; height: 18px; fill: #8b949e;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .switch-header.active .switch-chevron { transform: rotate(90deg); fill: #58a6ff; }
+  .switch-title-wrap h3 { font-size: 14px; font-weight: 600; color: #f0f6fc; }
+  .switch-subname { font-size: 12px; color: #8b949e; font-weight: normal; margin-left: 8px; }
+  
+  .switch-content {
+    padding: 20px;
+    display: none; /* Collapsed by default */
+  }
+  .switch-content.active { display: block; }
+  
+  .switch-actions { display: flex; gap: 8px; align-items: center; }
+
+  /* Input fields & Forms styling */
+  .form-row { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+  .form-row label { font-size: 12px; color: #8b949e; min-width: 85px; font-weight: 500; }
   .form-row input[type="text"],
   .form-row input[type="password"],
   .form-row input[type="number"] {
-    background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    background: #0d1117; border: 1px solid rgba(48, 54, 61, 0.8); border-radius: 6px;
     padding: 8px 12px; color: #e1e4e8; font-size: 13px; flex: 1; min-width: 120px;
+    transition: border-color 0.2s, box-shadow 0.2s;
   }
-  .form-row input:focus { outline: none; border-color: #58a6ff; }
+  .form-row input:focus { outline: none; border-color: #58a6ff; box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15); }
   .form-row input[type="checkbox"] { margin-left: 4px; }
-  .remove-btn {
-    background: none; border: 1px solid #f85149; color: #f85149;
-    padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
-    position: absolute; top: 12px; right: 12px;
+  
+  /* Buttons */
+  .inline-remove-btn {
+    background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.4); color: #f85149;
+    padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600;
+    transition: all .2s;
   }
-  .remove-btn:hover { background: rgba(248,81,73,0.15); }
+  .inline-remove-btn:hover { background: rgba(248, 81, 73, 0.2); border-color: #f85149; }
+  
+  .inline-reboot-btn {
+    background: rgba(240, 136, 62, 0.1); border: 1px solid rgba(240, 136, 62, 0.4); color: #f0883e;
+    padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600;
+    transition: all .2s;
+  }
+  .inline-reboot-btn:hover { background: rgba(240, 136, 62, 0.25); border-color: #f0883e; }
+  
   .add-btn {
-    background: none; border: 1px dashed #30363d; color: #8b949e;
-    padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 13px; width: 100%;
+    background: rgba(255,255,255,0.02); border: 1px dashed rgba(88, 166, 255, 0.3); color: #58a6ff;
+    padding: 12px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; width: 100%;
+    transition: all 0.2s ease;
   }
-  .add-btn:hover { border-color: #58a6ff; color: #58a6ff; }
-  .btn-row { display: flex; gap: 12px; margin-top: 20px; }
+  .add-btn:hover { background: rgba(88, 166, 255, 0.05); border-color: #58a6ff; box-shadow: 0 4px 12px rgba(88,166,255,0.08); }
+  
+  .btn-row { display: flex; gap: 12px; }
   .btn-row input[type="submit"] {
     background: #238636; border: none; color: #fff; padding: 10px 24px;
-    border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;
+    border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;
+    box-shadow: 0 4px 12px rgba(35, 134, 54, 0.25); transition: background .2s;
   }
   .btn-row input[type="submit"]:hover { background: #2ea043; }
   .btn-row a {
-    background: #21262d; border: 1px solid #30363d; color: #e1e4e8;
-    padding: 10px 24px; border-radius: 8px; text-decoration: none; font-size: 14px;
+    background: #21262d; border: 1px solid rgba(48, 54, 61, 0.8); color: #c9d1d9;
+    padding: 10px 24px; border-radius: 8px; text-decoration: none; font-size: 13px;
+    display: inline-flex; align-items: center; transition: all .2s;
   }
-  .btn-row a:hover { background: #30363d; }
-  .note { font-size: 11px; color: #484f58; margin-top: 4px; }
-  .global-row { margin-bottom: 12px; }
-  .global-row label { font-size: 12px; color: #8b949e; display: block; margin-bottom: 4px; }
+  .btn-row a:hover { background: #30363d; color: #fff; }
+  
+  .note { font-size: 11px; color: #8b949e; margin-top: 4px; }
+  
+  .global-row { margin-bottom: 16px; }
+  .global-row label { font-size: 12px; color: #8b949e; display: block; margin-bottom: 6px; font-weight: 500; }
   .global-row input[type="text"],
   .global-row input[type="number"] {
-    background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
-    padding: 8px 12px; color: #e1e4e8; font-size: 13px; width: 100%; max-width: 300px;
+    background: #0d1117; border: 1px solid rgba(48, 54, 61, 0.8); border-radius: 6px;
+    padding: 8px 12px; color: #e1e4e8; font-size: 13px; width: 100%; max-width: 400px;
+    transition: border-color 0.2s;
   }
   .global-row input:focus { outline: none; border-color: #58a6ff; }
+  
   .success-msg {
-    background: rgba(63,185,80,0.15); color: #3fb950; border: 1px solid #3fb950;
+    background: rgba(63,185,80,0.15); color: #3fb950; border: 1px solid rgba(63,185,80,0.4);
     padding: 12px 20px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;
   }
   .footer { text-align: center; margin-top: 24px; font-size: 12px; color: #8b949e; margin-bottom: 20px; }
   .version-badge {
     background: rgba(255, 255, 255, 0.08);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 10px;
-    color: #c9d1d9;
-    font-family: 'SF Mono', Monaco, monospace;
-    font-weight: 600;
+    padding: 2px 6px; border-radius: 4px; font-size: 10px; color: #c9d1d9;
+    font-family: 'SF Mono', Monaco, monospace; font-weight: 600;
+  }
+
+  /* YAML Code Editor Custom Styling */
+  .template-select-row {
+    display: flex; gap: 8px; margin-bottom: 14px;
+  }
+  .template-select {
+    background: #0d1117; border: 1px solid rgba(48, 54, 61, 0.8); border-radius: 6px;
+    padding: 8px 12px; color: #e1e4e8; font-size: 13px; flex: 1; transition: border-color 0.2s;
+    outline: none; cursor: pointer;
+  }
+  .template-select:focus { border-color: #58a6ff; }
+  
+  .btn-new-tpl {
+    background: #21262d; border: 1px solid rgba(48, 54, 61, 0.8); color: #c9d1d9;
+    padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;
+    transition: all .2s;
+  }
+  .btn-new-tpl:hover { background: #30363d; color: #fff; }
+
+  .editor-wrapper {
+    position: relative; margin-bottom: 16px; border-radius: 8px; border: 1px solid rgba(48, 54, 61, 0.8);
+    overflow: hidden; background: #0b0d10;
+  }
+  .editor-textarea {
+    width: 100%; height: 350px; background: transparent; border: none; color: #c9d1d9;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace; font-size: 12px; line-height: 1.6;
+    padding: 16px; resize: vertical; outline: none; min-height: 250px; display: block;
+  }
+  .editor-textarea:focus {
+    box-shadow: inset 0 0 0 1px rgba(88, 166, 255, 0.3);
   }
   
-  /* Reboot Button & Modal Styling */
-  .reboot-btn {
-    background: none; border: 1px solid #f0883e; color: #f0883e;
-    padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
-    position: absolute; top: 12px; right: 90px;
-    transition: all 0.2s ease;
+  .yaml-save-btn {
+    background: #1f6feb; border: none; color: #fff; padding: 10px 20px;
+    border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;
+    box-shadow: 0 4px 12px rgba(31, 111, 235, 0.25); transition: background .2s;
+    display: inline-flex; align-items: center; gap: 8px;
   }
-  .reboot-btn:hover { background: rgba(240,136,62,0.15); box-shadow: 0 0 8px rgba(240,136,62,0.2); }
-
+  .yaml-save-btn:hover { background: #388bfd; }
+  .yaml-save-btn:disabled { background: #1c2128; color: #8b949e; cursor: not-allowed; box-shadow: none; }
+  
+  .editor-status-bar {
+    background: rgba(33, 38, 45, 0.5); border-top: 1px solid rgba(48, 54, 61, 0.6);
+    padding: 6px 12px; display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; color: #8b949e;
+  }
+  
+  .yaml-feedback {
+    padding: 10px 14px; border-radius: 6px; font-size: 12px; display: none; margin-bottom: 12px;
+  }
+  .yaml-feedback.success {
+    background: rgba(63,185,80,0.12); color: #3fb950; border: 1px solid rgba(63,185,80,0.3); display: block;
+  }
+  .yaml-feedback.error {
+    background: rgba(248,81,73,0.12); color: #f85149; border: 1px solid rgba(248,81,73,0.3); display: block;
+    white-space: pre-wrap; font-family: monospace; font-size: 11px;
+  }
+  
+  /* Reboot & Safety Modals */
   .modal-backdrop {
     position: fixed;
     top: 0; left: 0; width: 100vw; height: 100vh;
     background: rgba(10, 11, 15, 0.85);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    opacity: 0;
-    pointer-events: none;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; opacity: 0; pointer-events: none;
     transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .modal-backdrop.active {
-    opacity: 1;
-    pointer-events: auto;
-  }
+  .modal-backdrop.active { opacity: 1; pointer-events: auto; }
   .modal-card {
     background: rgba(22, 27, 34, 0.95);
     border: 1px solid rgba(240, 136, 62, 0.4);
-    border-radius: 16px;
-    padding: 24px;
-    max-width: 440px;
-    width: 90%;
+    border-radius: 16px; padding: 24px; max-width: 440px; width: 90%;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
-    transform: scale(0.92);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: scale(0.92); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
   }
-  .modal-backdrop.active .modal-card {
-    transform: scale(1);
-  }
-  .modal-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #30363d;
-  }
-  .modal-header h3 {
-    font-size: 16px;
-    font-weight: 600;
-    color: #e1e4e8;
-  }
-  .modal-body {
-    font-size: 13px;
-    line-height: 1.6;
-    color: #c9d1d9;
-    margin-bottom: 24px;
-  }
-  .modal-warning {
-    margin-top: 12px;
-    color: #f0883e;
-    font-weight: 500;
-    font-size: 12px;
-  }
-  .modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-  }
-  .modal-footer button {
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-  .btn-cancel {
-    background: #21262d;
-    border: 1px solid #30363d;
-    color: #c9d1d9;
-  }
-  .btn-cancel:hover {
-    background: #30363d;
-    color: #fff;
-  }
-  .btn-confirm {
-    background: #f0883e;
-    border: none;
-    color: #fff;
-    box-shadow: 0 0 12px rgba(240, 136, 62, 0.3);
-  }
-  .btn-confirm:hover {
-    background: #f19754;
-    box-shadow: 0 0 16px rgba(240, 136, 62, 0.5);
-  }
-  .reboot-loading {
-    position: absolute;
-    inset: 0;
-    background: rgba(22, 27, 34, 0.95);
-    border-radius: 16px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    font-size: 14px;
-    color: #c9d1d9;
-  }
-  .spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid rgba(240, 136, 62, 0.15);
-    border-top-color: #f0883e;
-    border-radius: 50%;
-    animation: spin 1s infinite linear;
-  }
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-  .reboot-status {
-    position: absolute;
-    inset: 0;
-    background: rgba(22, 27, 34, 0.95);
-    border-radius: 16px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    font-size: 15px;
-    font-weight: 500;
-  }
+  .modal-backdrop.active .modal-card { transform: scale(1); }
+  .modal-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #30363d; }
+  .modal-header h3 { font-size: 16px; font-weight: 600; color: #e1e4e8; }
+  .modal-body { font-size: 13px; line-height: 1.6; color: #c9d1d9; margin-bottom: 24px; }
+  .modal-warning { margin-top: 12px; color: #f0883e; font-weight: 500; font-size: 12px; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 12px; }
+  .modal-footer button { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
+  .btn-cancel { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; }
+  .btn-cancel:hover { background: #30363d; color: #fff; }
+  .btn-confirm { background: #f0883e; border: none; color: #fff; box-shadow: 0 0 12px rgba(240, 136, 62, 0.3); }
+  .btn-confirm:hover { background: #f19754; box-shadow: 0 0 16px rgba(240, 136, 62, 0.5); }
+  .reboot-loading { position: absolute; inset: 0; background: rgba(22, 27, 34, 0.95); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; font-size: 14px; color: #c9d1d9; }
+  .spinner { width: 32px; height: 32px; border: 3px solid rgba(240, 136, 62, 0.15); border-top-color: #f0883e; border-radius: 50%; animation: spin 1s infinite linear; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .reboot-status { position: absolute; inset: 0; background: rgba(22, 27, 34, 0.95); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-size: 15px; font-weight: 500; }
 </style>
 </head>
 <body>
@@ -233,7 +284,7 @@
 </div>
 
 {% if saved %}
-<div class="card" style="max-width:800px">
+<div class="card" style="max-width:1400px; margin: 0 auto 24px auto;">
   <div class="success-msg">&#10003; Configuration saved. Dashboard is reloading with new settings...</div>
   <div class="btn-row">
     <a href="/">Return to Dashboard</a>
@@ -241,72 +292,119 @@
 </div>
 {% endif %}
 
-<form method="post" action="/config" id="config-form">
-  <div class="card">
-    <h2>General Settings</h2>
-    <div class="global-row">
-      <label>Dashboard Title</label>
-      <input type="text" name="title" value="{{ title }}" style="max-width:400px">
-    </div>
-    <div class="global-row">
-      <label>Refresh Interval (seconds)</label>
-      <input type="number" name="refresh_interval" value="{{ refresh }}" min="1" max="300">
-    </div>
-    <div class="global-row">
-      <label>MAC Table Refresh Multiplier (x polling cycles)</label>
-      <input type="number" name="mac_refresh_multiplier" value="{{ mac_multiplier }}" min="1" max="100" style="max-width:120px">
-      <span class="note" style="display:block; margin-top:2px;">e.g., if set to 5, the MAC table is fetched every 5 dashboard refreshes to reduce switch load.</span>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Switches</h2>
-    <div id="switch-list">
-      {% for sw in switches %}
-      <div class="switch-group" data-index="{{ loop.index0 }}">
-        <input type="hidden" name="keep[]" value="1">
-        <button type="button" class="reboot-btn" onclick="openRebootModal('{{ sw.ip }}', '{{ sw.name }}')">Reboot</button>
-        <button type="button" class="remove-btn" onclick="removeSwitch(this)">Delete</button>
-        <h3>Switch {{ loop.index }}</h3>
-        <div class="form-row">
-          <label>Name</label>
-          <input type="text" name="name[]" value="{{ sw.name }}" placeholder="Switch 1">
+<div class="layout-container">
+  <!-- LEFT PANE: Settings & Switches -->
+  <div class="left-pane">
+    <form method="post" action="/config" id="config-form">
+      <div class="card">
+        <h2>General Settings</h2>
+        <div class="global-row">
+          <label>Dashboard Title</label>
+          <input type="text" name="title" value="{{ title }}">
         </div>
-        <div class="form-row">
-          <label>IP Address</label>
-          <input type="text" name="ip[]" value="{{ sw.ip }}" placeholder="192.168.1.100">
+        <div class="global-row">
+          <label>Refresh Interval (seconds)</label>
+          <input type="number" name="refresh_interval" value="{{ refresh }}" min="1" max="300">
         </div>
-        <div class="form-row">
-          <label>Username</label>
-          <input type="text" name="username[]" value="{{ sw.username }}" placeholder="admin">
-        </div>
-        <div class="form-row">
-          <label>Password</label>
-          <input type="password" name="password[]" value="{{ sw.password }}" placeholder="admin">
-        </div>
-        <div class="form-row">
-          <label>Model</label>
-          <input type="text" name="model[]" value="{{ sw.get('model', '') }}" placeholder="HC-SWTGW218AS">
-          <span class="note">Optional, for display only</span>
-        </div>
-        <div class="form-row">
-          <label>Port Count</label>
-          <input type="number" name="port_count[]" value="{{ sw.get('port_count', 9) }}" min="1" max="52" style="max-width:80px">
+        <div class="global-row">
+          <label>MAC Table Refresh Multiplier (x polling cycles)</label>
+          <input type="number" name="mac_refresh_multiplier" value="{{ mac_multiplier }}" min="1" max="100" style="max-width:120px">
+          <span class="note" style="display:block; margin-top:2px;">e.g., if set to 5, the MAC table is fetched every 5 dashboard refreshes to reduce switch load.</span>
         </div>
       </div>
-      {% endfor %}
-    </div>
 
-    <button type="button" class="add-btn" onclick="addSwitch()">+ Add Switch</button>
+      <div class="card">
+        <h2>Switches</h2>
+        <div id="switch-list">
+          {% for sw in switches %}
+          <div class="switch-group" data-index="{{ loop.index0 }}">
+            <input type="hidden" name="keep[]" value="1">
+            <div class="switch-header" onclick="toggleSwitchExpand(this)">
+              <div class="switch-title-wrap">
+                <svg class="switch-chevron" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+                <h3>Switch {{ loop.index }} <span class="switch-subname" id="subname-{{ loop.index0 }}">{{ sw.name }} ({{ sw.ip }})</span></h3>
+              </div>
+              <div class="switch-actions" onclick="event.stopPropagation()">
+                <button type="button" class="inline-reboot-btn" onclick="openRebootModal('{{ sw.ip }}', '{{ sw.name }}')">Reboot</button>
+                <button type="button" class="inline-remove-btn" onclick="removeSwitch(this)">Delete</button>
+              </div>
+            </div>
+            <div class="switch-content">
+              <div class="form-row">
+                <label>Name</label>
+                <input type="text" name="name[]" value="{{ sw.name }}" placeholder="Switch 1" oninput="updateSubname({{ loop.index0 }}, this.value, null)">
+              </div>
+              <div class="form-row">
+                <label>IP Address</label>
+                <input type="text" name="ip[]" value="{{ sw.ip }}" placeholder="192.168.1.100" oninput="updateSubname({{ loop.index0 }}, null, this.value)">
+              </div>
+              <div class="form-row">
+                <label>Username</label>
+                <input type="text" name="username[]" value="{{ sw.username }}" placeholder="admin">
+              </div>
+              <div class="form-row">
+                <label>Password</label>
+                <input type="password" name="password[]" value="{{ sw.password }}" placeholder="admin">
+              </div>
+              <div class="form-row">
+                <label>Model</label>
+                <input type="text" name="model[]" value="{{ sw.get('model', '') }}" placeholder="HC-SWTGW218AS">
+                <span class="note">Optional, for display and template matching</span>
+              </div>
+              <div class="form-row">
+                <label>Port Count</label>
+                <input type="number" name="port_count[]" value="{{ sw.get('port_count', 9) }}" min="1" max="52" style="max-width:80px">
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <button type="button" class="add-btn" onclick="addSwitch()">+ Add Switch</button>
+      </div>
+
+      <div class="card">
+        <div class="btn-row">
+          <input type="submit" value="Save Configuration">
+          <a href="/">Cancel</a>
+        </div>
+      </div>
+    </form>
   </div>
 
-  <div class="card">
-    <div class="btn-row">
-      <input type="submit" value="Save Configuration">
-      <a href="/">Cancel</a>
+  <!-- RIGHT PANE: YAML Template Editor -->
+  <div class="right-pane">
+    <div class="card">
+      <h2>
+        <span>🔌 YAML Device Templates</span>
+        <span class="version-badge" style="background: rgba(88,166,255,0.15); color: #58a6ff;">Editor</span>
+      </h2>
+      <div class="yaml-feedback" id="yaml-feedback"></div>
+      
+      <div class="template-select-row">
+        <select class="template-select" id="template-select" onchange="loadSelectedTemplate()">
+          <option value="" disabled selected>Select a Template...</option>
+        </select>
+        <button type="button" class="btn-new-tpl" onclick="createNewTemplate()">New Template</button>
+      </div>
+      
+      <div class="editor-wrapper">
+        <textarea class="editor-textarea" id="editor-textarea" spellcheck="false" placeholder="# Select or create a template to begin editing..." disabled oninput="onEditorChange()"></textarea>
+        <div class="editor-status-bar">
+          <span id="editor-char-count">0 characters</span>
+          <span id="editor-syntax-status">Empty</span>
+        </div>
+      </div>
+      
+      <button type="button" class="yaml-save-btn" id="yaml-save-btn" onclick="saveTemplate()" disabled>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+          <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+        </svg>
+        Save Template
+      </button>
     </div>
   </div>
-</form>
+</div>
 
 <div class="footer">
   <div><a href="/" style="color:#8b949e">Back to Dashboard</a> &middot; <a href="/api-docs" style="color:#8b949e">API Reference</a> &middot; <span class="version-badge">v{{ version }}</span></div>
@@ -344,42 +442,78 @@
 </div>
 
 <script>
+// Switch Collapsing Logic
+function toggleSwitchExpand(header) {
+  const content = header.nextElementSibling;
+  header.classList.toggle('active');
+  content.classList.toggle('active');
+}
+
+// Live Header text update
+function updateSubname(index, nameVal, ipVal) {
+  const subnameSpan = document.getElementById(`subname-${index}`);
+  if (!subnameSpan) return;
+  
+  const group = document.querySelector(`.switch-group[data-index="${index}"]`);
+  if (!group) return;
+  
+  const nameInput = group.querySelector('input[name="name[]"]');
+  const ipInput = group.querySelector('input[name="ip[]"]');
+  
+  const name = nameInput ? nameInput.value : '';
+  const ip = ipInput ? ipInput.value : '';
+  
+  subnameSpan.textContent = `${name} (${ip})`;
+}
+
+// Add Switch Collapsible template
 function addSwitch() {
   const list = document.getElementById('switch-list');
-  const count = list.children.length + 1;
+  const count = list.children.length;
   const div = document.createElement('div');
   div.className = 'switch-group';
+  div.setAttribute('data-index', count);
   div.innerHTML = `
     <input type="hidden" name="keep[]" value="1">
-    <button type="button" class="remove-btn" onclick="removeSwitch(this)">Delete</button>
-    <h3>Switch ${count}</h3>
-    <div class="form-row">
-      <label>Name</label>
-      <input type="text" name="name[]" value="Switch ${count}" placeholder="Switch ${count}">
+    <div class="switch-header active" onclick="toggleSwitchExpand(this)">
+      <div class="switch-title-wrap">
+        <svg class="switch-chevron" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+        <h3>Switch ${count + 1} <span class="switch-subname" id="subname-${count}">New Switch</span></h3>
+      </div>
+      <div class="switch-actions" onclick="event.stopPropagation()">
+        <button type="button" class="inline-remove-btn" onclick="removeSwitch(this)">Delete</button>
+      </div>
     </div>
-    <div class="form-row">
-      <label>IP Address</label>
-      <input type="text" name="ip[]" value="" placeholder="192.168.1.x">
-    </div>
-    <div class="form-row">
-      <label>Username</label>
-      <input type="text" name="username[]" value="admin" placeholder="admin">
-    </div>
-    <div class="form-row">
-      <label>Password</label>
-      <input type="password" name="password[]" value="admin" placeholder="password">
-    </div>
-    <div class="form-row">
-      <label>Model</label>
-      <input type="text" name="model[]" value="" placeholder="HC-SWTGW218AS">
-    </div>
-    <div class="form-row">
-      <label>Port Count</label>
-      <input type="number" name="port_count[]" value="9" min="1" max="52" style="max-width:80px">
+    <div class="switch-content active">
+      <div class="form-row">
+        <label>Name</label>
+        <input type="text" name="name[]" value="Switch ${count + 1}" placeholder="Switch ${count + 1}" oninput="updateSubname(${count}, this.value, null)">
+      </div>
+      <div class="form-row">
+        <label>IP Address</label>
+        <input type="text" name="ip[]" value="" placeholder="192.168.1.x" oninput="updateSubname(${count}, null, this.value)">
+      </div>
+      <div class="form-row">
+        <label>Username</label>
+        <input type="text" name="username[]" value="admin" placeholder="admin">
+      </div>
+      <div class="form-row">
+        <label>Password</label>
+        <input type="password" name="password[]" value="admin" placeholder="password">
+      </div>
+      <div class="form-row">
+        <label>Model</label>
+        <input type="text" name="model[]" value="" placeholder="HC-SWTGW218AS">
+        <span class="note">Optional, for template matching</span>
+      </div>
+      <div class="form-row">
+        <label>Port Count</label>
+        <input type="number" name="port_count[]" value="9" min="1" max="52" style="max-width:80px">
+      </div>
     </div>`;
   list.appendChild(div);
-  // Renumber
   renumber();
+  updateSubname(count);
 }
 
 function removeSwitch(btn) {
@@ -387,19 +521,291 @@ function removeSwitch(btn) {
   const hidden = group.querySelector('input[name="keep[]"]');
   hidden.value = '0';
   group.style.display = 'none';
+  renumber();
 }
 
 function renumber() {
   const groups = document.querySelectorAll('.switch-group');
+  let activeIndex = 1;
   groups.forEach((g, i) => {
-    const h3 = g.querySelector('h3');
+    const h3 = g.querySelector('.switch-title-wrap h3');
     if (h3 && g.style.display !== 'none') {
-      h3.textContent = 'Switch ' + (i + 1);
+      const subname = g.querySelector('.switch-subname');
+      h3.innerHTML = `Switch ${activeIndex} <span class="switch-subname" id="${subname.id}">${subname.textContent}</span>`;
+      activeIndex++;
     }
   });
 }
 
-// Reboot Modal Interactivity Handlers
+// ==========================================
+// YAML TEMPLATE EDITOR INTERACTIVE FUNCTIONS
+// ==========================================
+
+const defaultTemplateMarkup = `model: "{MODEL_NAME}"
+manufacturer: "Generic"
+
+# Device Global Information from /info.cgi table 0 (key-value grid)
+device_info:
+  url: "/info.cgi"
+  method: "key_value_grid"
+  mappings:
+    uptime: "Sys Uptime"
+    mac: "MAC Address"
+    ip: "IP Address"
+    firmware: "Firmware Version"
+    model: "Device Model"
+
+# Port Link Settings and Speeds from /info.cgi table 1
+ports:
+  url: "/info.cgi"
+  source: "info_table"
+  columns:
+    port: 0
+    link: 1
+    duplex: 2
+    speed: 3
+    flow_control: 4
+
+# Port Transmission/Reception counters
+statistics:
+  url: "/port.cgi?page=stats"
+  method: "header_aware"
+  terms:
+    tx_packets: ["txgoodpkt", "txpackets", "tx packet", "txok"]
+    rx_packets: ["rxgoodpkt", "rxpackets", "rx packet", "rxok"]
+    tx_bytes: ["txbytes", "tx_bytes", "txgoodbytes"]
+    rx_bytes: ["rxbytes", "rx_bytes", "rxgoodbytes"]
+
+# DHCP Snooping Status
+dhcp_snooping:
+  url: "/dhcp_snooping.cgi?page=dump"
+  enable_input_name: "enable_dhcpsnp"
+  ports_form_action: "page=static"
+  trust_checkbox_class: "chkp"
+
+# IGMP Snooping Groups Table
+igmp:
+  url: "/igmp.cgi?page=dump"
+  enable_input_name: "enable_igmp"
+  table_header_keywords: ["IP Address", "Port", "VLAN ID"]
+
+# Jumbo Frame Parameter
+jumbo_frame:
+  url: "/fwd.cgi?page=jumboframe"
+  enable_input_name: "enable_jumbo"
+  select_name: "jumboframe"
+
+# MAC Address Table settings
+mac_table:
+  url: "/mac.cgi?page=fwd_tbl"
+  page_parameter: "pageidx"
+  perpage_parameter: "perpage"
+  perpage_value: "3"
+  cmd_parameter: "cmd"
+  cmd_value: "goto"
+
+# Config backup path
+backup:
+  url: "/config_back.cgi?cmd=conf_backup"
+  referer_path: "/config_back.cgi"
+  method: "GET"
+
+# Reboot action path
+reboot:
+  url: "/reboot.cgi"
+  referer_path: "/reboot.cgi"
+  method: "POST"
+  post_data:
+    cmd: "reboot"
+`;
+
+function loadTemplateList(selectFilename = null) {
+  const select = document.getElementById('template-select');
+  fetch('/api/templates')
+    .then(res => res.json())
+    .then(data => {
+      select.innerHTML = '<option value="" disabled selected>Select a Template...</option>';
+      if (data.templates && data.templates.length > 0) {
+        data.templates.forEach(tpl => {
+          const opt = document.createElement('option');
+          opt.value = tpl;
+          opt.textContent = tpl;
+          select.appendChild(opt);
+        });
+        if (selectFilename) {
+          select.value = selectFilename;
+          loadSelectedTemplate();
+        }
+      }
+    })
+    .catch(err => {
+      showFeedback('Failed to load template list: ' + err.message, 'error');
+    });
+}
+
+function loadSelectedTemplate() {
+  const select = document.getElementById('template-select');
+  const filename = select.value;
+  if (!filename) return;
+  
+  const textarea = document.getElementById('editor-textarea');
+  const saveBtn = document.getElementById('yaml-save-btn');
+  
+  textarea.disabled = true;
+  saveBtn.disabled = true;
+  textarea.value = 'Loading template content...';
+  
+  fetch(`/api/templates/${filename}`)
+    .then(res => {
+      if (!res.ok) {
+        return res.json().then(data => { throw new Error(data.error || 'Server error'); });
+      }
+      return res.json();
+    })
+    .then(data => {
+      textarea.value = data.content;
+      textarea.disabled = false;
+      onEditorChange();
+      showFeedback('', 'none');
+    })
+    .catch(err => {
+      textarea.value = '';
+      showFeedback('Failed to load template: ' + err.message, 'error');
+    });
+}
+
+function createNewTemplate() {
+  const modelName = prompt('Enter the Switch Model name (e.g. HC-SWTGW218AS or KP-9000):');
+  if (!modelName) return;
+  const cleanModel = modelName.trim().replace(/[^a-zA-Z0-9\-_]/g, '');
+  if (!cleanModel) {
+    alert('Invalid Model name!');
+    return;
+  }
+  const filename = cleanModel + '.yaml';
+  const textarea = document.getElementById('editor-textarea');
+  const select = document.getElementById('template-select');
+  const saveBtn = document.getElementById('yaml-save-btn');
+  
+  textarea.value = defaultTemplateMarkup.replace('{MODEL_NAME}', cleanModel);
+  textarea.disabled = false;
+  select.value = '';
+  saveBtn.disabled = false;
+  
+  showFeedback(`New blueprint initialized for ${cleanModel}. Click "Save Template" to create: ${filename}`, 'success');
+  onEditorChange();
+}
+
+function onEditorChange() {
+  const textarea = document.getElementById('editor-textarea');
+  const saveBtn = document.getElementById('yaml-save-btn');
+  const charCount = document.getElementById('editor-char-count');
+  const syntaxStatus = document.getElementById('editor-syntax-status');
+  
+  const text = textarea.value;
+  charCount.textContent = `${text.length} characters`;
+  
+  if (text.trim() === '') {
+    syntaxStatus.textContent = 'Empty';
+    saveBtn.disabled = true;
+    return;
+  }
+  
+  // Quick clientside indentation verification
+  let lines = text.split('\n');
+  let clean = true;
+  for (let line of lines) {
+    if (line.trim() && line.startsWith('\t')) {
+      clean = false;
+      break;
+    }
+  }
+  
+  if (!clean) {
+    syntaxStatus.textContent = 'Tabs detected (YAML forbids tabs)';
+    syntaxStatus.style.color = '#f85149';
+  } else {
+    syntaxStatus.textContent = 'Formatting looks clean';
+    syntaxStatus.style.color = '#8b949e';
+  }
+  
+  saveBtn.disabled = false;
+}
+
+function saveTemplate() {
+  const select = document.getElementById('template-select');
+  const textarea = document.getElementById('editor-textarea');
+  const content = textarea.value;
+  
+  let filename = select.value;
+  if (!filename) {
+    const match = content.match(/model:\s*"([^"]+)"/) || content.match(/model:\s*([a-zA-Z0-9\-_]+)/);
+    if (match && match[1]) {
+      filename = match[1].trim().replace(/[^a-zA-Z0-9\-_]/g, '') + '.yaml';
+    } else {
+      showFeedback('Error: Could not extract "model" attribute from the YAML content to determine filename!', 'error');
+      return;
+    }
+  }
+  
+  const saveBtn = document.getElementById('yaml-save-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+  
+  fetch(`/api/templates/${filename}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ content: content })
+  })
+  .then(res => {
+    if (!res.ok) {
+      return res.json().then(data => { throw new Error(data.error || 'Server error'); });
+    }
+    return res.json();
+  })
+  .then(data => {
+    showFeedback(`Template successfully saved: ${filename}`, 'success');
+    saveBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+      </svg>
+      Save Template
+    `;
+    saveBtn.disabled = false;
+    loadTemplateList(filename);
+  })
+  .catch(err => {
+    showFeedback(err.message, 'error');
+    saveBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+      </svg>
+      Save Template
+    `;
+    saveBtn.disabled = false;
+  });
+}
+
+function showFeedback(msg, type) {
+  const box = document.getElementById('yaml-feedback');
+  box.className = 'yaml-feedback';
+  if (type === 'success') {
+    box.className += ' success';
+    box.textContent = msg;
+  } else if (type === 'error') {
+    box.className += ' error';
+    box.textContent = msg;
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+// ==========================================
+// REBOOT INTERACTIVE FUNCTIONS
+// ==========================================
+
 let rebootIp = '';
 let rebootName = '';
 
@@ -409,7 +815,6 @@ function openRebootModal(ip, name) {
   document.getElementById('reboot-switch-name').textContent = name;
   document.getElementById('reboot-switch-ip').textContent = ip;
   
-  // Reset modal overlays
   document.getElementById('reboot-loading').style.display = 'none';
   document.getElementById('reboot-success').style.display = 'none';
   document.getElementById('reboot-error').style.display = 'none';
@@ -461,6 +866,11 @@ function executeReboot() {
     }, 4000);
   });
 }
+
+// Initialize on DOM Load
+window.addEventListener('DOMContentLoaded', () => {
+  loadTemplateList();
+});
 </script>
 </body>
 </html>

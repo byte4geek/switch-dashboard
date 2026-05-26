@@ -562,6 +562,56 @@ def api_notes():
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/templates")
+def list_templates():
+    try:
+        os.makedirs(DEVICE_TEMPLATES_DIR, exist_ok=True)
+        files = [f for f in os.listdir(DEVICE_TEMPLATES_DIR) if f.endswith(".yaml")]
+        return jsonify({"templates": files})
+    except Exception as e:
+        logger.error(f"Failed to list YAML templates: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/templates/<filename>", methods=["GET", "POST"])
+def manage_template(filename):
+    if ".." in filename or "/" in filename or "\\" in filename or not filename.endswith(".yaml"):
+        return jsonify({"error": "Invalid filename"}), 400
+
+    filepath = os.path.join(DEVICE_TEMPLATES_DIR, filename)
+
+    if request.method == "POST":
+        data = request.get_json(force=True, silent=True) or {}
+        content = data.get("content", "")
+        if not content.strip():
+            return jsonify({"error": "Content cannot be empty"}), 400
+        try:
+            import yaml
+            yaml.safe_load(content)
+        except Exception as ye:
+            return jsonify({"error": f"Invalid YAML Syntax: {ye}"}), 400
+
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(content)
+            logger.info(f"Updated YAML template: {filename}")
+            return jsonify({"status": "ok"})
+        except Exception as e:
+            logger.error(f"Failed to save template {filename}: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    # GET method
+    if not os.path.exists(filepath):
+        return jsonify({"error": "Template not found"}), 404
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+        return jsonify({"content": content})
+    except Exception as e:
+        logger.error(f"Failed to read template {filename}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/config", methods=["GET", "POST"])
 def config_page():
     if request.method == "POST":
