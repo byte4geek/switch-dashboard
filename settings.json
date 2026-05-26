@@ -1,3 +1,4 @@
 {
-  "font_size": "lg"
+  "font_size": "lg",
+  "log_level": "INFO"
 }

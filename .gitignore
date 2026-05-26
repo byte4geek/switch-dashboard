@@ -24,3 +24,8 @@ backup_test_temp/
 
 # Switch configuration backups
 backup/
+
+# Logs and log directories
+logs/
+*.log
+

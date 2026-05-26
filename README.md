@@ -180,6 +180,102 @@ To run the container manually with the Docker CLI:
 
 ---
 
+## 🔌 Customizing with YAML Device Templates
+
+The dashboard supports template-driven scraping. This enables users to add support for any managed switch model simply by writing a declarative YAML blueprint and placing it in the `./device-templates/` directory.
+
+### How to Create a Template
+A switch template is named `<model_name>.yaml` (where `<model_name>` matches the **model** field configured for the switch in `/config` or `config.json`).
+
+Here is a complete reference of the YAML blueprint schema:
+
+```yaml
+model: "HC-SWTGW218AS"          # The exact switch model name
+manufacturer: "Horaco"           # Brand/Manufacturer name
+
+# 1. Device Global Information (from /info.cgi key-value tables)
+device_info:
+  url: "/info.cgi"
+  method: "key_value_grid"
+  mappings:
+    uptime: "Sys Uptime"
+    mac: "MAC Address"
+    ip: "IP Address"
+    firmware: "Firmware Version"
+    model: "Device Model"
+
+# 2. Port Link Settings & Statuses
+ports:
+  url: "/info.cgi"
+  source: "info_table"           # "info_table" (Horaco style) or "port_table" (KeepLink style)
+  columns:
+    port: 0
+    link: 1
+    duplex: 2
+    speed: 3
+    flow_control: 4
+
+# 3. Port Transmission/Reception counters
+statistics:
+  url: "/port.cgi?page=stats"
+  method: "header_aware"
+  terms:
+    tx_packets: ["txgoodpkt", "txpackets", "tx packet", "txok"]
+    rx_packets: ["rxgoodpkt", "rxpackets", "rx packet", "rxok"]
+    tx_bytes: ["txbytes", "tx_bytes", "txgoodbytes"]
+    rx_bytes: ["rxbytes", "rx_bytes", "rxgoodbytes"]
+
+# 4. DHCP Snooping Status & Trusted Ports
+dhcp_snooping:
+  url: "/dhcp_snooping.cgi?page=dump"
+  enable_input_name: "enable_dhcpsnp"
+  ports_form_action: "page=static"
+  trust_checkbox_class: "chkp"
+
+# 5. IGMP Snooping Multicast Groups Table
+igmp:
+  url: "/igmp.cgi?page=dump"
+  enable_input_name: "enable_igmp"
+  table_header_keywords: ["IP Address", "Port", "VLAN ID"]
+
+# 6. Jumbo Frame Parameter
+jumbo_frame:
+  url: "/fwd.cgi?page=jumboframe"
+  enable_input_name: "enable_jumbo"
+  select_name: "jumboframe"
+
+# 7. MAC Address Forwarding Table (with paging)
+mac_table:
+  url: "/mac.cgi?page=fwd_tbl"
+  page_parameter: "pageidx"
+  perpage_parameter: "perpage"
+  perpage_value: "3"
+  cmd_parameter: "cmd"
+  cmd_value: "goto"
+
+# 8. CGI Configuration Backup download
+backup:
+  url: "/config_back.cgi?cmd=conf_backup"
+  referer_path: "/config_back.cgi"
+  method: "GET"
+
+# 9. Switch Remote Reboot action
+reboot:
+  url: "/reboot.cgi"
+  referer_path: "/reboot.cgi"
+  method: "POST"
+  post_data:
+    cmd: "reboot"
+```
+
+### Adding Model Custom Graphics
+To add a dedicated device photo or graphic to the switch card:
+1. Place a `.png`, `.jpg`, or `.jpeg` file in the `./device-templates/` directory.
+2. Name the file exactly after the switch model (e.g. `HC-SWTGW218AS.png`).
+3. If no custom image is found, the system will seamlessly fall back to a beautifully stylized 8-port switch icon located at `/static/switch_icon.png`.
+
+---
+
 ## 🔧 Manual Setup & Debugging
 
 If you prefer to configure the dashboard manually or want to run it on non-systemd machines (Windows / macOS):
@@ -274,7 +370,19 @@ This project is licensed under the **MIT License**. Feel free to modify, distrib
 
 ## 📅 Release Notes & Changelog
 
-### 🚀 Release 2026.5.3 (Current)
+### 🚀 Release 2026.5.4 (Current)
+* **📋 Dynamic YAML-Driven Scraper Blueprints**:
+  - Implemented dynamic, extensible scraping logic driven by declarative YAML templates under `./device-templates/`.
+  - Seamlessly appended CGI settings for administrative actions: **Configuration Backup downloads** (`backup`) and **Switch hardware reboots** (`reboot`) inside reference blueprints.
+  - Custom switch models now support 100% template-driven telemetry retrieval (Device Info, Port Link speed, Packets/Bytes statistics, DHCP trust, IGMP multicast, and MAC tables).
+* **🎨 Custom Switch Graphic Icons**:
+  - Automatically loads per-model graphics (e.g. `./device-templates/HC-SWTGW218AS.png` or `.jpg`) in the dashboard switch card, falling back to a newly designed premium stylized 8-port switch icon at `/static/switch_icon.png` if missing.
+* **📂 Bounded Rotational Logging Directory**:
+  - Relocated and consolidated logging output to the dedicated `./logs/` directory (`logs/dashboard.log`), securely ignoring all log traces inside `.gitignore`.
+
+---
+
+### 🚀 Release 2026.5.3
 * **🩹 Dynamic Switch Model Fallback**:
   - Fixed a bug where switches that do not explicitly report their model inside `/info.cgi` (such as `LIANGUO LG-SG5T1`) incorrectly fell back to a hardcoded `"HC-SWTGW218AS"` model name in the UI. The scraper now dynamically falls back to the exact model name specified in `config.json`.
   - Changed the default fallback in `scraper.py` (when the `"model"` attribute is omitted from `config.json` entirely) to a clean, generic `"Generic Model"` string to avoid any brand confusion.
