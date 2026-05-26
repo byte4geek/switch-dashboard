@@ -270,7 +270,7 @@ class HCSwitchScraper:
                                                 speed_val = actual_link
                                         else:
                                             speed_val = "Auto"
-                                            duplex_val = "Full"
+                                            duplex_val = ""
                                     
                                     ports.append({
                                         "port": port_num,
@@ -278,7 +278,7 @@ class HCSwitchScraper:
                                         "link": link_val,
                                         "speed": speed_val,
                                         "duplex": duplex_val,
-                                        "flow_control": cells[4].get_text(strip=True) if len(cells) > 4 else "",
+                                        "flow_control": cells[5].get_text(strip=True) if len(cells) > 5 else "",
                                         "tx_packets": 0,
                                         "rx_packets": 0,
                                         "tx_bytes": 0,
@@ -292,21 +292,59 @@ class HCSwitchScraper:
             soup = BeautifulSoup(stats_html, "html.parser")
             stats_table = soup.find("table")
             if stats_table:
-                for row in stats_table.find_all("tr")[1:]:
-                    cells = row.find_all("td")
-                    if len(cells) >= 7:
-                        port_name = cells[0].get_text(strip=True)
-                        match = re.match(r"Port\s*(\d+)", port_name)
-                        port_num = match.group(1) if match else (
-                            port_name if "trunk" in port_name.lower() else port_name
-                        )
-                        for p in ports:
-                            if p["port"] == port_name.replace("Port ", ""):
-                                p["tx_packets"] = self._parse_counter(cells[3].get_text(strip=True))
-                                p["rx_packets"] = self._parse_counter(cells[4].get_text(strip=True))
-                                p["tx_bytes"] = self._parse_counter(cells[5].get_text(strip=True))
-                                p["rx_bytes"] = self._parse_counter(cells[6].get_text(strip=True))
-                                break
+                rows = stats_table.find_all("tr")
+                if len(rows) > 0:
+                    first_row = rows[0]
+                    headers = [c.get_text(strip=True).strip().lower() for c in first_row.find_all(["td", "th"])]
+                    logger.debug(f"Parsing stats table. Found headers: {headers}")
+                    
+                    tx_pkt_idx = -1
+                    rx_pkt_idx = -1
+                    tx_bytes_idx = -1
+                    rx_bytes_idx = -1
+                    
+                    for idx, h in enumerate(headers):
+                        if any(term in h for term in ["txgoodpkt", "txpackets", "tx packet", "txok", "tx_pkt", "tx pkt"]) or h == "tx":
+                            tx_pkt_idx = idx
+                        elif any(term in h for term in ["rxgoodpkt", "rxpackets", "rx packet", "rxok", "rx_pkt", "rx pkt"]) or h == "rx":
+                            rx_pkt_idx = idx
+                        elif any(term in h for term in ["txbytes", "tx byte", "tx_octet", "tx octet", "txgoodbytes", "tx_bytes", "txbytes", "tx good bytes"]):
+                            tx_bytes_idx = idx
+                        elif any(term in h for term in ["rxbytes", "rx byte", "rx_octet", "rx octet", "rxgoodbytes", "rx_bytes", "rxbytes", "rx good bytes"]):
+                            rx_bytes_idx = idx
+                    
+                    # Fallback to defaults if not resolved
+                    if tx_pkt_idx == -1: tx_pkt_idx = 3
+                    if rx_pkt_idx == -1: rx_pkt_idx = 5 if "rxgoodpkt" in headers else 4
+                    
+                    logger.debug(f"Dynamic stats column mapping: tx_pkt_idx={tx_pkt_idx}, rx_pkt_idx={rx_pkt_idx}, tx_bytes_idx={tx_bytes_idx}, rx_bytes_idx={rx_bytes_idx}")
+                    
+                    for row in rows[1:]:
+                        cells = row.find_all("td")
+                        if len(cells) > max(tx_pkt_idx, rx_pkt_idx):
+                            port_name = cells[0].get_text(strip=True)
+                            match = re.match(r"Port\s*(\d+)", port_name)
+                            port_num = match.group(1) if match else (
+                                port_name if "trunk" in port_name.lower() else port_name
+                            )
+                            for p in ports:
+                                if p["port"] == port_name.replace("Port ", ""):
+                                    tx_pkts = self._parse_counter(cells[tx_pkt_idx].get_text(strip=True))
+                                    rx_pkts = self._parse_counter(cells[rx_pkt_idx].get_text(strip=True))
+                                    
+                                    p["tx_packets"] = tx_pkts
+                                    p["rx_packets"] = rx_pkts
+                                    
+                                    if tx_bytes_idx != -1 and len(cells) > tx_bytes_idx:
+                                        p["tx_bytes"] = self._parse_counter(cells[tx_bytes_idx].get_text(strip=True))
+                                    else:
+                                        p["tx_bytes"] = tx_pkts * 800
+                                        
+                                    if rx_bytes_idx != -1 and len(cells) > rx_bytes_idx:
+                                        p["rx_bytes"] = self._parse_counter(cells[rx_bytes_idx].get_text(strip=True))
+                                    else:
+                                        p["rx_bytes"] = rx_pkts * 800
+                                    break
                 logger.debug(f"Parsed port statistical counter bytes: {ports}")
 
         # Scrape DHCP Snooping
@@ -392,22 +430,26 @@ class HCSwitchScraper:
                 
             # 2. Parse Dump IGMP entry table
             entries = []
-            show_div = soup.find("div", class_="showdiv")
-            if show_div:
-                table = show_div.find("table")
-                if table:
-                    rows = table.find_all("tr")[1:] # skip header row
-                    for row in rows:
-                        cells = row.find_all("td")
-                        if len(cells) >= 3:
-                            ip_addr = cells[0].get_text(strip=True)
-                            ports = cells[1].get_text(strip=True)
-                            vlan = cells[2].get_text(strip=True)
-                            entries.append({
-                                "vlan": vlan,
-                                "ip": ip_addr,
-                                "ports": ports
-                            })
+            table = None
+            for t in soup.find_all("table"):
+                text_content = t.get_text()
+                if "IP Address" in text_content and "Port" in text_content and "VLAN ID" in text_content:
+                    table = t
+                    break
+            
+            if table:
+                rows = table.find_all("tr")[1:] # skip header row
+                for row in rows:
+                    cells = row.find_all("td")
+                    if len(cells) >= 3:
+                        ip_addr = cells[0].get_text(strip=True)
+                        ports = cells[1].get_text(strip=True)
+                        vlan = cells[2].get_text(strip=True)
+                        entries.append({
+                            "vlan": vlan,
+                            "ip": ip_addr,
+                            "ports": ports
+                        })
             res = {
                 "enabled": enabled,
                 "entries": entries
@@ -430,7 +472,11 @@ class HCSwitchScraper:
             # 1. Parse whether Jumbo Frame is globally enabled
             enabled = False
             enable_input = soup.find("input", {"name": "enable_jumbo"})
-            if enable_input and enable_input.has_attr("checked"):
+            if enable_input:
+                if enable_input.has_attr("checked"):
+                    enabled = True
+            else:
+                # If there's no enable checkbox, it's always active at the selected size
                 enabled = True
                 
             # 2. Parse size value
@@ -579,21 +625,38 @@ class HCSwitchScraper:
         for table in tables:
             headers = [th.get_text(strip=True).lower() for th in table.find_all("th")]
             if "mac address" in headers or "mac" in headers:
-                for row in table.find_all("tr")[1:]:
-                    cells = row.find_all("td")
-                    if len(cells) >= 4:
-                        mac = cells[0].get_text(strip=True)
-                        m_type = cells[1].get_text(strip=True)
-                        port = cells[2].get_text(strip=True)
-                        vlan = cells[3].get_text(strip=True)
-                        
-                        if ":" in mac and len(mac) >= 12:
-                            rows_data.append({
-                                "mac": mac,
-                                "type": m_type,
-                                "port": port,
-                                "vlan": vlan
-                            })
+                # Dynamically locate columns by header names
+                mac_idx = -1
+                type_idx = -1
+                port_idx = -1
+                vlan_idx = -1
+                
+                for idx, h in enumerate(headers):
+                    if "mac address" in h or h == "mac":
+                        mac_idx = idx
+                    elif "type" in h:
+                        type_idx = idx
+                    elif "port" in h:
+                        port_idx = idx
+                    elif "vlan" in h or h == "vlan id":
+                        vlan_idx = idx
+                
+                if mac_idx != -1 and port_idx != -1:
+                    for row in table.find_all("tr")[1:]:
+                        cells = row.find_all("td")
+                        if len(cells) > max(mac_idx, port_idx, type_idx, vlan_idx):
+                            mac = cells[mac_idx].get_text(strip=True)
+                            port = cells[port_idx].get_text(strip=True)
+                            m_type = cells[type_idx].get_text(strip=True) if type_idx != -1 else "dynamic"
+                            vlan = cells[vlan_idx].get_text(strip=True) if vlan_idx != -1 else "1"
+                            
+                            if ":" in mac and len(mac) >= 12:
+                                rows_data.append({
+                                    "mac": mac.upper(),
+                                    "type": m_type,
+                                    "port": port,
+                                    "vlan": vlan
+                                })
                 break
         return rows_data
 
