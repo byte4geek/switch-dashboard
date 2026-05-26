@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title }} - Settings</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#128252;</text></svg>">
+<!-- CodeMirror Styles and Scripts from CDN for YAML Syntax Highlighting -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/theme/ayu-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/mode/yaml/yaml.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -213,6 +218,32 @@
   }
   .editor-textarea:focus {
     box-shadow: inset 0 0 0 1px rgba(88, 166, 255, 0.3);
+  }
+
+  /* CodeMirror Custom Styling to blend into our glassmorphism theme */
+  .CodeMirror {
+    height: 450px;
+    background: rgba(13, 15, 20, 0.65) !important;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace !important;
+    font-size: 13px !important;
+    color: #e1e4e8 !important;
+    resize: vertical;
+    overflow: hidden !important;
+    min-height: 250px;
+    max-height: 1200px;
+  }
+  .CodeMirror-gutters {
+    background: rgba(22, 27, 34, 0.6) !important;
+    border-right: 1px solid rgba(48, 54, 61, 0.5) !important;
+  }
+  .CodeMirror-linenumber {
+    color: rgba(139, 148, 158, 0.7) !important;
+  }
+  .CodeMirror-selected {
+    background: rgba(88, 166, 255, 0.15) !important;
+  }
+  .CodeMirror-cursor {
+    border-left: 2px solid #58a6ff !important;
   }
   
   .yaml-save-btn {
@@ -619,6 +650,8 @@ reboot:
     cmd: "reboot"
 `;
 
+let cmEditor = null;
+
 function loadTemplateList(selectFilename = null) {
   const select = document.getElementById('template-select');
   fetch('/api/templates')
@@ -648,12 +681,11 @@ function loadSelectedTemplate() {
   const filename = select.value;
   if (!filename) return;
   
-  const textarea = document.getElementById('editor-textarea');
   const saveBtn = document.getElementById('yaml-save-btn');
   
-  textarea.disabled = true;
+  cmEditor.setOption('readOnly', 'nocursor');
   saveBtn.disabled = true;
-  textarea.value = 'Loading template content...';
+  cmEditor.setValue('Loading template content...');
   
   fetch(`/api/templates/${filename}`)
     .then(res => {
@@ -663,13 +695,13 @@ function loadSelectedTemplate() {
       return res.json();
     })
     .then(data => {
-      textarea.value = data.content;
-      textarea.disabled = false;
+      cmEditor.setValue(data.content);
+      cmEditor.setOption('readOnly', false);
       onEditorChange();
       showFeedback('', 'none');
     })
     .catch(err => {
-      textarea.value = '';
+      cmEditor.setValue('');
       showFeedback('Failed to load template: ' + err.message, 'error');
     });
 }
@@ -683,12 +715,11 @@ function createNewTemplate() {
     return;
   }
   const filename = cleanModel + '.yaml';
-  const textarea = document.getElementById('editor-textarea');
   const select = document.getElementById('template-select');
   const saveBtn = document.getElementById('yaml-save-btn');
   
-  textarea.value = defaultTemplateMarkup.replace('{MODEL_NAME}', cleanModel);
-  textarea.disabled = false;
+  cmEditor.setValue(defaultTemplateMarkup.replace('{MODEL_NAME}', cleanModel));
+  cmEditor.setOption('readOnly', false);
   select.value = '';
   saveBtn.disabled = false;
   
@@ -697,15 +728,15 @@ function createNewTemplate() {
 }
 
 function onEditorChange() {
-  const textarea = document.getElementById('editor-textarea');
   const saveBtn = document.getElementById('yaml-save-btn');
   const charCount = document.getElementById('editor-char-count');
   const syntaxStatus = document.getElementById('editor-syntax-status');
   
-  const text = textarea.value;
+  if (!cmEditor) return;
+  const text = cmEditor.getValue();
   charCount.textContent = `${text.length} characters`;
   
-  if (text.trim() === '') {
+  if (text.trim() === '' || text === 'Loading template content...') {
     syntaxStatus.textContent = 'Empty';
     saveBtn.disabled = true;
     return;
@@ -734,8 +765,7 @@ function onEditorChange() {
 
 function saveTemplate() {
   const select = document.getElementById('template-select');
-  const textarea = document.getElementById('editor-textarea');
-  const content = textarea.value;
+  const content = cmEditor.getValue();
   
   let filename = select.value;
   if (!filename) {
@@ -869,6 +899,21 @@ function executeReboot() {
 
 // Initialize on DOM Load
 window.addEventListener('DOMContentLoaded', () => {
+  // Initialize CodeMirror Editor
+  cmEditor = CodeMirror.fromTextArea(document.getElementById('editor-textarea'), {
+    lineNumbers: true,
+    mode: 'yaml',
+    theme: 'ayu-dark',
+    lineWrapping: true,
+    indentUnit: 2,
+    tabSize: 2,
+    readOnly: 'nocursor'
+  });
+  
+  cmEditor.on('change', () => {
+    onEditorChange();
+  });
+  
   loadTemplateList();
 });
 </script>
