@@ -373,7 +373,15 @@ This project is licensed under the **MIT License**. Feel free to modify, distrib
 
 ## 📅 Release Notes & Changelog
 
-### 🚀 Release 2026.5.4 (Current)
+### 🚀 Release 2026.5.5 (Current)
+* **🔌 RTLPlayground Custom Switch Firmware Support**:
+  - Generated and packaged a dedicated declarative switch scraper template `RTLPlayground.yaml` to fully support Realtek RTL8372/RTL8373 switches running the open-source **RTLPlayground alternative firmware** by `logicog`.
+  - Added support for the default RTLPlayground network segments (e.g. `192.168.10.247`), uIP embedded web server structures, and specialized `/ports`, `/stats`, `/vlan`, `/config`, and `/reboot` API pathways.
+  - Automatically parses port status states, EEE configurations, packet transmission statistics, and handles safe device reboots.
+
+---
+
+### 🚀 Release 2026.5.4
 * **📋 Dynamic YAML-Driven Scraper Blueprints**:
   - Implemented dynamic, extensible scraping logic driven by declarative YAML templates under `./device-templates/`.
   - Seamlessly appended CGI settings for administrative actions: **Configuration Backup downloads** (`backup`) and **Switch hardware reboots** (`reboot`) inside reference blueprints.

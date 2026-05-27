@@ -92,7 +92,7 @@ DAILY_PATH = os.path.join(DATA_DIR, "history_daily.json")
 BACKUP_DIR = os.path.join(DATA_DIR, "backup")
 DEVICE_TEMPLATES_DIR = os.path.join(DATA_DIR, "device-templates")
 os.makedirs(DEVICE_TEMPLATES_DIR, exist_ok=True)
-VERSION = "2026.5.4"
+VERSION = "2026.5.5"
 
 config = {}
 switch_configs = []
