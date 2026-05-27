@@ -1,0 +1,76 @@
+model: "RTLPlayground"
+manufacturer: "logicog"
+
+# Device Global Information from /index key-value grid
+device_info:
+  url: "/index"
+  method: "key_value_grid"
+  mappings:
+    uptime: "Uptime"
+    mac: "MAC"
+    ip: "IP"
+    firmware: "Firmware"
+    model: "Model"
+
+# Port Link Settings and Speeds from /ports
+ports:
+  url: "/ports"
+  source: "port_table"
+  port_table_match: "Port"
+  columns:
+    port: 0
+    admin_state: 1
+    actual_link: 2
+    flow_control: 3
+
+# Port Transmission/Reception counters from /stats
+statistics:
+  url: "/stats"
+  method: "header_aware"
+  terms:
+    tx_packets: ["tx packets", "txgoodpkt", "tx ok", "tx ok packets", "tx_pkt", "tx"]
+    rx_packets: ["rx packets", "rxgoodpkt", "rx ok", "rx ok packets", "rx_pkt", "rx"]
+    tx_bytes: ["tx bytes", "tx_bytes", "txgoodbytes", "tx octets", "tx_octets"]
+    rx_bytes: ["rx bytes", "rx_bytes", "rxgoodbytes", "rx octets", "rx_octets"]
+
+# DHCP Snooping Status (if implemented)
+dhcp_snooping:
+  url: "/ports"
+  enable_input_name: "enable_dhcp"
+  ports_form_action: "page=static"
+  trust_checkbox_class: "chkp"
+
+# IGMP Snooping Groups Table from /vlan
+igmp:
+  url: "/vlan"
+  enable_input_name: "enable_igmp"
+  table_header_keywords: ["IP Address", "Port", "VLAN ID"]
+
+# Jumbo Frame Parameter from /ports
+jumbo_frame:
+  url: "/ports"
+  enable_input_name: "enable_jumbo"
+  select_name: "jumboframe"
+
+# MAC Address Table settings from /mac
+mac_table:
+  url: "/mac"
+  page_parameter: "pageidx"
+  perpage_parameter: "perpage"
+  perpage_value: "3"
+  cmd_parameter: "cmd"
+  cmd_value: "goto"
+
+# Config backup path from /config
+backup:
+  url: "/config"
+  referer_path: "/config"
+  method: "GET"
+
+# Reboot action path from /reboot
+reboot:
+  url: "/reboot"
+  referer_path: "/reboot"
+  method: "POST"
+  post_data:
+    cmd: "reboot"
