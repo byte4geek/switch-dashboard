@@ -1,6 +1,6 @@
 # 🌐 Switch Dashboard (HORACO & OEM Managed Switches)
 
-A premium, high-performance, **real-time monitoring dashboard** designed for HORACO (`HC-SWTGW218AS`) and similar 8-Port + 2-Port SFP+ (10G) managed switches. The dashboard queries the switch’s native HTTP CGI interface, meaning **no SNMP setup or configuration is required**. 
+A premium, high-performance, **real-time monitoring dashboard** designed for Managed Chiese Switches similar to HORACO HC-SWTGW218AS 8-Port + 1-Port SFP+ (10G) managed switches. The dashboard queries the switch’s native HTTP CGI interface, meaning **no SNMP setup or configuration is required**. 
 
 Built with a gorgeous, high-tech glassmorphic dark-mode interface, it features automatic rolling bandwidth history, persistent byte-delta tracking, MAC address table searches, on-demand optical transceiver telemetry (DDMI), and a built-in interactive API explorer.
 
