@@ -47,6 +47,22 @@ class HCSwitchScraper:
         return None
 
     def _login(self):
+        template = self._load_template()
+        login_cfg = template.get("login") if template else None
+        login_required = True
+        if login_cfg is False:
+            login_required = False
+        elif isinstance(login_cfg, dict):
+            login_required = login_cfg.get("required", True)
+
+        if not login_required:
+            logger.debug(f"[_login] Login not required by template for {self.ip}. Initializing basic opener.")
+            self._cj = CookieJar()
+            self._opener = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(self._cj)
+            )
+            return
+
         logger.debug(f"[_login] Generating credentials MD5 hash for {self.username} on {self.ip}...")
         auth_str = self.username + self.password
         md5hash = hashlib.md5(auth_str.encode()).hexdigest()
@@ -128,9 +144,20 @@ class HCSwitchScraper:
                 logger.info(f"Using template-driven scraping for model {self.model} on {self.ip}")
                 return self._scrape_with_template(template)
             except Exception as e:
-                logger.error(f"Template-driven scraping failed for {self.ip}: {e}")
-                return self._fallback()
+                logger.error(f"Template-driven scraping failed for {self.ip}: {e}. Falling back to built-in scraper.")
+                try:
+                    return self._scrape_builtin()
+                except Exception as ex:
+                    logger.error(f"Built-in scraping also failed for {self.ip}: {ex}")
+                    return self._fallback()
 
+        try:
+            return self._scrape_builtin()
+        except Exception as e:
+            logger.error(f"Built-in scraping failed for {self.ip}: {e}")
+            return self._fallback()
+
+    def _scrape_builtin(self):
         try:
             self._login()
         except Exception as e:
@@ -607,7 +634,10 @@ class HCSwitchScraper:
         if template:
             backup_cfg = template.get("backup", {})
             if backup_cfg:
-                return self._download_backup_with_template(backup_cfg)
+                try:
+                    return self._download_backup_with_template(backup_cfg)
+                except Exception as e:
+                    logger.error(f"Failed to download config backup via template for {self.ip}: {e}. Trying built-in backup...")
                 
         if not self._opener:
             self._login()
@@ -625,7 +655,10 @@ class HCSwitchScraper:
         if template:
             reboot_cfg = template.get("reboot", {})
             if reboot_cfg:
-                return self._reboot_switch_with_template(reboot_cfg)
+                try:
+                    return self._reboot_switch_with_template(reboot_cfg)
+                except Exception as e:
+                    logger.error(f"Failed to reboot switch via template for {self.ip}: {e}. Trying built-in reboot...")
                 
         if not self._opener:
             self._login()
@@ -722,7 +755,13 @@ class HCSwitchScraper:
         if template:
             mac_cfg = template.get("mac_table", {})
             if mac_cfg:
-                return self._scrape_mac_table_with_template(mac_cfg)
+                try:
+                    res = self._scrape_mac_table_with_template(mac_cfg)
+                    if res:
+                        return res
+                    logger.warning(f"Template MAC scrape returned no entries for {self.ip}. Trying built-in MAC scraper...")
+                except Exception as e:
+                    logger.error(f"Error scraping MAC table via template on {self.ip}: {e}. Falling back to built-in scraper.")
         try:
             self._login()
         except Exception as e:
