@@ -2,7 +2,12 @@ model: "RTLPlayground"
 manufacturer: "logicog"
 
 login:
-  required: false
+  required: true
+  url: "/login"
+  method: "POST"
+  referer_path: "/login.html"
+  post_data:
+    pwd: "{{password}}"
 
 # Device Global Information from /index key-value grid
 device_info:
