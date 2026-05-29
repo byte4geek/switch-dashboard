@@ -1,6 +1,9 @@
 model: "RTLPlayground"
 manufacturer: "logicog"
 
+login:
+  required: false
+
 # Device Global Information from /index key-value grid
 device_info:
   url: "/index"
