@@ -9,76 +9,60 @@ login:
   post_data:
     pwd: "{{password}}"
 
-# Device Global Information from /index key-value grid
+# Global Device Information is served via JSON in /information.json
 device_info:
-  url: "/index"
-  method: "key_value_grid"
+  url: "/information.json"
+  format: "json"
   mappings:
-    uptime: "Uptime"
-    mac: "MAC"
-    ip: "IP"
-    firmware: "Firmware"
-    model: "Model"
+    mac: "mac_address"
+    ip: "ip_address"
+    firmware: "sw_ver"
+    model: "hw_ver"
 
-# Port Link Settings and Speeds from /ports
+# Port Link Settings, Speeds and Tx/Rx statistical counters are all served via JSON in /status.json
 ports:
-  url: "/ports"
-  source: "port_table"
-  port_table_match: "Port"
-  columns:
-    port: 0
-    admin_state: 1
-    actual_link: 2
-    flow_control: 3
+  url: "/status.json"
+  format: "json"
+  mapping:
+    port: "portNum"
+    admin_state: "enabled"
+    link: "link"
+    tx_packets: "txG"
+    rx_packets: "rxG"
+    tx_bytes: "txB"
+    rx_bytes: "rxB"
 
-# Port Transmission/Reception counters from /stats
+# statistics is handled directly in ports block above, no separate Stats fetch required
 statistics:
-  url: "/stats"
-  method: "header_aware"
-  terms:
-    tx_packets: ["tx packets", "txgoodpkt", "tx ok", "tx ok packets", "tx_pkt", "tx"]
-    rx_packets: ["rx packets", "rxgoodpkt", "rx ok", "rx ok packets", "rx_pkt", "rx"]
-    tx_bytes: ["tx bytes", "tx_bytes", "txgoodbytes", "tx octets", "tx_octets"]
-    rx_bytes: ["rx bytes", "rx_bytes", "rxgoodbytes", "rx octets", "rx_octets"]
+  url: "/status.json"
 
-# DHCP Snooping Status (if implemented)
-dhcp_snooping:
-  url: "/ports"
-  enable_input_name: "enable_dhcp"
-  ports_form_action: "page=static"
-  trust_checkbox_class: "chkp"
-
-# IGMP Snooping Groups Table from /vlan
-igmp:
-  url: "/vlan"
-  enable_input_name: "enable_igmp"
-  table_header_keywords: ["IP Address", "Port", "VLAN ID"]
-
-# Jumbo Frame Parameter from /ports
+# Jumbo Frame configuration is served via /mtu.json
 jumbo_frame:
-  url: "/ports"
-  enable_input_name: "enable_jumbo"
-  select_name: "jumboframe"
+  url: "/mtu.json"
+  format: "json"
 
-# MAC Address Table settings from /mac
+# MAC Address Table is served via /l2.json
 mac_table:
-  url: "/mac"
-  page_parameter: "pageidx"
-  perpage_parameter: "perpage"
+  url: "/l2.json"
+  format: "json"
+  page_parameter: "idx"
   perpage_value: "3"
-  cmd_parameter: "cmd"
-  cmd_value: "goto"
+  mapping:
+    mac: "mac"
+    port: "port"
+    type: "type"
+    vlan: "vlan"
 
-# Config backup path from /config
+# Config backup path
 backup:
   url: "/config"
   referer_path: "/config"
   method: "GET"
 
-# Reboot action path from /reboot
+# Reboot action path
 reboot:
-  url: "/reboot"
-  referer_path: "/reboot"
+  url: "/cmd"
+  referer_path: "/index.html"
   method: "POST"
   post_data:
     cmd: "reboot"
