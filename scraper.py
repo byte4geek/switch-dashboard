@@ -1,6 +1,7 @@
 import hashlib
 import urllib.request
 import urllib.parse
+import urllib.error
 from http.cookiejar import CookieJar, Cookie
 from bs4 import BeautifulSoup
 import time
@@ -63,6 +64,113 @@ class HCSwitchScraper:
             )
             return
 
+        if login_required and isinstance(login_cfg, dict) and "url" in login_cfg:
+            logger.debug(f"[_login] Custom template-driven login for {self.ip}...")
+            self._cj = CookieJar()
+            self._opener = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(self._cj)
+            )
+            
+            login_url = login_cfg.get("url")
+            method = login_cfg.get("method", "POST")
+            post_data_raw = login_cfg.get("post_data", {})
+            post_data = {}
+            
+            auth_str = self.username + self.password
+            md5hash = hashlib.md5(auth_str.encode()).hexdigest()
+            
+            for k, v in post_data_raw.items():
+                if isinstance(v, str):
+                    post_data[k] = v.replace("{{username}}", self.username)\
+                                    .replace("{{password}}", self.password)\
+                                    .replace("{{md5hash}}", md5hash)
+                else:
+                    post_data[k] = v
+                    
+            referer_path = login_cfg.get("referer_path", "/login.html")
+            headers = {"Referer": f"{self.base_url}{referer_path}"}
+            
+            data = None
+            if method.upper() == "POST":
+                data = urllib.parse.urlencode(post_data).encode()
+                headers["Content-Type"] = "application/x-www-form-urlencoded"
+                
+            req = urllib.request.Request(f"{self.base_url}{login_url}", data=data, headers=headers, method=method)
+            try:
+                r = self._opener.open(req, timeout=10)
+                r.read()
+                logger.debug(f"[_login] Custom template-driven login response read successfully")
+                return
+            except Exception as e:
+                logger.warning(f"Custom template-driven login urllib request failed for {self.ip}: {e}. Trying raw socket login fallback...")
+                try:
+                    import socket
+                    host_port = self.ip.split(":")
+                    host = host_port[0]
+                    port = int(host_port[1]) if len(host_port) > 1 else 80
+                    
+                    body = urllib.parse.urlencode(post_data)
+                    req_lines = [
+                        f"{method} {login_url} HTTP/1.0",
+                        f"Host: {self.ip}",
+                        f"Referer: {self.base_url}{referer_path}",
+                        "Content-Type: application/x-www-form-urlencoded",
+                        f"Content-Length: {len(body)}",
+                        "Connection: close",
+                        "",
+                        body
+                    ]
+                    req_bytes = "\r\n".join(req_lines).encode("utf-8")
+                    
+                    logger.debug(f"Sending raw socket login request to {host}:{port}...")
+                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    s.settimeout(5)
+                    s.connect((host, port))
+                    s.sendall(req_bytes)
+                    
+                    response_parts = []
+                    while True:
+                        chunk = s.recv(4096)
+                        if not chunk:
+                            break
+                        response_parts.append(chunk)
+                    s.close()
+                    
+                    response_text = b"".join(response_parts).decode("latin-1")
+                    logger.debug(f"Raw socket response: {response_text}")
+                    
+                    cookie_found = False
+                    for line in response_text.splitlines():
+                        if line.lower().startswith("set-cookie:"):
+                            cookie_content = line[11:].strip()
+                            parts = cookie_content.split(";")
+                            if parts:
+                                name_val = parts[0].split("=", 1)
+                                if len(name_val) == 2:
+                                    c_name = name_val[0].strip()
+                                    c_val = name_val[1].strip()
+                                    
+                                    new_cookie = Cookie(
+                                        version=0, name=c_name, value=c_val,
+                                        port=None, port_specified=False,
+                                        domain=host, domain_specified=True,
+                                        domain_initial_dot=False,
+                                        path="/", path_specified=True,
+                                        secure=False, expires=None, discard=True,
+                                        comment=None, comment_url=None, rest={}
+                                    )
+                                    self._cj.set_cookie(new_cookie)
+                                    logger.info(f"Successfully extracted and set cookie via raw socket fallback: {c_name}={c_val}")
+                                    cookie_found = True
+                    if cookie_found:
+                        return
+                    else:
+                        logger.error("No Set-Cookie headers found in raw socket response")
+                        raise Exception("No cookies in raw socket response")
+                except Exception as ex:
+                    logger.error(f"Raw socket login fallback failed for {self.ip}: {ex}")
+                    raise e
+
         logger.debug(f"[_login] Generating credentials MD5 hash for {self.username} on {self.ip}...")
         auth_str = self.username + self.password
         md5hash = hashlib.md5(auth_str.encode()).hexdigest()
@@ -112,6 +220,10 @@ class HCSwitchScraper:
             return res
         except Exception as e:
             logger.error(f"Failed to fetch {path}: {e}")
+            if isinstance(e, urllib.error.HTTPError) and e.code in [401, 403]:
+                logger.warning(f"Received HTTP {e.code} for {path} on {self.ip}. Resetting session opener to force re-login.")
+                self._opener = None
+                self._cj = None
             return None
 
     def _fmt_uptime(self, raw):
@@ -125,6 +237,12 @@ class HCSwitchScraper:
         return raw
 
     def _parse_counter(self, val):
+        val = val.strip()
+        if val.lower().startswith("0x"):
+            try:
+                return int(val, 16)
+            except ValueError:
+                return 0
         parts = val.split("-")
         if len(parts) == 2:
             try:
@@ -677,6 +795,29 @@ class HCSwitchScraper:
             logger.error(f"Failed to trigger reboot for {self.ip}: {e}")
             raise e
 
+    def _parse_mac_json_entries(self, data, mac_cfg):
+        entries = []
+        mapping = mac_cfg.get("mapping", {})
+        mac_key = mapping.get("mac", "mac")
+        port_key = mapping.get("port", "port")
+        type_key = mapping.get("type", "type")
+        vlan_key = mapping.get("vlan", "vlan")
+        
+        for item in data:
+            mac = str(item.get(mac_key, ""))
+            port = str(item.get(port_key, ""))
+            m_type = str(item.get(type_key, "dynamic"))
+            vlan = str(item.get(vlan_key, "1"))
+            
+            if mac:
+                entries.append({
+                    "mac": mac.upper(),
+                    "type": "static" if "static" in m_type.lower() or m_type.lower() == "s" else "dynamic",
+                    "port": f"Port {port}" if not port.lower().startswith("port") else port,
+                    "vlan": vlan
+                })
+        return entries
+
     def _scrape_mac_table_with_template(self, mac_cfg):
         logger.debug(f"[_scrape_mac_table_with_template] Executing template-driven MAC scrape...")
         try:
@@ -686,35 +827,103 @@ class HCSwitchScraper:
             return []
 
         url = mac_cfg.get("url", "/mac.cgi?page=fwd_tbl")
+        format_type = mac_cfg.get("format", "html")
         entries = []
         try:
-            html = self._fetch(url)
+            # For JSON pagination, if page_parameter is set, append ?<param>=0 to satisfy strict uIP URL matching
+            page_param = mac_cfg.get("page_parameter")
+            fetch_url = url
+            if format_type == "json" and page_param and "?" not in url:
+                fetch_url = f"{url}?{page_param}=0"
+                
+            html = self._fetch(fetch_url)
             if not html:
                 return []
                 
-            soup = BeautifulSoup(html, "html.parser")
-            entries.extend(self._parse_mac_table_rows(soup))
-            
-            page_param = mac_cfg.get("page_parameter")
-            if page_param:
-                total_pages = 1
-                totalpage_label = soup.find(id="totalpage")
-                if totalpage_label:
-                    try:
-                        total_pages = int(totalpage_label.get_text(strip=True))
-                    except ValueError:
-                        total_pages = 1
-                        
-                for page in range(2, total_pages + 1):
-                    logger.info(f"Scraping MAC table page {page}/{total_pages} for {self.ip}")
-                    page_html = self._fetch_mac_page_with_template(mac_cfg, page)
-                    if page_html:
-                        page_soup = BeautifulSoup(page_html, "html.parser")
-                        entries.extend(self._parse_mac_table_rows(page_soup))
+            if format_type == "json":
+                try:
+                    import json
+                    data = json.loads(html)
+                    entries.extend(self._parse_mac_json_entries(data, mac_cfg))
+                    
+                    page_param = mac_cfg.get("page_parameter")
+                    if page_param and len(data) > 0:
+                        last_idx = data[-1].get(page_param)
+                        perpage_val = int(mac_cfg.get("perpage_value", 3))
+                        seen_indices = set()
+                        if last_idx is not None:
+                            seen_indices.add(str(last_idx))
+                        while last_idx and len(data) >= perpage_val:
+                            # Safely parse last_idx as an integer (hex or decimal)
+                            try:
+                                if isinstance(last_idx, str):
+                                    if last_idx.startswith("0x"):
+                                        val = int(last_idx, 16)
+                                    elif any(c in 'abcdefABCDEF' for c in last_idx) or len(last_idx) == 4:
+                                        val = int(last_idx, 16)
+                                    else:
+                                        val = int(last_idx, 10)
+                                else:
+                                    val = int(last_idx)
+                                
+                                # Increment by 1 as done in l2.js (l2CurrentEntry = s[s.length-1].idx + 1)
+                                # and query in decimal representation since uIP atoi expects base 10
+                                query_idx = str(val + 1)
+                            except Exception:
+                                query_idx = str(last_idx)
+
+                            if query_idx in seen_indices:
+                                logger.warning(f"Detected potential MAC table pagination loop at idx={query_idx}. Breaking.")
+                                break
+                            seen_indices.add(query_idx)
+
+                            logger.info(f"Scraping MAC table next page with idx={query_idx} (raw: {last_idx}) for {self.ip}")
+                            next_url = f"{url}?{page_param}={query_idx}"
+                            next_html = self._fetch(next_url)
+                            if not next_html:
+                                break
+                            data = json.loads(next_html)
+                            if not data:
+                                break
+                            page_entries = self._parse_mac_json_entries(data, mac_cfg)
+                            if not page_entries:
+                                break
+                            entries.extend(page_entries)
+                            last_idx = data[-1].get(page_param)
+                except Exception as e:
+                    logger.error(f"Error scraping JSON MAC table via template on {self.ip}: {e}")
+            else:
+                soup = BeautifulSoup(html, "html.parser")
+                entries.extend(self._parse_mac_table_rows(soup))
+                
+                page_param = mac_cfg.get("page_parameter")
+                if page_param:
+                    total_pages = 1
+                    totalpage_label = soup.find(id="totalpage")
+                    if totalpage_label:
+                        try:
+                            total_pages = int(totalpage_label.get_text(strip=True))
+                        except ValueError:
+                            total_pages = 1
+                            
+                    for page in range(2, total_pages + 1):
+                        logger.info(f"Scraping MAC table page {page}/{total_pages} for {self.ip}")
+                        page_html = self._fetch_mac_page_with_template(mac_cfg, page)
+                        if page_html:
+                            page_soup = BeautifulSoup(page_html, "html.parser")
+                            entries.extend(self._parse_mac_table_rows(page_soup))
         except Exception as e:
             logger.error(f"Error scraping MAC table via template on {self.ip}: {e}")
             
-        return entries
+        # De-duplicate entries by MAC address to prevent wrap-around pagination duplicates
+        unique_entries = []
+        seen_macs = set()
+        for entry in entries:
+            mac_upper = entry["mac"].upper()
+            if mac_upper not in seen_macs:
+                seen_macs.add(mac_upper)
+                unique_entries.append(entry)
+        return unique_entries
 
     def _fetch_mac_page_with_template(self, mac_cfg, page_num):
         if not self._opener:
@@ -964,24 +1173,34 @@ class HCSwitchScraper:
             url = info_cfg.get("url", "/info.cgi")
             info_html = self._fetch(url)
             if info_html:
-                soup = BeautifulSoup(info_html, "html.parser")
-                tables = soup.find_all("table")
-                if tables and info_cfg.get("method") == "key_value_grid":
-                    for row in tables[0].find_all("tr"):
-                        cells = row.find_all(["td", "th"])
-                        for i in range(0, len(cells), 2):
-                            if i + 1 >= len(cells):
-                                break
-                            label = cells[i].get_text(strip=True).rstrip(":")
-                            value = cells[i + 1].get_text(strip=True)
-                            
-                            mappings = info_cfg.get("mappings", {})
-                            for key, label_term in mappings.items():
-                                if label_term.lower() in label.lower():
-                                    if key == "uptime":
-                                        device_info["uptime"] = self._fmt_uptime(value)
-                                    else:
-                                        device_info[key] = value
+                if info_cfg.get("format") == "json" or template.get("format") == "json":
+                    try:
+                        import json
+                        data = json.loads(info_html)
+                        mappings = info_cfg.get("mappings", {})
+                        for key, json_key in mappings.items():
+                            device_info[key] = str(data.get(json_key, ""))
+                    except Exception as e:
+                        logger.error(f"Error parsing JSON device_info: {e}")
+                else:
+                    soup = BeautifulSoup(info_html, "html.parser")
+                    tables = soup.find_all("table")
+                    if tables and info_cfg.get("method") == "key_value_grid":
+                        for row in tables[0].find_all("tr"):
+                            cells = row.find_all(["td", "th"])
+                            for i in range(0, len(cells), 2):
+                                if i + 1 >= len(cells):
+                                    break
+                                label = cells[i].get_text(strip=True).rstrip(":")
+                                value = cells[i + 1].get_text(strip=True)
+                                
+                                mappings = info_cfg.get("mappings", {})
+                                for key, label_term in mappings.items():
+                                    if label_term.lower() in label.lower():
+                                        if key == "uptime":
+                                            device_info["uptime"] = self._fmt_uptime(value)
+                                        else:
+                                            device_info[key] = value
 
         # 2. Scraping administrative port states or standard link statuses
         ports_cfg = template.get("ports", {})
@@ -991,121 +1210,196 @@ class HCSwitchScraper:
             
             html = self._fetch(url)
             if html:
-                soup = BeautifulSoup(html, "html.parser")
-                columns = ports_cfg.get("columns", {})
-                
-                if source == "info_table":
-                    # Horaco style: Ports status from second table in info page
-                    tables = soup.find_all("table")
-                    if len(tables) >= 2:
-                        for row in tables[1].find_all("tr")[1:]:
-                            cells = row.find_all("td")
-                            port_idx = columns.get("port", 0)
-                            link_idx = columns.get("link", 1)
-                            duplex_idx = columns.get("duplex", 2)
-                            speed_idx = columns.get("speed", 3)
-                            flow_idx = columns.get("flow_control", 4)
+                if ports_cfg.get("format") == "json" or template.get("format") == "json":
+                    try:
+                        import json
+                        port_list = json.loads(html)
+                        list_key = ports_cfg.get("list_key")
+                        if list_key and isinstance(port_list, dict):
+                            port_list = port_list.get(list_key, [])
                             
-                            if len(cells) > max(port_idx, link_idx, duplex_idx, speed_idx):
-                                port_name = cells[port_idx].get_text(strip=True)
-                                match = re.match(r"Port\s*(\d+)", port_name)
-                                port_num = match.group(1) if match else port_name
-                                
-                                status_val = "up" if "Up" in cells[link_idx].get_text(strip=True) else "down"
-                                link_val = cells[link_idx].get_text(strip=True)
-                                
-                                ports.append({
-                                    "port": port_num,
-                                    "status": status_val,
-                                    "link": link_val,
-                                    "speed": cells[speed_idx].get_text(strip=True),
-                                    "duplex": cells[duplex_idx].get_text(strip=True),
-                                    "flow_control": cells[flow_idx].get_text(strip=True) if len(cells) > flow_idx else "",
-                                    "tx_packets": 0, "rx_packets": 0, "tx_bytes": 0, "rx_bytes": 0
-                                })
-                
-                elif source == "port_table":
-                    # KeepLink style: ports link from /port.cgi table
-                    tables = soup.find_all("table")
-                    status_table = None
-                    match_keyword = ports_cfg.get("port_table_match", "Actual")
-                    for t in tables:
-                        rows = t.find_all("tr")
-                        if len(rows) >= 3:
-                            text_content = t.get_text()
-                            if match_keyword in text_content and "Port 1" in text_content:
-                                status_table = t
-                                break
+                        mapping = ports_cfg.get("mapping", {})
+                        for port_obj in port_list:
+                            port_num_key = mapping.get("port", "portNum")
+                            port_num = str(port_obj.get(port_num_key, ""))
+                            
+                            admin_key = mapping.get("admin_state", "enabled")
+                            admin_enabled = port_obj.get(admin_key, 1)
+                            
+                            if admin_enabled == 0 or admin_enabled is False:
+                                status_val = "disable"
+                                link_val = "Disabled"
+                                speed_val = "Disabled"
+                                duplex_val = "Disabled"
+                            else:
+                                link_key = mapping.get("link", "link")
+                                link_code = port_obj.get(link_key, 0)
+                                if isinstance(link_code, (int, float)):
+                                    link_code = int(link_code)
+                                    if link_code == 0:
+                                        status_val = "down"
+                                        link_val = "Link Down"
+                                        speed_val = "Auto"
+                                        duplex_val = ""
+                                    else:
+                                        status_val = "up"
+                                        link_map = {
+                                            1: ("100M", "Half"),
+                                            2: ("100M", "Full"),
+                                            3: ("1000M", "Half"),
+                                            4: ("1000M", "Full"),
+                                            5: ("2.5G", "Full"),
+                                            6: ("5G", "Full"),
+                                            7: ("10G", "Full")
+                                        }
+                                        speed_val, duplex_val = link_map.get(link_code, ("Auto", "Full"))
+                                        link_val = f"Link Up"
+                                else:
+                                    link_str = str(link_code)
+                                    status_val = "up" if "up" in link_str.lower() else "down"
+                                    link_val = link_str
+                                    speed_val = str(port_obj.get(mapping.get("speed", "speed"), "Auto"))
+                                    duplex_val = str(port_obj.get(mapping.get("duplex", "duplex"), "Full"))
+                                    
+                            flow_key = mapping.get("flow_control", "flow")
+                            flow_val = str(port_obj.get(flow_key, ""))
+                            
+                            tx_pkts = self._parse_counter(str(port_obj.get(mapping.get("tx_packets", "txG"), "0")))
+                            rx_pkts = self._parse_counter(str(port_obj.get(mapping.get("rx_packets", "rxG"), "0")))
+                            tx_bytes = self._parse_counter(str(port_obj.get(mapping.get("tx_bytes", "txB"), "0")))
+                            rx_bytes = self._parse_counter(str(port_obj.get(mapping.get("rx_bytes", "rxB"), "0")))
+                            
+                            ports.append({
+                                "port": port_num,
+                                "status": status_val,
+                                "link": link_val,
+                                "speed": speed_val,
+                                "duplex": duplex_val,
+                                "flow_control": flow_val,
+                                "tx_packets": tx_pkts,
+                                "rx_packets": rx_pkts,
+                                "tx_bytes": tx_bytes,
+                                "rx_bytes": rx_bytes
+                            })
+                    except Exception as e:
+                        logger.error(f"Error parsing JSON ports: {e}")
+                else:
+                    soup = BeautifulSoup(html, "html.parser")
+                    columns = ports_cfg.get("columns", {})
                     
-                    if status_table:
-                        rows = status_table.find_all("tr")
-                        start_idx = 0
-                        for idx, r in enumerate(rows):
-                            cells = r.find_all(["td", "th"])
-                            cells_text = [c.get_text(strip=True) for c in cells]
-                            if len(cells_text) > 0 and "Port 1" in cells_text[0]:
-                                start_idx = idx
-                                break
-                                
-                        if start_idx > 0:
-                            for row in rows[start_idx:]:
-                                cells = row.find_all(["td", "th"])
+                    if source == "info_table":
+                        # Horaco style: Ports status from second table in info page
+                        tables = soup.find_all("table")
+                        if len(tables) >= 2:
+                            for row in tables[1].find_all("tr")[1:]:
+                                cells = row.find_all("td")
                                 port_idx = columns.get("port", 0)
-                                admin_idx = columns.get("admin_state", 1)
-                                link_idx = columns.get("actual_link", 3)
-                                flow_idx = columns.get("flow_control", 5)
+                                link_idx = columns.get("link", 1)
+                                duplex_idx = columns.get("duplex", 2)
+                                speed_idx = columns.get("speed", 3)
+                                flow_idx = columns.get("flow_control", 4)
                                 
-                                if len(cells) > max(port_idx, admin_idx, link_idx):
+                                if len(cells) > max(port_idx, link_idx, duplex_idx, speed_idx):
                                     port_name = cells[port_idx].get_text(strip=True)
                                     match = re.match(r"Port\s*(\d+)", port_name)
                                     port_num = match.group(1) if match else port_name
                                     
-                                    admin_state = cells[admin_idx].get_text(strip=True).strip().lower()
-                                    actual_link = cells[link_idx].get_text(strip=True).strip()
+                                    status_val = "up" if "Up" in cells[link_idx].get_text(strip=True) else "down"
+                                    link_val = cells[link_idx].get_text(strip=True)
                                     
-                                    if admin_state in ["disable", "disabled"]:
-                                        status_val = "disable"
-                                        link_val = "Disabled"
-                                        speed_val = "Disabled"
-                                        duplex_val = "Disabled"
-                                    else:
-                                        status_val = "down" if "down" in actual_link.lower() else "up"
-                                        link_val = "Link Up" if status_val == "up" else "Link Down"
-                                        speed_val = "Auto"
-                                        duplex_val = "Full"
-                                        
-                                        if status_val == "up":
-                                            speed_match = re.match(r"(\d+G?)(Full|Half)?", actual_link, re.IGNORECASE)
-                                            if speed_match:
-                                                speed_num = speed_match.group(1)
-                                                if "G" in speed_num.upper():
-                                                    speed_val = speed_num.upper()
-                                                else:
-                                                    speed_val = f"{speed_num}M"
-                                                duplex_val = speed_match.group(2) or "Full"
-                                                if duplex_val.lower() == "full":
-                                                    duplex_val = "Full"
-                                                elif duplex_val.lower() == "half":
-                                                    duplex_val = "Half"
-                                            else:
-                                                speed_val = actual_link
-                                        else:
-                                            speed_val = "Auto"
-                                            duplex_val = ""
-                                            
                                     ports.append({
                                         "port": port_num,
                                         "status": status_val,
                                         "link": link_val,
-                                        "speed": speed_val,
-                                        "duplex": duplex_val,
+                                        "speed": cells[speed_idx].get_text(strip=True),
+                                        "duplex": cells[duplex_idx].get_text(strip=True),
                                         "flow_control": cells[flow_idx].get_text(strip=True) if len(cells) > flow_idx else "",
                                         "tx_packets": 0, "rx_packets": 0, "tx_bytes": 0, "rx_bytes": 0
                                     })
+                    
+                    elif source == "port_table":
+                        # KeepLink style: ports link from /port.cgi table
+                        tables = soup.find_all("table")
+                        status_table = None
+                        match_keyword = ports_cfg.get("port_table_match", "Actual")
+                        for t in tables:
+                            rows = t.find_all("tr")
+                            if len(rows) >= 3:
+                                text_content = t.get_text()
+                                if match_keyword in text_content and "Port 1" in text_content:
+                                    status_table = t
+                                    break
+                        
+                        if status_table:
+                            rows = status_table.find_all("tr")
+                            start_idx = 0
+                            for idx, r in enumerate(rows):
+                                cells = r.find_all(["td", "th"])
+                                cells_text = [c.get_text(strip=True) for c in cells]
+                                if len(cells_text) > 0 and "Port 1" in cells_text[0]:
+                                    start_idx = idx
+                                    break
+                                    
+                            if start_idx > 0:
+                                for row in rows[start_idx:]:
+                                    cells = row.find_all(["td", "th"])
+                                    port_idx = columns.get("port", 0)
+                                    admin_idx = columns.get("admin_state", 1)
+                                    link_idx = columns.get("actual_link", 3)
+                                    flow_idx = columns.get("flow_control", 5)
+                                    
+                                    if len(cells) > max(port_idx, admin_idx, link_idx):
+                                        port_name = cells[port_idx].get_text(strip=True)
+                                        match = re.match(r"Port\s*(\d+)", port_name)
+                                        port_num = match.group(1) if match else port_name
+                                        
+                                        admin_state = cells[admin_idx].get_text(strip=True).strip().lower()
+                                        actual_link = cells[link_idx].get_text(strip=True).strip()
+                                        
+                                        if admin_state in ["disable", "disabled"]:
+                                            status_val = "disable"
+                                            link_val = "Disabled"
+                                            speed_val = "Disabled"
+                                            duplex_val = "Disabled"
+                                        else:
+                                            status_val = "down" if "down" in actual_link.lower() else "up"
+                                            link_val = "Link Up" if status_val == "up" else "Link Down"
+                                            speed_val = "Auto"
+                                            duplex_val = "Full"
+                                            
+                                            if status_val == "up":
+                                                speed_match = re.match(r"(\d+G?)(Full|Half)?", actual_link, re.IGNORECASE)
+                                                if speed_match:
+                                                    speed_num = speed_match.group(1)
+                                                    if "G" in speed_num.upper():
+                                                        speed_val = speed_num.upper()
+                                                    else:
+                                                        speed_val = f"{speed_num}M"
+                                                    duplex_val = speed_match.group(2) or "Full"
+                                                    if duplex_val.lower() == "full":
+                                                        duplex_val = "Full"
+                                                    elif duplex_val.lower() == "half":
+                                                        duplex_val = "Half"
+                                                else:
+                                                    speed_val = actual_link
+                                            else:
+                                                speed_val = "Auto"
+                                                duplex_val = ""
+                                                
+                                        ports.append({
+                                            "port": port_num,
+                                            "status": status_val,
+                                            "link": link_val,
+                                            "speed": speed_val,
+                                            "duplex": duplex_val,
+                                            "flow_control": cells[flow_idx].get_text(strip=True) if len(cells) > flow_idx else "",
+                                            "tx_packets": 0, "rx_packets": 0, "tx_bytes": 0, "rx_bytes": 0
+                                        })
 
         # 3. Scraping transmission statistics
         stats_cfg = template.get("statistics", {})
-        if stats_cfg:
+        has_stats = len(ports) > 0 and any(p.get("tx_packets", 0) > 0 for p in ports)
+        if stats_cfg and not has_stats:
             url = stats_cfg.get("url", "/port.cgi?page=stats")
             stats_html = self._fetch(url)
             if stats_html:
