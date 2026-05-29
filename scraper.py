@@ -1535,36 +1535,66 @@ class HCSwitchScraper:
             url = jumbo_cfg.get("url", "/fwd.cgi?page=jumboframe")
             html = self._fetch(url)
             if html:
-                soup = BeautifulSoup(html, "html.parser")
-                
-                enabled = False
-                enable_input_name = jumbo_cfg.get("enable_input_name", "enable_jumbo")
-                enable_input = soup.find("input", {"name": enable_input_name})
-                if enable_input:
-                    if enable_input.has_attr("checked"):
-                        enabled = True
+                if jumbo_cfg.get("format") == "json" or template.get("format") == "json":
+                    try:
+                        import json
+                        data = json.loads(html)
+                        max_mtu = 1500
+                        enabled = False
+                        for port_obj in data:
+                            mtu_val = port_obj.get("mtu", "1500")
+                            try:
+                                if isinstance(mtu_val, str):
+                                    if mtu_val.lower().startswith("0x"):
+                                        val = int(mtu_val, 16)
+                                    else:
+                                        val = int(mtu_val)
+                                else:
+                                    val = int(mtu_val)
+                                if val > max_mtu:
+                                    max_mtu = val
+                            except Exception:
+                                pass
+                        if max_mtu > 1522:
+                            enabled = True
+                            size_val = f"{max_mtu}Bytes"
+                        else:
+                            enabled = False
+                            size_val = "Disabled"
+                        jumbo_frame = {"enabled": enabled, "size": size_val}
+                    except Exception as e:
+                        logger.error(f"Error parsing JSON jumbo_frame: {e}")
                 else:
-                    enabled = True
+                    soup = BeautifulSoup(html, "html.parser")
                     
-                size_val = "Unknown"
-                select_name = jumbo_cfg.get("select_name", "jumboframe")
-                select = soup.find("select", {"name": select_name})
-                if select:
-                    selected_option = select.find("option", selected=True)
-                    if not selected_option:
-                        for opt in select.find_all("option"):
-                            if opt.has_attr("selected"):
-                                selected_option = opt
-                                break
-                    if selected_option:
-                        text_node = selected_option.find(string=True, recursive=False)
-                        size_val = text_node.strip() if text_node else selected_option.get_text(strip=True)
+                    enabled = False
+                    enable_input_name = jumbo_cfg.get("enable_input_name", "enable_jumbo")
+                    enable_input = soup.find("input", {"name": enable_input_name})
+                    if enable_input:
+                        if enable_input.has_attr("checked"):
+                            enabled = True
                     else:
-                        options = select.find_all("option")
-                        if options:
-                            text_node = options[0].find(string=True, recursive=False)
-                            size_val = text_node.strip() if text_node else options[0].get_text(strip=True)
-                jumbo_frame = {"enabled": enabled, "size": size_val}
+                        enabled = True
+                        
+                    size_val = "Unknown"
+                    select_name = jumbo_cfg.get("select_name", "jumboframe")
+                    select = soup.find("select", {"name": select_name})
+                    if select:
+                        selected_option = select.find("option", selected=True)
+                        if not selected_option:
+                            for opt in select.find_all("option"):
+                                if opt.has_attr("selected"):
+                                    selected_option = opt
+                                    break
+                        if selected_option:
+                            text_node = selected_option.find(string=True, recursive=False)
+                            size_val = text_node.strip() if text_node else selected_option.get_text(strip=True)
+                        else:
+                            options = select.find_all("option")
+                            if options:
+                                text_node = options[0].find(string=True, recursive=False)
+                                size_val = text_node.strip() if text_node else options[0].get_text(strip=True)
+                    jumbo_frame = {"enabled": enabled, "size": size_val}
 
         return {
             "name": self.name,
