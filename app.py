@@ -240,14 +240,15 @@ def update_cache():
         for sw in switch_configs:
             ip = sw["ip"]
             
+            from scraper import HCSwitchScraper
+            scraper_obj = HCSwitchScraper(sw)
+            
             # Scrape MAC table if due
             last_scrape = last_mac_scrape_times.get(ip, 0)
             r_interval = config.get("refresh_interval", 30)
             if now - last_scrape >= (r_interval * mac_refresh_multiplier) or ip not in mac_tables:
                 logger.info(f"Scheduled scraping of MAC table for {ip}...")
                 try:
-                    from scraper import HCSwitchScraper
-                    scraper_obj = HCSwitchScraper(sw)
                     mac_table = scraper_obj.scrape_mac_table()
                     mac_tables[ip] = mac_table
                     last_mac_scrape_times[ip] = now
@@ -257,7 +258,7 @@ def update_cache():
                         mac_tables[ip] = []
 
             try:
-                data = scrape_switch(sw)
+                data = scraper_obj.scrape()
             except Exception as e:
                 data = {"name": sw["name"], "ip": ip, "ports": [], "error": str(e)}
 
