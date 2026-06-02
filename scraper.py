@@ -9,9 +9,20 @@ import logging
 import re
 import os
 import yaml
+import threading
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+_locks_lock = threading.Lock()
+_switch_locks = {}
+
+
+def get_switch_lock(ip):
+    with _locks_lock:
+        if ip not in _switch_locks:
+            _switch_locks[ip] = threading.Lock()
+        return _switch_locks[ip]
 
 
 class HCSwitchScraper:
@@ -25,6 +36,23 @@ class HCSwitchScraper:
         self.base_url = f"http://{self.ip}"
         self._cj = None
         self._opener = None
+
+    def _open_request_with_retry(self, req, timeout=45, max_retries=5, retry_delay=3):
+        for attempt in range(1, max_retries + 1):
+            try:
+                if self._opener:
+                    logger.debug(f"[_open_request_with_retry] Attempt {attempt}/{max_retries} with opener. Timeout={timeout}")
+                    return self._opener.open(req, timeout=timeout)
+                else:
+                    logger.debug(f"[_open_request_with_retry] Attempt {attempt}/{max_retries} with urlopen. Timeout={timeout}")
+                    return urllib.request.urlopen(req, timeout=timeout)
+            except Exception as e:
+                url_str = req if isinstance(req, str) else (req.full_url if hasattr(req, 'full_url') else str(req))
+                logger.warning(f"[_open_request_with_retry] Attempt {attempt}/{max_retries} failed for {url_str}: {e}")
+                if attempt < max_retries:
+                    time.sleep(retry_delay)
+                else:
+                    raise e
 
     def _load_template(self):
         # Look for templates in DASHBOARD_DATA_DIR or local directory
@@ -97,8 +125,11 @@ class HCSwitchScraper:
                 
             req = urllib.request.Request(f"{self.base_url}{login_url}", data=data, headers=headers, method=method)
             try:
-                r = self._opener.open(req, timeout=10)
+                r = self._open_request_with_retry(req, timeout=45, max_retries=5)
                 r.read()
+                if "login.html" in r.geturl():
+                    logger.warning(f"[_login] Custom login redirect returned login.html on {self.ip}. Login failed!")
+                    raise Exception("Login redirected to login.html")
                 logger.debug(f"[_login] Custom template-driven login response read successfully")
                 return
             except Exception as e:
@@ -187,8 +218,9 @@ class HCSwitchScraper:
             "language": "EN"
         }).encode()
 
-        r = self._opener.open(
-            f"{self.base_url}/login.cgi", data=data, timeout=10
+        req_login = urllib.request.Request(f"{self.base_url}/login.cgi", data=data)
+        r = self._open_request_with_retry(
+            req_login, timeout=45, max_retries=5
         )
         r.read()
 
@@ -204,17 +236,20 @@ class HCSwitchScraper:
         self._cj.set_cookie(admin_c)
         logger.debug(f"[_login] Authenticated cookie jar initialized. Admin cookie set to {md5hash}")
 
-        r = self._opener.open(f"{self.base_url}/", timeout=10)
+        req_base = urllib.request.Request(f"{self.base_url}/")
+        r = self._open_request_with_retry(req_base, timeout=45, max_retries=5)
         r.read()
 
     def _fetch(self, path):
         if not self._opener:
             self._login()
         logger.debug(f"[_fetch] Fetching path: {path}")
+        # Enforce spacing between sequential uIP HTTP requests
+        time.sleep(0.5)
         headers = {"Referer": f"{self.base_url}/"}
         req = urllib.request.Request(f"{self.base_url}{path}", headers=headers)
         try:
-            r = self._opener.open(req, timeout=10)
+            r = self._open_request_with_retry(req, timeout=45, max_retries=5)
             res = r.read().decode("utf-8", errors="replace")
             logger.debug(f"[_fetch] Path {path} successfully fetched (size: {len(res)} characters)")
             return res
@@ -255,25 +290,26 @@ class HCSwitchScraper:
             return 0
 
     def scrape(self):
-        logger.debug(f"Running full telemetry scrape for switch {self.name} ({self.ip})...")
-        template = self._load_template()
-        if template:
-            try:
-                logger.info(f"Using template-driven scraping for model {self.model} on {self.ip}")
-                return self._scrape_with_template(template)
-            except Exception as e:
-                logger.error(f"Template-driven scraping failed for {self.ip}: {e}. Falling back to built-in scraper.")
+        with get_switch_lock(self.ip):
+            logger.debug(f"Running full telemetry scrape for switch {self.name} ({self.ip})...")
+            template = self._load_template()
+            if template:
                 try:
-                    return self._scrape_builtin()
-                except Exception as ex:
-                    logger.error(f"Built-in scraping also failed for {self.ip}: {ex}")
-                    return self._fallback()
+                    logger.info(f"Using template-driven scraping for model {self.model} on {self.ip}")
+                    return self._scrape_with_template(template)
+                except Exception as e:
+                    logger.error(f"Template-driven scraping failed for {self.ip}: {e}. Falling back to built-in scraper.")
+                    try:
+                        return self._scrape_builtin()
+                    except Exception as ex:
+                        logger.error(f"Built-in scraping also failed for {self.ip}: {ex}")
+                        return self._fallback()
 
-        try:
-            return self._scrape_builtin()
-        except Exception as e:
-            logger.error(f"Built-in scraping failed for {self.ip}: {e}")
-            return self._fallback()
+            try:
+                return self._scrape_builtin()
+            except Exception as e:
+                logger.error(f"Built-in scraping failed for {self.ip}: {e}")
+                return self._fallback()
 
     def _scrape_builtin(self):
         try:
@@ -718,7 +754,7 @@ class HCSwitchScraper:
             
         req = urllib.request.Request(f"{self.base_url}{url_path}", data=post_data, headers=headers)
         try:
-            r = self._opener.open(req, timeout=15)
+            r = self._open_request_with_retry(req, timeout=45, max_retries=5)
             return r.read()
         except Exception as e:
             logger.error(f"Failed to download config backup via template on {self.ip}: {e}")
@@ -741,59 +777,61 @@ class HCSwitchScraper:
             
         req = urllib.request.Request(f"{self.base_url}{url_path}", data=post_data, headers=headers)
         try:
-            r = self._opener.open(req, timeout=10)
+            r = self._open_request_with_retry(req, timeout=45, max_retries=5)
             return r.read().decode("utf-8", errors="replace")
         except Exception as e:
             logger.error(f"Failed to reboot switch via template on {self.ip}: {e}")
             raise e
 
     def download_backup(self):
-        template = self._load_template()
-        if template:
-            backup_cfg = template.get("backup", {})
-            if backup_cfg:
-                try:
-                    return self._download_backup_with_template(backup_cfg)
-                except Exception as e:
-                    logger.error(f"Failed to download config backup via template for {self.ip}: {e}. Trying built-in backup...")
-                
-        if not self._opener:
-            self._login()
-        headers = {"Referer": f"{self.base_url}/config_back.cgi"}
-        req = urllib.request.Request(f"{self.base_url}/config_back.cgi?cmd=conf_backup", headers=headers)
-        try:
-            r = self._opener.open(req, timeout=15)
-            return r.read()
-        except Exception as e:
-            logger.error(f"Failed to download config backup for {self.ip}: {e}")
-            raise e
+        with get_switch_lock(self.ip):
+            template = self._load_template()
+            if template:
+                backup_cfg = template.get("backup", {})
+                if backup_cfg:
+                    try:
+                        return self._download_backup_with_template(backup_cfg)
+                    except Exception as e:
+                        logger.error(f"Failed to download config backup via template for {self.ip}: {e}. Trying built-in backup...")
+                    
+            if not self._opener:
+                self._login()
+            headers = {"Referer": f"{self.base_url}/config_back.cgi"}
+            req = urllib.request.Request(f"{self.base_url}/config_back.cgi?cmd=conf_backup", headers=headers)
+            try:
+                r = self._opener.open(req, timeout=15)
+                return r.read()
+            except Exception as e:
+                logger.error(f"Failed to download config backup for {self.ip}: {e}")
+                raise e
 
     def reboot_switch(self):
-        template = self._load_template()
-        if template:
-            reboot_cfg = template.get("reboot", {})
-            if reboot_cfg:
-                try:
-                    return self._reboot_switch_with_template(reboot_cfg)
-                except Exception as e:
-                    logger.error(f"Failed to reboot switch via template for {self.ip}: {e}. Trying built-in reboot...")
-                
-        if not self._opener:
-            self._login()
-        headers = {
-            "Referer": f"{self.base_url}/reboot.cgi",
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-        data = urllib.parse.urlencode({
-            "cmd": "reboot"
-        }).encode()
-        req = urllib.request.Request(f"{self.base_url}/reboot.cgi", data=data, headers=headers)
-        try:
-            r = self._opener.open(req, timeout=10)
-            return r.read().decode("utf-8", errors="replace")
-        except Exception as e:
-            logger.error(f"Failed to trigger reboot for {self.ip}: {e}")
-            raise e
+        with get_switch_lock(self.ip):
+            template = self._load_template()
+            if template:
+                reboot_cfg = template.get("reboot", {})
+                if reboot_cfg:
+                    try:
+                        return self._reboot_switch_with_template(reboot_cfg)
+                    except Exception as e:
+                        logger.error(f"Failed to reboot switch via template for {self.ip}: {e}. Trying built-in reboot...")
+                    
+            if not self._opener:
+                self._login()
+            headers = {
+                "Referer": f"{self.base_url}/reboot.cgi",
+                "Content-Type": "application/x-www-form-urlencoded"
+            }
+            data = urllib.parse.urlencode({
+                "cmd": "reboot"
+            }).encode()
+            req = urllib.request.Request(f"{self.base_url}/reboot.cgi", data=data, headers=headers)
+            try:
+                r = self._opener.open(req, timeout=10)
+                return r.read().decode("utf-8", errors="replace")
+            except Exception as e:
+                logger.error(f"Failed to trigger reboot for {self.ip}: {e}")
+                raise e
 
     def _parse_mac_json_entries(self, data, mac_cfg):
         entries = []
@@ -952,66 +990,67 @@ class HCSwitchScraper:
         }
         req = urllib.request.Request(f'{self.base_url}{url}', data=data, headers=headers)
         try:
-            r = self._opener.open(req, timeout=10)
+            r = self._open_request_with_retry(req, timeout=45, max_retries=5)
             return r.read().decode('utf-8', errors='replace')
         except Exception as e:
             logger.error(f"Failed to fetch MAC table page {page_num} via template on {self.ip}: {e}")
             return None
 
     def scrape_mac_table(self):
-        logger.debug(f"Scraping MAC address table for {self.ip}...")
-        template = self._load_template()
-        if template:
-            mac_cfg = template.get("mac_table", {})
-            if mac_cfg:
-                try:
-                    res = self._scrape_mac_table_with_template(mac_cfg)
-                    if res:
-                        return res
-                    logger.warning(f"Template MAC scrape returned no entries for {self.ip}. Trying built-in MAC scraper...")
-                except Exception as e:
-                    logger.error(f"Error scraping MAC table via template on {self.ip}: {e}. Falling back to built-in scraper.")
-        try:
-            self._login()
-        except Exception as e:
-            logger.error(f"Login failed for MAC scrape on {self.ip}: {e}")
-            return []
-
-        entries = []
-        try:
-            # Page 1
-            html = self._fetch("/mac.cgi?page=fwd_tbl")
-            if not html:
+        with get_switch_lock(self.ip):
+            logger.debug(f"Scraping MAC address table for {self.ip}...")
+            template = self._load_template()
+            if template:
+                mac_cfg = template.get("mac_table", {})
+                if mac_cfg:
+                    try:
+                        res = self._scrape_mac_table_with_template(mac_cfg)
+                        if res:
+                            return res
+                        logger.warning(f"Template MAC scrape returned no entries for {self.ip}. Trying built-in MAC scraper...")
+                    except Exception as e:
+                        logger.error(f"Error scraping MAC table via template on {self.ip}: {e}. Falling back to built-in scraper.")
+            try:
+                self._login()
+            except Exception as e:
+                logger.error(f"Login failed for MAC scrape on {self.ip}: {e}")
                 return []
-            
-            # Parse page 1 and extract total pages
-            total_pages = 1
-            soup = BeautifulSoup(html, "html.parser")
-            
-            # Find totalpage label
-            totalpage_label = soup.find(id="totalpage")
-            if totalpage_label:
-                try:
-                    total_pages = int(totalpage_label.get_text(strip=True))
-                except ValueError:
-                    total_pages = 1
-            
-            # Parse table rows on page 1
-            entries.extend(self._parse_mac_table_rows(soup))
-            
-            # If total_pages > 1, fetch additional pages
-            for page in range(2, total_pages + 1):
-                logger.info(f"Scraping MAC table page {page}/{total_pages} for {self.ip}")
-                page_html = self._fetch_mac_page(page)
-                if page_html:
-                    page_soup = BeautifulSoup(page_html, "html.parser")
-                    entries.extend(self._parse_mac_table_rows(page_soup))
-                    
-            logger.debug(f"Found {len(entries)} MAC table entries on {self.ip}")
-        except Exception as e:
-            logger.error(f"Error scraping MAC table on {self.ip}: {e}")
-            
-        return entries
+
+            entries = []
+            try:
+                # Page 1
+                html = self._fetch("/mac.cgi?page=fwd_tbl")
+                if not html:
+                    return []
+                
+                # Parse page 1 and extract total pages
+                total_pages = 1
+                soup = BeautifulSoup(html, "html.parser")
+                
+                # Find totalpage label
+                totalpage_label = soup.find(id="totalpage")
+                if totalpage_label:
+                    try:
+                        total_pages = int(totalpage_label.get_text(strip=True))
+                    except ValueError:
+                        total_pages = 1
+                
+                # Parse table rows on page 1
+                entries.extend(self._parse_mac_table_rows(soup))
+                
+                # If total_pages > 1, fetch additional pages
+                for page in range(2, total_pages + 1):
+                    logger.info(f"Scraping MAC table page {page}/{total_pages} for {self.ip}")
+                    page_html = self._fetch_mac_page(page)
+                    if page_html:
+                        page_soup = BeautifulSoup(page_html, "html.parser")
+                        entries.extend(self._parse_mac_table_rows(page_soup))
+                        
+                logger.debug(f"Found {len(entries)} MAC table entries on {self.ip}")
+            except Exception as e:
+                logger.error(f"Error scraping MAC table on {self.ip}: {e}")
+                
+            return entries
 
     def _fetch_mac_page(self, page_num):
         if not self._opener:
@@ -1029,7 +1068,7 @@ class HCSwitchScraper:
         }
         req = urllib.request.Request(f'{self.base_url}/mac.cgi?page=fwd_tbl', data=data, headers=headers)
         try:
-            r = self._opener.open(req, timeout=10)
+            r = self._open_request_with_retry(req, timeout=45, max_retries=5)
             return r.read().decode('utf-8', errors='replace')
         except Exception as e:
             logger.error(f"Failed to fetch MAC table page {page_num} on {self.ip}: {e}")
@@ -1081,83 +1120,84 @@ class HCSwitchScraper:
         return rows_data
 
     def scrape_transceiver(self):
-        logger.debug(f"Scraping SFP+ Transceiver diagnostics for {self.ip}...")
-        try:
-            self._login()
-        except Exception as e:
-            logger.error(f"Login failed for Transceiver scrape on {self.ip}: {e}")
-            return None
+        with get_switch_lock(self.ip):
+            logger.debug(f"Scraping SFP+ Transceiver diagnostics for {self.ip}...")
+            try:
+                self._login()
+            except Exception as e:
+                logger.error(f"Login failed for Transceiver scrape on {self.ip}: {e}")
+                return None
 
-        try:
-            html = self._fetch("/transceiver.cgi")
-            if not html:
-                return None
-            
-            # Clean the malformed <th>...</td> tags by replacing '<th' with '<td'
-            cleaned_html = html.replace("<th", "<td").replace("</th>", "</td>")
-            soup = BeautifulSoup(cleaned_html, "html.parser")
-            info = {}
-            
-            table = soup.find("table", class_="infotbl")
-            if not table:
-                table = soup.find("table")
-            if not table:
-                return None
+            try:
+                html = self._fetch("/transceiver.cgi")
+                if not html:
+                    return None
                 
-            for row in table.find_all("tr"):
-                cells = row.find_all(["td", "th"])
-                if len(cells) >= 2:
-                    key = cells[0].get_text(strip=True).rstrip(":")
-                    val = cells[1].get_text(strip=True)
+                # Clean the malformed <th>...</td> tags by replacing '<th' with '<td'
+                cleaned_html = html.replace("<th", "<td").replace("</th>", "</td>")
+                soup = BeautifulSoup(cleaned_html, "html.parser")
+                info = {}
+                
+                table = soup.find("table", class_="infotbl")
+                if not table:
+                    table = soup.find("table")
+                if not table:
+                    return None
                     
-                    if cells[1].has_attr("id"):
-                        id_name = cells[1]["id"]
-                        info[id_name + "_raw"] = val
-                    else:
-                        norm_key = key.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").lower()
-                        info[norm_key] = val
+                for row in table.find_all("tr"):
+                    cells = row.find_all(["td", "th"])
+                    if len(cells) >= 2:
+                        key = cells[0].get_text(strip=True).rstrip(":")
+                        val = cells[1].get_text(strip=True)
+                        
+                        if cells[1].has_attr("id"):
+                            id_name = cells[1]["id"]
+                            info[id_name + "_raw"] = val
+                        else:
+                            norm_key = key.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").lower()
+                            info[norm_key] = val
 
-            import math
-            def decode_ddmi(raw_str, multiplier, is_power=False):
-                try:
-                    parts = raw_str.split('-')
-                    if len(parts) == 2:
-                        val = int(parts[0]) * 256 + int(parts[1])
-                        decoded = val * multiplier
-                        if is_power:
-                            if decoded <= 0:
-                                return "-inf dBm"
-                            dbm = 10 * math.log10(decoded)
-                            return f"{dbm:.2f} dBm"
-                        return decoded
-                except Exception:
-                    pass
-                return raw_str
+                import math
+                def decode_ddmi(raw_str, multiplier, is_power=False):
+                    try:
+                        parts = raw_str.split('-')
+                        if len(parts) == 2:
+                            val = int(parts[0]) * 256 + int(parts[1])
+                            decoded = val * multiplier
+                            if is_power:
+                                if decoded <= 0:
+                                    return "-inf dBm"
+                                dbm = 10 * math.log10(decoded)
+                                return f"{dbm:.2f} dBm"
+                            return decoded
+                    except Exception:
+                        pass
+                    return raw_str
 
-            if "temp_raw" in info:
-                raw = info["temp_raw"]
-                val = decode_ddmi(raw, 0.00391)
-                info["temperature"] = f"{val:.2f} °C" if isinstance(val, (int, float)) else raw
-            if "voltage_raw" in info:
-                raw = info["voltage_raw"]
-                val = decode_ddmi(raw, 0.0001)
-                info["voltage"] = f"{val:.2f} V" if isinstance(val, (int, float)) else raw
-            if "current_raw" in info:
-                raw = info["current_raw"]
-                val = decode_ddmi(raw, 0.002)
-                info["current"] = f"{val:.2f} mA" if isinstance(val, (int, float)) else raw
-            if "txpower_raw" in info:
-                raw = info["txpower_raw"]
-                info["tx_power"] = decode_ddmi(raw, 0.0001, is_power=True)
-            if "rxpower_raw" in info:
-                raw = info["rxpower_raw"]
-                info["rx_power"] = decode_ddmi(raw, 0.0001, is_power=True)
-                
-            logger.debug(f"SFP+ Transceiver diagnostics scrape results on {self.ip}: {info}")
-            return info
-        except Exception as e:
-            logger.error(f"Error scraping Transceiver on {self.ip}: {e}")
-            return None
+                if "temp_raw" in info:
+                    raw = info["temp_raw"]
+                    val = decode_ddmi(raw, 0.00391)
+                    info["temperature"] = f"{val:.2f} °C" if isinstance(val, (int, float)) else raw
+                if "voltage_raw" in info:
+                    raw = info["voltage_raw"]
+                    val = decode_ddmi(raw, 0.0001)
+                    info["voltage"] = f"{val:.2f} V" if isinstance(val, (int, float)) else raw
+                if "current_raw" in info:
+                    raw = info["current_raw"]
+                    val = decode_ddmi(raw, 0.002)
+                    info["current"] = f"{val:.2f} mA" if isinstance(val, (int, float)) else raw
+                if "txpower_raw" in info:
+                    raw = info["txpower_raw"]
+                    info["tx_power"] = decode_ddmi(raw, 0.0001, is_power=True)
+                if "rxpower_raw" in info:
+                    raw = info["rxpower_raw"]
+                    info["rx_power"] = decode_ddmi(raw, 0.0001, is_power=True)
+                    
+                logger.debug(f"SFP+ Transceiver diagnostics scrape results on {self.ip}: {info}")
+                return info
+            except Exception as e:
+                logger.error(f"Error scraping Transceiver on {self.ip}: {e}")
+                return None
 
     def _scrape_with_template(self, template):
         logger.debug(f"[_scrape_with_template] Executing template-driven scrape...")
