@@ -35,7 +35,11 @@
     display: inline-block; width: 8px; height: 8px; border-radius: 50%;
     background: #3fb950; margin-right: 6px;
   }
-  .switches { display: grid; grid-template-columns: repeat(auto-fit, minmax(600px, 1fr)); gap: 20px; }
+  .switches {
+    display: grid;
+    grid-template-columns: var(--grid-columns, repeat(auto-fit, minmax(600px, 1fr)));
+    gap: 20px;
+  }
   .switch-card {
     background: #161b22; border: 1px solid #30363d; border-radius: 12px; overflow: visible;
   }
@@ -46,16 +50,35 @@
   }
   .switch-header h2 { font-size: 16px; font-weight: 600; }
   .switch-header .meta { font-size: 11px; color: #8b949e; text-align: right; }
-  .port-table { width: 100%; border-collapse: collapse; }
+  .port-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   .port-table th {
     font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px;
     padding: 8px 6px; text-align: left; border-bottom: 1px solid #30363d;
     font-weight: 600;
+    position: relative; /* for resizer positioning */
   }
   .port-table td {
     padding: 8px 6px; font-size: 12px; border-bottom: 1px solid #21262d;
-    white-space: nowrap; line-height: 1.4;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.4;
   }
+  
+  /* Resizer styling */
+  .resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    user-select: none;
+    z-index: 10;
+  }
+  .resizer:hover, th.resizing .resizer {
+    background: rgba(88, 166, 255, 0.4) !important;
+  }
+
   .port-table tr:hover { background: #1c2128; }
   .port-table tr:last-child td { border-bottom: none; }
   .port-num { font-weight: 600; }
@@ -277,6 +300,20 @@
     .port-table th, .port-table td { padding: 4px 4px; font-size: 10px; }
   }
 
+  /* Drag and Drop styling */
+  .port-table th[draggable="true"] {
+    position: relative;
+    transition: background 0.15s ease;
+  }
+  .port-table th[draggable="true"]:hover {
+    background: #21262d !important;
+    cursor: move;
+  }
+  .port-table th.drag-over {
+    border-left: 2px solid #58a6ff !important;
+    background: #1f242c !important;
+  }
+
   /* ========================================== */
   /* Sleek Premium Dark-Mode Scrollbars & Resizer */
   /* ========================================== */
@@ -487,6 +524,14 @@
   .sfp-speed-link:hover {
     color: #58a6ff;
   }
+  
+  :root {
+    {% if grid_columns and grid_columns != 'auto' %}
+    --grid-columns: repeat({{ grid_columns }}, 1fr);
+    {% else %}
+    --grid-columns: repeat(auto-fit, minmax(600px, 1fr));
+    {% endif %}
+  }
 </style>
 </head>
 <body data-font-size="md">
@@ -591,6 +636,8 @@
 
 <script>
 const REFRESH_SECONDS = {{ refresh }};
+const enabledColumns = {{ enabled_columns|tojson }} || ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes'];
+
 let currentGraphIp = null;
 let currentGraphPort = null;
 let currentGraphRange = 'live'; // 'live', '1h', '24h'
@@ -598,6 +645,278 @@ let currentGraphSwitchName = '';
 let currentGraphPortLabel = '';
 let speedUnit = 'Bps'; // 'bps' or 'Bps' (bytes per second)
 let pollingPaused = false;
+
+const defaultOrder = ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes'];
+let columnOrder = [];
+
+// Cookie helper functions
+function setCookie(name, value, days) {
+  let expires = "";
+  if (days) {
+    let date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = "; expires=" + date.toUTCString();
+  }
+  document.cookie = name + "=" + (value || "")  + expires + "; path=/";
+}
+
+function getCookie(name) {
+  let nameEQ = name + "=";
+  let ca = document.cookie.split(';');
+  for(let i=0;i < ca.length;i++) {
+    let c = ca[i];
+    while (c.charAt(0)==' ') c = c.substring(1,c.length);
+    if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+  }
+  return null;
+}
+
+function initColumnOrder() {
+  const cookieVal = getCookie('switch_column_order');
+  let savedOrder = cookieVal ? cookieVal.split(',') : null;
+  
+  if (!savedOrder || savedOrder.length === 0) {
+    savedOrder = defaultOrder;
+  }
+  
+  // Filter savedOrder to keep only enabled columns
+  columnOrder = savedOrder.filter(id => enabledColumns.includes(id));
+  
+  // Append any enabled columns that are not in columnOrder
+  enabledColumns.forEach(id => {
+    if (!columnOrder.includes(id)) {
+      columnOrder.push(id);
+    }
+  });
+}
+
+// Initialize Column Order
+initColumnOrder();
+
+let columnWidths = {};
+
+function saveColumnWidth(colId, width) {
+  columnWidths[colId] = width;
+  setCookie('switch_column_widths', JSON.stringify(columnWidths), 365);
+}
+
+function loadColumnWidths() {
+  const cookieVal = getCookie('switch_column_widths');
+  if (cookieVal) {
+    try {
+      columnWidths = JSON.parse(cookieVal);
+    } catch (e) {
+      columnWidths = {};
+    }
+  }
+}
+
+loadColumnWidths();
+
+// Resize Columns Logic
+let resizingColId = null;
+let resizingStartX = 0;
+let resizingStartWidth = 0;
+let resizingTh = null;
+
+function handleResizeStart(event, colId) {
+  event.stopPropagation();
+  event.preventDefault();
+  resizingColId = colId;
+  resizingTh = event.target.closest('th');
+  resizingStartX = event.clientX;
+  resizingStartWidth = resizingTh.offsetWidth;
+  
+  document.addEventListener('mousemove', handleResizeMove);
+  document.addEventListener('mouseup', handleResizeEnd);
+  resizingTh.classList.add('resizing');
+  
+  // Temporarily disable draggable on all headers so browser doesn't trigger drag-and-drop
+  document.querySelectorAll('.port-table th').forEach(th => {
+    th.setAttribute('draggable', 'false');
+  });
+}
+
+function handleResizeMove(event) {
+  if (!resizingColId || !resizingTh) return;
+  const diff = event.clientX - resizingStartX;
+  const newWidth = Math.max(30, resizingStartWidth + diff);
+  
+  // Set the width on all corresponding th elements across all switch cards to keep layout aligned
+  const ths = document.querySelectorAll(`.port-table th[data-col-id="${resizingColId}"]`);
+  ths.forEach(th => {
+    th.style.width = newWidth + 'px';
+  });
+}
+
+function handleResizeEnd(event) {
+  if (resizingColId && resizingTh) {
+    resizingTh.classList.remove('resizing');
+    const finalWidth = resizingTh.offsetWidth;
+    saveColumnWidth(resizingColId, finalWidth);
+  }
+  
+  resizingColId = null;
+  resizingTh = null;
+  document.removeEventListener('mousemove', handleResizeMove);
+  document.removeEventListener('mouseup', handleResizeEnd);
+  
+  // Restore draggable on all headers
+  document.querySelectorAll('.port-table th').forEach(th => {
+    th.setAttribute('draggable', 'true');
+  });
+}
+
+const COLUMN_DEFS = {
+  port: {
+    label: 'Port',
+    thStyle: 'width:55px',
+    tdClass: 'port-num',
+    render: (p, sw) => p.port
+  },
+  status: {
+    label: 'Status',
+    thStyle: 'width:145px',
+    render: (p, sw) => {
+      const status = (p.status || 'unknown').toLowerCase();
+      // DHCP Snooping port trust badges
+      let trustBadgeHtml = '';
+      if (sw.dhcp_snooping && sw.dhcp_snooping.enabled) {
+        const portsMap = sw.dhcp_snooping.ports || {};
+        const cleanPortName = p.port.split('/')[0];
+        const trustState = portsMap[p.port] || portsMap[cleanPortName];
+        if (trustState === 'Trusted') {
+          trustBadgeHtml = `<span class="trust-badge trusted" title="DHCP Snooping: Trusted Port">Trusted</span>`;
+        } else if (trustState === 'Untrusted') {
+          trustBadgeHtml = `<span class="trust-badge untrusted" title="DHCP Snooping: Untrusted Port">Untrusted</span>`;
+        }
+      }
+      return `
+        <div style="display: flex; align-items: center;">
+          <span class="status-badge ${status}" onclick="openGraph('${sw.ip}','${p.port}','${sw.name}','Port ${p.port}')"><span class="status-dot ${status}"></span>${status.toUpperCase()}</span>
+          ${trustBadgeHtml}
+        </div>
+      `;
+    }
+  },
+  speed: {
+    label: 'Speed',
+    thStyle: 'width:55px',
+    tdClassFn: (p) => speedClass(p.speed, p.status),
+    tdTitleFn: (p) => p.duplex || '',
+    render: (p, sw) => {
+      const isSfp = (p.port === '9' || (p.speed || '').toLowerCase().includes('10g') || p.port === 'SFP' || p.port === '9/SFP');
+      const speed = p.speed || 'Auto';
+      if (isSfp) {
+        return `<span class="sfp-speed-link" onclick="openTransceiver('${sw.ip}','${p.port}','${sw.name}')" title="Click to view SFP+ Transceiver Diagnostics">${speed} <svg viewBox="0 0 24 24" style="width: 10px; height: 10px; fill: currentColor; display: inline-block;"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0-7C7 2 2.73 5.11 1 9.5 2.73 13.89 7 17 12 17s9.27-3.11 11-7.5C21.27 5.11 17 2 12 2zm0 13a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/></svg></span>`;
+      } else {
+        return speed;
+      }
+    }
+  },
+  packets: {
+    label: 'Traffic<br><span style="font-weight:400;color:#8b949e">(packets)</span>',
+    thStyle: 'width:90px',
+    tdClass: 'mono',
+    tdTitle: 'TX / RX packets',
+    render: (p, sw) => {
+      const tx = p.tx_packets || 0;
+      const rx = p.rx_packets || 0;
+      return `TX ${formatPkts(tx)}<br>RX ${formatPkts(rx)}`;
+    }
+  },
+  bytes: {
+    label: 'Traffic<br><span style="font-weight:400;color:#8b949e">(bytes)</span>',
+    thStyle: 'width:90px',
+    tdClass: 'mono',
+    tdTitle: 'TX / RX bytes formatted',
+    render: (p, sw) => {
+      const cumTx = p.cum_tx || p.tx_bytes || 0;
+      const cumRx = p.cum_rx || p.rx_bytes || 0;
+      return `${formatBytes(cumTx)}<br>${formatBytes(cumRx)}`;
+    }
+  },
+  raw_bytes: {
+    label: 'TRAFFIC<br><span style="font-weight:400;color:#8b949e">(RAW bytes)</span>',
+    thStyle: 'width:110px',
+    tdClass: 'mono',
+    tdTitle: 'RAW cumulative bytes',
+    render: (p, sw) => {
+      const cumTx = p.cum_tx || p.tx_bytes || 0;
+      const cumRx = p.cum_rx || p.rx_bytes || 0;
+      return `${cumTx.toLocaleString()}<br>${cumRx.toLocaleString()}`;
+    }
+  },
+  info: {
+    getLabel: () => `Info <span id="speed-unit-toggle" class="unit-toggle" onclick="toggleSpeedUnit(event)" title="Toggle speed unit">${speedUnit}</span>`,
+    tdClass: 'col-info',
+    render: (p, sw) => {
+      const duplex = p.duplex || '';
+      const speedNow = (p.speed_tx_bps ? formatBps(p.speed_tx_bps, speedUnit) + ' / ' + (p.speed_rx_bps ? formatBps(p.speed_rx_bps, speedUnit) : '0') : '');
+      return `${duplex}${p.flow_control && p.flow_control !== 'Off' ? ' FC:'+p.flow_control : ''}${speedNow ? '<br><span style="color:#58a6ff">' + speedNow + '</span>' : ''}`;
+    }
+  },
+  notes: {
+    label: 'Notes',
+    tdClass: 'col-note',
+    render: (p, sw) => {
+      return `<input class="note-input" type="text" placeholder="-" value="${p.note || ''}" data-key="${sw.ip}:${p.port}" onfocus="pausePolling()" onblur="saveNote(this)">`;
+    }
+  }
+};
+
+// Drag and drop variables and handlers
+let draggedColumnId = null;
+
+function handleDragStart(event, colId) {
+  draggedColumnId = colId;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', colId);
+}
+
+function handleDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+}
+
+function handleDragEnter(event, colId) {
+  event.preventDefault();
+  const th = event.target.closest('th');
+  if (th && draggedColumnId !== colId) {
+    th.classList.add('drag-over');
+  }
+}
+
+function handleDragLeave(event) {
+  const th = event.target.closest('th');
+  if (th) {
+    th.classList.remove('drag-over');
+  }
+}
+
+function handleDragEnd(event) {
+  document.querySelectorAll('.port-table th').forEach(th => {
+    th.classList.remove('drag-over');
+  });
+}
+
+function handleDrop(event, targetColId) {
+  event.preventDefault();
+  const th = event.target.closest('th');
+  if (th) {
+    th.classList.remove('drag-over');
+  }
+  if (draggedColumnId && draggedColumnId !== targetColId) {
+    const fromIndex = columnOrder.indexOf(draggedColumnId);
+    const toIndex = columnOrder.indexOf(targetColId);
+    if (fromIndex !== -1 && toIndex !== -1) {
+      columnOrder.splice(fromIndex, 1);
+      columnOrder.splice(toIndex, 0, draggedColumnId);
+      setCookie('switch_column_order', columnOrder.join(','), 365);
+      updateDashboard();
+    }
+  }
+}
 
 let currentTransceiverIp = null;
 let currentTransceiverPort = null;
@@ -626,7 +945,7 @@ function saveMacStatesToStorage() {
       const s = macTableStates[ip];
       prunedStates[ip] = {
         expanded: s.expanded,
-        filters: s.filters || { mac: '', type: '', port: '', vlan: '' },
+        filters: s.filters || { mac: '', vendor: '', type: '', port: '', vlan: '' },
         sortBy: s.sortBy || 'port',
         sortAsc: s.sortAsc !== undefined ? s.sortAsc : true,
         scrollTop: s.scrollTop || 0,
@@ -646,6 +965,7 @@ function getMacState(ip) {
   if (!state.filters) {
     state.filters = {
       mac: '',
+      vendor: '',
       type: '',
       port: '',
       vlan: ''
@@ -765,11 +1085,13 @@ function toggleIgmpTable(ip) {
 function filterMacTable(ip) {
   const state = getMacState(ip);
   const fMac = document.querySelector(`.mac-filter-mac-${CSS.escape(ip)}`);
+  const fVendor = document.querySelector(`.mac-filter-vendor-${CSS.escape(ip)}`);
   const fType = document.querySelector(`.mac-filter-type-${CSS.escape(ip)}`);
   const fPort = document.querySelector(`.mac-filter-port-${CSS.escape(ip)}`);
   const fVlan = document.querySelector(`.mac-filter-vlan-${CSS.escape(ip)}`);
   
   if (fMac) state.filters.mac = fMac.value.trim().toLowerCase();
+  if (fVendor) state.filters.vendor = fVendor.value.trim().toLowerCase();
   if (fType) state.filters.type = fType.value.trim().toLowerCase();
   if (fPort) state.filters.port = fPort.value.trim().toLowerCase();
   if (fVlan) state.filters.vlan = fVlan.value.trim().toLowerCase();
@@ -863,7 +1185,7 @@ function renderMacTable(ip) {
   const tbody = document.querySelector(`.mac-tbody-${CSS.escape(ip)}`);
   if (!tbody) return;
   
-  ['mac', 'type', 'port', 'vlan'].forEach(col => {
+  ['mac', 'vendor', 'type', 'port', 'vlan'].forEach(col => {
     const indicator = document.querySelector(`.sort-indicator-${CSS.escape(ip)}-${col}`);
     if (indicator) {
       if (state.sortBy === col) {
@@ -876,14 +1198,15 @@ function renderMacTable(ip) {
   });
 
   let rows = state.data;
-  const filters = state.filters || { mac: '', type: '', port: '', vlan: '' };
-  if (filters.mac || filters.type || filters.port || filters.vlan) {
+  const filters = state.filters || { mac: '', vendor: '', type: '', port: '', vlan: '' };
+  if (filters.mac || filters.vendor || filters.type || filters.port || filters.vlan) {
     rows = rows.filter(r => {
       const matchMac = !filters.mac || (r.mac || '').toLowerCase().includes(filters.mac);
+      const matchVendor = !filters.vendor || (r.vendor || '').toLowerCase().includes(filters.vendor);
       const matchType = !filters.type || (r.type || '').toLowerCase().includes(filters.type);
       const matchPort = !filters.port || (r.port || '').toString().toLowerCase().includes(filters.port);
       const matchVlan = !filters.vlan || (r.vlan || '').toString().toLowerCase().includes(filters.vlan);
-      return matchMac && matchType && matchPort && matchVlan;
+      return matchMac && matchVendor && matchType && matchPort && matchVlan;
     });
   }
 
@@ -908,7 +1231,7 @@ function renderMacTable(ip) {
   });
 
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" style="padding: 12px; text-align: center; color: #8b949e;">No MAC entries found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="padding: 12px; text-align: center; color: #8b949e;">No MAC entries found</td></tr>`;
     const container = document.querySelector(`.mac-scroll-container-${CSS.escape(ip)}`);
     if (container) {
       container.scrollTop = state.scrollTop || 0;
@@ -917,9 +1240,11 @@ function renderMacTable(ip) {
   }
 
   tbody.innerHTML = rows.map(r => {
+    const vendorHtml = r.vendor ? r.vendor : `<a href="/config#vendor-editor-card" style="color: #8b949e; text-decoration: underline;" title="Edit custom vendor list">Unknown</a>`;
     return `
       <tr style="border-bottom: 1px solid #21262d; transition: background 0.15s;" onmouseover="this.style.background='#1c2128'" onmouseout="this.style.background='transparent'">
         <td style="padding: 8px 12px; font-family: 'SF Mono', Monaco, monospace; color: #c9d1d9;">${r.mac}</td>
+        <td style="padding: 8px 12px; color: #b1bac4;">${vendorHtml}</td>
         <td style="padding: 8px 12px; color: #8b949e;">${r.type}</td>
         <td style="padding: 8px 12px; font-weight: 600; color: #58a6ff;">${r.port}</td>
         <td style="padding: 8px 12px; color: #b1bac4;">VLAN ${r.vlan}</td>
@@ -973,9 +1298,9 @@ function formatBps(n, unit) {
   return v.toFixed(0) + ' ' + suf[0];
 }
 
-function toggleSpeedUnit() {
+function toggleSpeedUnit(event) {
+  if (event) event.stopPropagation();
   speedUnit = speedUnit === 'bps' ? 'Bps' : 'bps';
-  document.getElementById('speed-unit-toggle').textContent = speedUnit;
   updateDashboard();
 }
 
@@ -1059,54 +1384,39 @@ function renderSwitch(sw) {
     </div>
   ` : '';
 
+  const theadCols = columnOrder.map(colId => {
+    const colDef = COLUMN_DEFS[colId];
+    const label = colDef.getLabel ? colDef.getLabel() : colDef.label;
+    const savedWidth = columnWidths[colId];
+    const styleWidth = savedWidth ? `width: ${savedWidth}px;` : (colDef.thStyle || '');
+    
+    return `<th draggable="true"
+                ondragstart="handleDragStart(event, '${colId}')"
+                ondragover="handleDragOver(event)"
+                ondragenter="handleDragEnter(event, '${colId}')"
+                ondragleave="handleDragLeave(event)"
+                ondragend="handleDragEnd(event)"
+                ondrop="handleDrop(event, '${colId}')"
+                data-col-id="${colId}"
+                style="cursor: move; user-select: none; ${styleWidth}"
+                class="${colDef.thClass || ''}">
+              ${label}
+              <div class="resizer" onmousedown="handleResizeStart(event, '${colId}')"></div>
+            </th>`;
+  }).join('');
+
   const portRows = (sw.ports || []).map(p => {
-    const status = (p.status || 'unknown').toLowerCase();
-    const speed = p.speed || 'Auto';
-    const duplex = p.duplex || '';
-    const tx = p.tx_packets || 0;
-    const rx = p.rx_packets || 0;
-    const cumTx = p.cum_tx || p.tx_bytes || 0;
-    const cumRx = p.cum_rx || p.rx_bytes || 0;
-    const speedNow = (p.speed_tx_bps ? formatBps(p.speed_tx_bps, speedUnit) + ' / ' + (p.speed_rx_bps ? formatBps(p.speed_rx_bps, speedUnit) : '0') : '');
-    
-    // Check if the port is an SFP/SFP+ port
-    const isSfp = (p.port === '9' || (p.speed || '').toLowerCase().includes('10g') || p.port === 'SFP' || p.port === '9/SFP');
-    
-    let speedHtml = '';
-    if (isSfp) {
-      speedHtml = `<span class="sfp-speed-link" onclick="openTransceiver('${sw.ip}','${p.port}','${sw.name}')" title="Click to view SFP+ Transceiver Diagnostics">${speed} <svg viewBox="0 0 24 24" style="width: 10px; height: 10px; fill: currentColor; display: inline-block;"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0-7C7 2 2.73 5.11 1 9.5 2.73 13.89 7 17 12 17s9.27-3.11 11-7.5C21.27 5.11 17 2 12 2zm0 13a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/></svg></span>`;
-    } else {
-      speedHtml = speed;
-    }
-
-    // DHCP Snooping port trust badges
-    let trustBadgeHtml = '';
-    if (sw.dhcp_snooping && sw.dhcp_snooping.enabled) {
-      const portsMap = sw.dhcp_snooping.ports || {};
-      const cleanPortName = p.port.split('/')[0];
-      const trustState = portsMap[p.port] || portsMap[cleanPortName];
-      if (trustState === 'Trusted') {
-        trustBadgeHtml = `<span class="trust-badge trusted" title="DHCP Snooping: Trusted Port">Trusted</span>`;
-      } else if (trustState === 'Untrusted') {
-        trustBadgeHtml = `<span class="trust-badge untrusted" title="DHCP Snooping: Untrusted Port">Untrusted</span>`;
-      }
-    }
-
-    return `<tr>
-      <td class="port-num">${p.port}</td>
-      <td>
-        <div style="display: flex; align-items: center;">
-          <span class="status-badge ${status}" onclick="openGraph('${sw.ip}','${p.port}','${sw.name}','Port ${p.port}')"><span class="status-dot ${status}"></span>${status.toUpperCase()}</span>
-          ${trustBadgeHtml}
-        </div>
-      </td>
-      <td class="${speedClass(speed, status)}" title="${duplex}">${speedHtml}</td>
-      <td class="mono" title="TX / RX packets">TX ${formatPkts(tx)}<br>RX ${formatPkts(rx)}</td>
-      <td class="mono" title="TX / RX bytes formatted">${formatBytes(cumTx)}<br>${formatBytes(cumRx)}</td>
-      <td class="mono" title="RAW bytes">${cumTx.toLocaleString()}<br>${cumRx.toLocaleString()}</td>
-      <td class="col-info">${duplex}${p.flow_control && p.flow_control !== 'Off' ? ' FC:'+p.flow_control : ''}${speedNow ? '<br><span style="color:#58a6ff">' + speedNow + '</span>' : ''}</td>
-      <td class="col-note"><input class="note-input" type="text" placeholder="-" value="${p.note || ''}" data-key="${sw.ip}:${p.port}" onfocus="pausePolling()" onblur="saveNote(this)"></td>
-    </tr>`;
+    const cells = columnOrder.map(colId => {
+      const colDef = COLUMN_DEFS[colId];
+      const content = colDef.render(p, sw);
+      const tdClass = colDef.tdClassFn ? colDef.tdClassFn(p) : (colDef.tdClass || '');
+      const tdTitle = colDef.tdTitleFn ? colDef.tdTitleFn(p) : (colDef.tdTitle || '');
+      const classAttr = tdClass ? `class="${tdClass}"` : '';
+      const titleAttr = tdTitle ? `title="${tdTitle}"` : '';
+      
+      return `<td ${classAttr} ${titleAttr}>${content}</td>`;
+    }).join('');
+    return `<tr>${cells}</tr>`;
   }).join('');
 
   const errorBlock = sw.error ? `<div class="error-card">Error: ${sw.error}</div>` : '';
@@ -1162,12 +1472,14 @@ function renderSwitch(sw) {
             <thead>
               <tr style="background: #161b22; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid #30363d;">
                 <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'mac')">MAC Address <span class="sort-indicator-${sw.ip}-mac"></span></th>
+                <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'vendor')">Vendor <span class="sort-indicator-${sw.ip}-vendor"></span></th>
                 <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'type')">Type <span class="sort-indicator-${sw.ip}-type"></span></th>
                 <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'port')">Port <span class="sort-indicator-${sw.ip}-port"></span></th>
                 <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'vlan')">VLAN <span class="sort-indicator-${sw.ip}-vlan"></span></th>
               </tr>
               <tr style="background: #0d1117; position: sticky; top: 31px; z-index: 2; border-bottom: 1px solid #30363d;">
                 <th style="padding: 4px 6px;"><input type="text" class="mac-filter-mac-${sw.ip}" placeholder="Filter MAC..." value="${macState.filters ? macState.filters.mac : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
+                <th style="padding: 4px 6px;"><input type="text" class="mac-filter-vendor-${sw.ip}" placeholder="Filter Vendor..." value="${macState.filters ? macState.filters.vendor : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
                 <th style="padding: 4px 6px;"><input type="text" class="mac-filter-type-${sw.ip}" placeholder="Filter Type..." value="${macState.filters ? macState.filters.type : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
                 <th style="padding: 4px 6px;"><input type="text" class="mac-filter-port-${sw.ip}" placeholder="Port..." value="${macState.filters ? macState.filters.port : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
                 <th style="padding: 4px 6px;"><input type="text" class="mac-filter-vlan-${sw.ip}" placeholder="VLAN..." value="${macState.filters ? macState.filters.vlan : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
@@ -1257,16 +1569,9 @@ function renderSwitch(sw) {
     </div>
     <table class="port-table">
       <thead><tr>
-        <th style="width:55px">Port</th>
-        <th style="width:145px">Status</th>
-        <th style="width:55px">Speed</th>
-        <th style="width:90px">Traffic<br><span style="font-weight:400;color:#8b949e">(packets)</span></th>
-        <th style="width:90px">Traffic<br><span style="font-weight:400;color:#8b949e">(bytes)</span></th>
-        <th style="width:110px" title="RAW cumulative bytes">TRAFFIC<br><span style="font-weight:400;color:#8b949e">(RAW bytes)</span></th>
-        <th>Info <span id="speed-unit-toggle" class="unit-toggle" onclick="toggleSpeedUnit()" title="Toggle speed unit">Bps</span></th>
-        <th class="col-note">Notes</th>
+        ${theadCols}
       </tr></thead>
-      <tbody>${portRows || '<tr><td colspan="8" style="padding:20px;text-align:center;color:#b1bac4">No data</td></tr>'}</tbody>
+      <tbody>${portRows || `<tr><td colspan="${columnOrder.length}" style="padding:20px;text-align:center;color:#b1bac4">No data</td></tr>`}</tbody>
     </table>
     ${errorBlock}
     ${macSectionHtml}

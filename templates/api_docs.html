@@ -453,6 +453,12 @@
             <span>/api/backups/&lt;filename&gt;</span>
           </a>
         </li>
+        <li class="sidebar-item">
+          <a href="#update-oui" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/api/vendors/update_oui</span>
+          </a>
+        </li>
       </ul>
     </div>
 
@@ -1017,6 +1023,27 @@
         <div class="code-container">
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
           <pre><code>{
+  "status": "ok"
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- POST /api/vendors/update_oui -->
+      <div class="api-card" id="update-oui">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/vendors/update_oui</span>
+          <span class="api-title">Update IEEE OUI Databases</span>
+        </div>
+        <p class="api-desc">Triggers an on-demand download of the official IEEE OUI registration databases (<code>oui.txt</code> and <code>oui36.txt</code>) to resolve MAC addresses to manufacturers. Requires internet connection to IEEE servers. Note that IEEE limits queries to one download per day.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "message": "IEEE OUI databases successfully updated.",
   "status": "ok"
 }</code></pre>
         </div>

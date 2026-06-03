@@ -338,6 +338,8 @@ The dashboard includes a set of REST endpoints. For complete details, response p
 | `GET` | `/api/backups/<filename>/download` | Downloads a specific saved switch configuration file. |
 | `DELETE`| `/api/backups/<filename>` | Deletes a specific switch configuration file from the server. |
 | `GET` | `/backups` | Returns the HTML template for the backups manager dashboard. |
+| `GET`/`POST` | `/api/vendors` | Retrieves or saves custom MAC vendor mappings (`mac_vendors.txt`). |
+| `POST`| `/api/vendors/update_oui` | Manually downloads and caches the official IEEE OUI and OUI-36 databases. |
 
 ---
 
@@ -351,6 +353,9 @@ The dashboard includes a set of REST endpoints. For complete details, response p
 ├── counters.json       # Persistent cumulative traffic database
 ├── notes.json          # Persistent custom port descriptions
 ├── settings.json       # Persisted user UI configurations (e.g. font sizes, table dimensions)
+├── mac_vendors.txt     # Local custom OUI vendor names/overrides file
+├── oui.txt             # Downloaded official IEEE OUI-24 database
+├── oui36.txt           # Downloaded official IEEE OUI-36 database
 ├── install.sh          # Self-healing, multi-distro Linux automated systemd installer
 ├── requirements.txt    # Python package dependencies
 ├── templates/
@@ -373,7 +378,27 @@ This project is licensed under the **MIT License**. Feel free to modify, distrib
 
 ## 📅 Release Notes & Changelog
 
-### 🚀 Release 2026.5.5 (Current)
+### 🚀 Release 2026.6.1 (Current)
+* **🌐 Dynamic MAC Address Vendor Resolution**:
+  - Automatically matches MAC addresses to manufacturers using the official IEEE OUI registry (`oui.txt` and `oui36.txt`).
+  - Added support for a custom MAC vendors file (`mac_vendors.txt`) mapping local MAC prefixes to custom device names (e.g., `AA:BB:CC Custom Local Device`).
+  - Included a **Custom MAC Vendors Editor** directly on the Settings configuration page.
+  - Implemented an **IEEE OUI Database Update** utility card in `/config` to manually download the latest registration lists.
+  - Added query rate warnings detailing IEEE's query limits (maximum 1 download request per day to prevent IP address bans).
+* **🎛️ Interactive Table Resizing & Reordering**:
+  - Implemented interactive drag-and-drop reordering for all dashboard switch table columns.
+  - Added support for interactive column width resizing by dragging column margins.
+  - Persists custom widths and column ordering directly inside local browser cookies.
+  - Implemented cell auto-wrapping when columns are resized narrow, preventing text overflow.
+* **🎨 General Layout Config & Column Visibility**:
+  - Added a General Settings layout option dropdown in `/config` to choose the maximum number of switches shown side-by-side (Auto, 1, 2, 3, or 4).
+  - Added a column visibility checklist in the Settings page to enable or disable individual dashboard columns dynamically.
+* **📖 API Docs Update**:
+  - Documented `POST /api/vendors/update_oui` and `GET/POST /api/vendors` endpoints in the local `/api-docs` path.
+
+---
+
+### 🚀 Release 2026.5.5
 * **🔌 RTLPlayground Custom Switch Firmware Support**:
   - Generated and packaged a dedicated declarative switch scraper template `RTLPlayground.yaml` to fully support Realtek RTL8372/RTL8373 switches running the open-source **RTLPlayground alternative firmware** by `logicog`.
   - Added support for the default RTLPlayground network segments (e.g. `192.168.10.247`), uIP embedded web server structures, and specialized `/ports`, `/stats`, `/vlan`, `/config`, and `/reboot` API pathways.
