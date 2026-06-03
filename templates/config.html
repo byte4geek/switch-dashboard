@@ -342,6 +342,41 @@
           <input type="number" name="mac_refresh_multiplier" value="{{ mac_multiplier }}" min="1" max="100" style="max-width:120px">
           <span class="note" style="display:block; margin-top:2px;">e.g., if set to 5, the MAC table is fetched every 5 dashboard refreshes to reduce switch load.</span>
         </div>
+        <div class="global-row">
+          <label>Switches Per Row</label>
+          <select name="grid_columns" style="background: #0d1117; border: 1px solid rgba(48, 54, 61, 0.8); border-radius: 6px; padding: 8px 12px; color: #e1e4e8; font-size: 13px; max-width: 180px; outline: none; cursor: pointer; transition: border-color 0.2s;">
+            <option value="auto" {% if grid_columns == 'auto' or not grid_columns %}selected{% endif %}>Auto (Responsive)</option>
+            <option value="1" {% if grid_columns == '1' %}selected{% endif %}>1</option>
+            <option value="2" {% if grid_columns == '2' %}selected{% endif %}>2</option>
+            <option value="3" {% if grid_columns == '3' %}selected{% endif %}>3</option>
+            <option value="4" {% if grid_columns == '4' %}selected{% endif %}>4</option>
+          </select>
+          <span class="note" style="display:block; margin-top:2px;">Select how many switches are displayed side-by-side on large screens.</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Column Visibility Settings</h2>
+        <div class="global-row" style="margin-bottom: 0;">
+          <span class="note" style="display:block; margin-bottom: 12px;">Select which columns are visible in the switch port tables on the dashboard.</span>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 8px;">
+            {% for col_id, col_label in [
+              ('port', 'Port'),
+              ('status', 'Status'),
+              ('speed', 'Speed'),
+              ('packets', 'Traffic (packets)'),
+              ('bytes', 'Traffic (bytes)'),
+              ('raw_bytes', 'Traffic (RAW bytes)'),
+              ('info', 'Info'),
+              ('notes', 'Notes')
+            ] %}
+            <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #b1bac4; font-weight: 500; cursor: pointer; user-select: none; padding: 6px 0;">
+              <input type="checkbox" name="columns[]" value="{{ col_id }}" {% if col_id in enabled_columns %}checked{% endif %} style="accent-color: #58a6ff; width: 15px; height: 15px; cursor: pointer;">
+              {{ col_label }}
+            </label>
+            {% endfor %}
+          </div>
+        </div>
       </div>
 
       <div class="card">
@@ -432,6 +467,66 @@
           <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
         </svg>
         Save Template
+      </button>
+    </div>
+
+    <!-- NEW CARD: Custom MAC Vendors Editor -->
+    <div class="card" id="vendor-editor-card" style="margin-top: 20px;">
+      <h2>
+        <span>📁 Custom MAC Vendors</span>
+        <span class="version-badge" style="background: rgba(63,185,80,0.15); color: #3fb950;">mac_vendors.txt</span>
+      </h2>
+      <div class="yaml-feedback" id="vendor-feedback"></div>
+      
+      <span class="note" style="display:block; margin-bottom: 12px;">
+        Edit custom OUI prefixes. Format: <code>AA:BB:CC Vendor Name</code>, one per line. If a MAC address starts with these 3 bytes, the specified vendor name will be displayed.
+      </span>
+
+      <div class="editor-wrapper">
+        <textarea class="editor-textarea" id="vendor-textarea" spellcheck="false" placeholder="# Enter MAC vendor mappings (e.g. AA:BB:CC My Device)..." oninput="onVendorChange()" style="height: 250px;"></textarea>
+        <div class="editor-status-bar">
+          <span id="vendor-char-count">0 characters</span>
+          <span id="vendor-syntax-status">Ready</span>
+        </div>
+      </div>
+      
+      <button type="button" class="yaml-save-btn" id="vendor-save-btn" onclick="saveVendorList()" style="background: #238636; box-shadow: 0 4px 12px rgba(35, 134, 54, 0.25);">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+          <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+        </svg>
+        Save MAC Vendors
+      </button>
+    </div>
+
+    <!-- NEW CARD: IEEE OUI Update -->
+    <div class="card" id="oui-update-card" style="margin-top: 20px;">
+      <h2>
+        <span>🌐 IEEE OUI Database</span>
+        <span class="version-badge" style="background: rgba(88, 166, 255, 0.15); color: #58a6ff;">IEEE Registry</span>
+      </h2>
+      <div class="yaml-feedback" id="oui-feedback"></div>
+      
+      <!-- Warning Alert -->
+      <div style="background: rgba(240, 136, 62, 0.1); border: 1px solid rgba(240, 136, 62, 0.3); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
+        <div style="display: flex; gap: 10px; align-items: flex-start;">
+          <svg viewBox="0 0 24 24" width="20" height="20" style="flex-shrink:0; fill: #f0883e;">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+          </svg>
+          <div style="font-size: 12px; line-height: 1.5; color: #f0883e;">
+            <strong>Warning:</strong> Due to excessively high volume suspicious queries to the IEEE Registration Authority Assignments Downloads server(s), a number of addresses are being blocked. Users are reminded that IEEE RA assignment downloads are limited to <strong>one per day</strong>. If your access is blocked please contact IEEE Registration Authority <a href="mailto:ieee-registration-authority@ieee.org" style="color: #58a6ff; text-decoration: underline;">ieee-registration-authority@ieee.org</a> to resolve the issue.
+          </div>
+        </div>
+      </div>
+
+      <span class="note" style="display:block; margin-bottom: 16px;">
+        Download the latest IEEE OUI databases (<code>oui.txt</code> and <code>oui36.txt</code>) directly from IEEE standards servers to automatically resolve official MAC address manufacturers.
+      </span>
+
+      <button type="button" class="yaml-save-btn" id="oui-update-btn" onclick="updateIeeeOui()" style="background: #1f6feb; box-shadow: 0 4px 12px rgba(31, 111, 235, 0.25);">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+          <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/>
+        </svg>
+        Update IEEE OUI Database
       </button>
     </div>
   </div>
@@ -897,6 +992,160 @@ function executeReboot() {
   });
 }
 
+// ==========================================
+// CUSTOM MAC VENDOR INTERACTIVE FUNCTIONS
+// ==========================================
+function loadVendorList() {
+  const textarea = document.getElementById('vendor-textarea');
+  const saveBtn = document.getElementById('vendor-save-btn');
+  textarea.disabled = true;
+  saveBtn.disabled = true;
+  textarea.value = 'Loading custom MAC vendors...';
+  
+  fetch('/api/vendors')
+    .then(res => {
+      if (!res.ok) {
+        return res.json().then(data => { throw new Error(data.error || 'Server error'); });
+      }
+      return res.json();
+    })
+    .then(data => {
+      textarea.value = data.content;
+      textarea.disabled = false;
+      saveBtn.disabled = false;
+      onVendorChange();
+      showVendorFeedback('', 'none');
+    })
+    .catch(err => {
+      textarea.value = '';
+      showVendorFeedback('Failed to load MAC vendors file: ' + err.message, 'error');
+    });
+}
+
+function onVendorChange() {
+  const textarea = document.getElementById('vendor-textarea');
+  const charCount = document.getElementById('vendor-char-count');
+  const text = textarea.value;
+  charCount.textContent = `${text.length} characters`;
+}
+
+function saveVendorList() {
+  const textarea = document.getElementById('vendor-textarea');
+  const content = textarea.value;
+  const saveBtn = document.getElementById('vendor-save-btn');
+  
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+  
+  fetch('/api/vendors', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ content: content })
+  })
+  .then(res => {
+    if (!res.ok) {
+      return res.json().then(data => { throw new Error(data.error || 'Server error'); });
+    }
+    return res.json();
+  })
+  .then(data => {
+    showVendorFeedback('MAC vendors list successfully saved!', 'success');
+    saveBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+      </svg>
+      Save MAC Vendors
+    `;
+    saveBtn.disabled = false;
+  })
+  .catch(err => {
+    showVendorFeedback(err.message, 'error');
+    saveBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+      </svg>
+      Save MAC Vendors
+    `;
+    saveBtn.disabled = false;
+  });
+}
+
+function showVendorFeedback(msg, type) {
+  const box = document.getElementById('vendor-feedback');
+  box.className = 'yaml-feedback';
+  if (type === 'success') {
+    box.className += ' success';
+    box.textContent = msg;
+    box.style.display = 'block';
+  } else if (type === 'error') {
+    box.className += ' error';
+    box.textContent = msg;
+    box.style.display = 'block';
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+function updateIeeeOui() {
+  const btn = document.getElementById('oui-update-btn');
+  const feedbackBox = document.getElementById('oui-feedback');
+  
+  btn.disabled = true;
+  btn.textContent = 'Updating OUI Database...';
+  showOuiFeedback('', 'none');
+  
+  fetch('/api/vendors/update_oui', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+  .then(res => {
+    if (!res.ok) {
+      return res.json().then(data => { throw new Error(data.message || data.error || 'Server error'); });
+    }
+    return res.json();
+  })
+  .then(data => {
+    showOuiFeedback(data.message || 'IEEE OUI databases successfully updated!', 'success');
+    btn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+        <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/>
+      </svg>
+      Update IEEE OUI Database
+    `;
+    btn.disabled = false;
+  })
+  .catch(err => {
+    showOuiFeedback(err.message, 'error');
+    btn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+        <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/>
+      </svg>
+      Update IEEE OUI Database
+    `;
+    btn.disabled = false;
+  });
+}
+
+function showOuiFeedback(msg, type) {
+  const box = document.getElementById('oui-feedback');
+  box.className = 'yaml-feedback';
+  if (type === 'success') {
+    box.className += ' success';
+    box.textContent = msg;
+    box.style.display = 'block';
+  } else if (type === 'error') {
+    box.className += ' error';
+    box.textContent = msg;
+    box.style.display = 'block';
+  } else {
+    box.style.display = 'none';
+  }
+}
+
 // Initialize on DOM Load
 window.addEventListener('DOMContentLoaded', () => {
   // Initialize CodeMirror Editor
@@ -915,6 +1164,7 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   
   loadTemplateList();
+  loadVendorList();
 });
 </script>
 </body>

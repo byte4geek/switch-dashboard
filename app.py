@@ -92,7 +92,153 @@ DAILY_PATH = os.path.join(DATA_DIR, "history_daily.json")
 BACKUP_DIR = os.path.join(DATA_DIR, "backup")
 DEVICE_TEMPLATES_DIR = os.path.join(DATA_DIR, "device-templates")
 os.makedirs(DEVICE_TEMPLATES_DIR, exist_ok=True)
-VERSION = "2026.5.5"
+VENDORS_TXT_PATH = os.path.join(DATA_DIR, "mac_vendors.txt")
+OUI36_TXT_PATH = os.path.join(DATA_DIR, "oui36.txt")
+OUI_TXT_PATH = os.path.join(DATA_DIR, "oui.txt")
+VERSION = "2026.6.1"
+
+ieee_vendors_cache = {}
+
+
+def download_single_oui_file(url, dest_path):
+    global ieee_vendors_cache
+    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    logger.info(f"Downloading OUI list from {url} to {dest_path}...")
+    try:
+        import urllib.request
+        req = urllib.request.Request(url, headers={'User-Agent': ua})
+        with urllib.request.urlopen(req, timeout=15) as response:
+            content = response.read()
+        with open(dest_path, "wb") as f:
+            f.write(content)
+        ieee_vendors_cache = {}  # Clear cache to trigger reload
+        logger.info(f"Successfully downloaded and saved {os.path.basename(dest_path)}.")
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to download {os.path.basename(dest_path)} using urllib: {e}. Trying fallback with curl...")
+        try:
+            import subprocess
+            res = subprocess.run(['curl.exe', '-s', '-o', dest_path, '-A', ua, url], timeout=25)
+            if res.returncode == 0 and os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000:
+                ieee_vendors_cache = {}  # Clear cache to trigger reload
+                logger.info(f"Successfully downloaded and saved {os.path.basename(dest_path)} via curl.")
+                return True
+            else:
+                logger.error(f"curl download failed or file is too small for {os.path.basename(dest_path)}. Return code: {res.returncode}")
+        except Exception as ex:
+            logger.error(f"Failed to download {os.path.basename(dest_path)} using curl: {ex}")
+    return False
+
+
+def download_oui_files():
+    if not os.path.exists(OUI36_TXT_PATH):
+        download_single_oui_file("https://standards-oui.ieee.org/oui36/oui36.txt", OUI36_TXT_PATH)
+    if not os.path.exists(OUI_TXT_PATH):
+        download_single_oui_file("https://standards-oui.ieee.org/oui/oui.txt", OUI_TXT_PATH)
+
+
+def load_ieee_oui():
+    oui_db = {}
+    
+    # 1. Parse oui36.txt if exists
+    if os.path.exists(OUI36_TXT_PATH):
+        try:
+            with open(OUI36_TXT_PATH, "r", encoding="utf-8", errors="ignore") as f:
+                current_oui = None
+                for line in f:
+                    if "(hex)" in line:
+                        parts = line.split("(hex)")
+                        prefix = parts[0].strip().replace("-", "").replace(":", "").replace(" ", "").upper()
+                        current_oui = prefix
+                    elif "(base 16)" in line and current_oui:
+                        parts = line.split("(base 16)")
+                        range_str = parts[0].strip()
+                        name = parts[1].strip()
+                        if "-" in range_str:
+                            range_prefix = range_str.split("-")[0].strip()[:3]
+                            full_prefix = current_oui + range_prefix
+                            oui_db[full_prefix] = name
+                        else:
+                            oui_db[current_oui] = name
+        except Exception as e:
+            logger.error(f"Error parsing IEEE OUI36 file: {e}")
+
+    # 2. Parse oui.txt if exists
+    if os.path.exists(OUI_TXT_PATH):
+        try:
+            with open(OUI_TXT_PATH, "r", encoding="utf-8", errors="ignore") as f:
+                current_oui = None
+                for line in f:
+                    if "(hex)" in line:
+                        parts = line.split("(hex)")
+                        prefix = parts[0].strip().replace("-", "").replace(":", "").replace(" ", "").upper()
+                        current_oui = prefix
+                    elif "(base 16)" in line and current_oui:
+                        parts = line.split("(base 16)")
+                        range_str = parts[0].strip()
+                        name = parts[1].strip()
+                        if "-" in range_str:
+                            range_prefix = range_str.split("-")[0].strip()[:3]
+                            full_prefix = current_oui + range_prefix
+                            oui_db[full_prefix] = name
+                        else:
+                            oui_db[current_oui] = name
+        except Exception as e:
+            logger.error(f"Error parsing IEEE OUI file: {e}")
+            
+    return oui_db
+
+
+def get_ieee_vendors():
+    global ieee_vendors_cache
+    if not ieee_vendors_cache:
+        ieee_vendors_cache = load_ieee_oui()
+    return ieee_vendors_cache
+
+
+def load_mac_vendors():
+    vendors = {}
+    if os.path.exists(VENDORS_TXT_PATH):
+        try:
+            with open(VENDORS_TXT_PATH, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    parts = line.split(None, 1)
+                    if len(parts) == 2:
+                        prefix, name = parts
+                        clean_prefix = prefix.replace(":", "").replace("-", "").replace(" ", "").upper()
+                        if len(clean_prefix) in [6, 9]:
+                            vendors[clean_prefix] = name.strip()
+        except Exception as e:
+            logger.error(f"Error loading custom MAC vendors: {e}")
+    return vendors
+
+
+def lookup_vendor(mac_str, custom_vendors, ieee_vendors):
+    if not mac_str:
+        return ""
+    clean_mac = mac_str.replace(":", "").replace("-", "").replace(" ", "").upper()
+    prefix_9 = clean_mac[:9]
+    
+    # 1. Match downloaded IEEE OUI-36 (9-hex prefix)
+    if len(prefix_9) == 9 and prefix_9 in ieee_vendors:
+        return ieee_vendors[prefix_9]
+        
+    # 2. Match downloaded IEEE OUI-24 (6-hex prefix)
+    prefix_6 = clean_mac[:6]
+    if len(prefix_6) == 6 and prefix_6 in ieee_vendors:
+        return ieee_vendors[prefix_6]
+        
+    # 3. Match custom OUI (9-hex prefix or 6-hex prefix)
+    if len(prefix_9) == 9 and prefix_9 in custom_vendors:
+        return custom_vendors[prefix_9]
+    if len(prefix_6) == 6 and prefix_6 in custom_vendors:
+        return custom_vendors[prefix_6]
+        
+    return ""
+
 
 config = {}
 switch_configs = []
@@ -375,6 +521,9 @@ load_config()
 load_history()
 start_cache_thread()
 
+if not os.path.exists(OUI_TXT_PATH) or not os.path.exists(OUI36_TXT_PATH):
+    threading.Thread(target=download_oui_files, daemon=True).start()
+
 
 def _format_bps(bps):
     if bps >= 1_000_000_000:
@@ -391,15 +540,22 @@ def dashboard():
     return render_template("index.html",
                            title=config.get("title", "Switch Dashboard"),
                            refresh=config.get("refresh_interval", 30),
+                           enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes']),
+                           grid_columns=config.get("grid_columns", "auto"),
                            version=VERSION)
+
 
 
 @app.route("/api/switches")
 def api_switches():
     notes = load_notes()
+    vendors = load_mac_vendors()
+    ieee_vendors = get_ieee_vendors()
     with cache_lock:
         data = list(cached_data.values())
     for sw in data:
+        for entry in sw.get("mac_table", []):
+            entry["vendor"] = lookup_vendor(entry.get("mac"), vendors, ieee_vendors)
         for p in sw.get("ports", []):
             p["note"] = notes.get(f"{sw['ip']}:{p['port']}", "")
     return jsonify(data)
@@ -420,6 +576,11 @@ def refresh_mac(ip):
         scraper_obj = HCSwitchScraper(sw)
         mac_table = scraper_obj.scrape_mac_table()
         
+        vendors = load_mac_vendors()
+        ieee_vendors = get_ieee_vendors()
+        for entry in mac_table:
+            entry["vendor"] = lookup_vendor(entry.get("mac"), vendors, ieee_vendors)
+            
         with cache_lock:
             if ip in cached_data:
                 cached_data[ip]["mac_table"] = mac_table
@@ -640,11 +801,17 @@ def config_page():
         new_title = request.form.get("title", config.get("title", ""))
         new_refresh = int(request.form.get("refresh_interval", 30))
         new_mac_multiplier = int(request.form.get("mac_refresh_multiplier", 5))
+        new_columns = request.form.getlist("columns[]")
+        if not new_columns:
+            new_columns = ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes']
+        new_grid_columns = request.form.get("grid_columns", "auto")
 
         new_config = {
             "title": new_title,
             "refresh_interval": new_refresh,
             "mac_refresh_multiplier": new_mac_multiplier,
+            "enabled_columns": new_columns,
+            "grid_columns": new_grid_columns,
             "switches": new_switches,
         }
 
@@ -663,6 +830,8 @@ def config_page():
                            switches=switch_configs,
                            refresh=config.get("refresh_interval", 30),
                            mac_multiplier=config.get("mac_refresh_multiplier", 5),
+                           enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes']),
+                           grid_columns=config.get("grid_columns", "auto"),
                            version=VERSION)
 
 
@@ -685,6 +854,59 @@ def api_settings():
         with open(SETTINGS_PATH) as f:
             return jsonify(json.load(f))
     return jsonify({"font_size": "md"})
+
+
+@app.route("/api/vendors", methods=["GET", "POST"])
+def api_vendors():
+    if request.method == "POST":
+        data = request.get_json(force=True, silent=True) or {}
+        content = data.get("content", "")
+        try:
+            with open(VENDORS_TXT_PATH, "w", encoding="utf-8") as f:
+                f.write(content)
+            logger.info("Custom MAC vendors file updated successfully.")
+            return jsonify({"status": "ok"})
+        except Exception as e:
+            logger.error(f"Failed to save custom MAC vendors file: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    # GET method
+    content = ""
+    if os.path.exists(VENDORS_TXT_PATH):
+        try:
+            with open(VENDORS_TXT_PATH, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception as e:
+            logger.error(f"Failed to read custom MAC vendors file: {e}")
+            return jsonify({"error": str(e)}), 500
+    else:
+        content = (
+            "# Custom MAC Vendor mappings (one per line)\n"
+            "# Format: AA:BB:CC Vendor Name\n"
+            "# Example:\n"
+            "AA:BB:CC Custom Local Device\n"
+            "00:11:22 Custom Router\n"
+        )
+        try:
+            with open(VENDORS_TXT_PATH, "w", encoding="utf-8") as f:
+                f.write(content)
+        except Exception as e:
+            logger.error(f"Failed to write default custom MAC vendors file: {e}")
+    return jsonify({"content": content})
+
+
+@app.route("/api/vendors/update_oui", methods=["POST"])
+def update_oui_api():
+    try:
+        success_36 = download_single_oui_file("https://standards-oui.ieee.org/oui36/oui36.txt", OUI36_TXT_PATH)
+        success_24 = download_single_oui_file("https://standards-oui.ieee.org/oui/oui.txt", OUI_TXT_PATH)
+        if success_36 and success_24:
+            return jsonify({"status": "ok", "message": "IEEE OUI databases successfully updated."})
+        else:
+            return jsonify({"status": "error", "message": "Failed to download one or both OUI files. Check server logs."}), 500
+    except Exception as e:
+        logger.error(f"Manual OUI update failed: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route("/api-docs")

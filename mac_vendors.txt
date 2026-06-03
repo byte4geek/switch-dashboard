@@ -1,0 +1,5 @@
+# Custom MAC Vendor mappings (one per line)
+# Format: AA:BB:CC Vendor Name
+# Example:
+AA:BB:CC Custom Local Device
+00:11:22 Custom Router
