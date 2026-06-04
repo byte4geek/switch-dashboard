@@ -71,6 +71,40 @@ This dashboarb support these device:
 * **Remote Power Cycle**: Triggers a remote switch reboot via `/reboot.cgi` securely.
 * **Safety Confirmation**: Uses an immersive custom warning card modal using frosted glass backdrop effects, with real-time feedback loops during reboot execution.
 
+### 11. Interactive Network Topology Map
+* **Cubic Bezier Routing**: Interactive network map displaying real-time physical topology with cubic Bezier curved cables. Source and target port badges track the lines dynamically as you drag nodes.
+* **Smart Device Grouping**: Automatically structures the layout using a levels-based tree schema: Router/Gateway -> Core Managed Switches -> Unmanaged/Virtual Switches -> Repeaters/APs -> Client Devices.
+* **Persistent Layout Storage**: Drag-and-drop to position your network devices exactly where you want them. Coordinates are saved directly to `config.json` on the server.
+
+---
+
+## 🕸️ Network Map Topology & Device Grouping Guide
+
+The dashboard automatically parses the learned MAC forwarding tables to construct a complete, visual topology map of your network (accessible at `/map`). By combining managed switch configurations with custom infrastructure devices, you can group and segment devices:
+
+### 1. Router / Gateway (Root)
+* **What it does**: Represents the main internet gateway or firewall. It serves as the root node of the layout.
+* **How to configure**: Navigate to `/config` and under **Infrastructure Devices**, click **+ Add Infrastructure Device**. Set the type to **Router/Gateway** and enter its MAC address. 
+* **Layout result**: The router will be drawn at the very top level, with uplinks radiating down to the managed core switches.
+
+### 2. Repeaters / Access Points
+* **What it does**: Represents WiFi access points or range extenders that have wireless clients associated with them.
+* **How to configure**: Under **Infrastructure Devices**, click **+ Add Infrastructure Device**. Set the type to **Repeater/AP** and enter its MAC address.
+* **Layout result**: Any client device whose MAC address is learned on the same managed switch port as the Repeater will automatically branch under the Repeater node instead of being linked directly to the switch port. This correctly represents wireless clients grouped under their AP.
+
+### 3. Unmanaged / Virtual Switches
+* **What it does**: Represents a physical unmanaged switch (or a dummy switch) connected to a specific managed switch port. All devices connected to this unmanaged switch will be grouped under it.
+* **How to configure**: Under **Unmanaged Switches**, click **+ Add Unmanaged Switch**. Specify:
+  * **Name**: The display name for the unmanaged switch (e.g. "Desk Switch").
+  * **Parent Switch**: Select the managed parent switch from the dropdown.
+  * **Parent Port**: Specify the port number where the unmanaged switch is connected.
+* **Layout result**: All clients and infrastructure devices (like repeaters) learned on that managed parent port will automatically link to the unmanaged switch node. The unmanaged switch is then uplinked to the parent managed switch port.
+
+### 4. Switch Monitoring Deactivation
+* **What it does**: Stops querying a specific switch (reducing CGI page polling load) and completely hides it and its downstream devices from view.
+* **How to configure**: In the **Switches** section, toggle the **Enabled** slider checkbox to off.
+* **Layout result**: The switch disappears from both the main dashboard and the network map. Any offline client devices whose last known location was this disabled switch are automatically filtered out to prevent orphan floating nodes.
+
 ---
 
 ## 🛠️ System Architecture
@@ -378,7 +412,22 @@ This project is licensed under the **MIT License**. Feel free to modify, distrib
 
 ## 📅 Release Notes & Changelog
 
-### 🚀 Release 2026.6.1 (Current)
+### 🚀 Release 2026.6.2 (Current)
+* **🕸️ Interactive Network Topology Map**:
+  - Implemented custom Bezier curve routing equations to position port badges precisely along cables during node drags.
+  - Added layout reset confirmation dialogs in English to prevent accidental map layout clears.
+  - Auto-expanded node card width calculations based on client names and sublabels.
+* **🔌 Unmanaged Switches / Virtual Switches Support**:
+  - Added support for defining unmanaged switches connected to specific ports of managed switches.
+  - Automatically structures downstream devices (clients and repeaters) under the unmanaged switch node, enabling accurate client grouping.
+* **🎛️ Configured Switch Deactivation**:
+  - Added a switch deactivation toggle checkbox on the configuration page with a clean slider toggle styling.
+  - Skips background scraping threads for disabled switches, purges their cached data, and hides them from the main index and network map.
+  - Filters out orphan offline client devices whose last known parent switch is disabled to prevent scattering layout errors.
+
+---
+
+### 🚀 Release 2026.6.1
 * **🌐 Dynamic MAC Address Vendor Resolution**:
   - Automatically matches MAC addresses to manufacturers using the official IEEE OUI registry (`oui.txt` and `oui36.txt`).
   - Added support for a custom MAC vendors file (`mac_vendors.txt`) mapping local MAC prefixes to custom device names (e.g., `AA:BB:CC Custom Local Device`).
