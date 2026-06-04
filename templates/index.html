@@ -548,6 +548,7 @@
       <button class="fs-btn" data-size="lg" onclick="setFontSize('lg')">L</button>
       <button class="fs-btn" data-size="xl" onclick="setFontSize('xl')">XL</button>
     </span>
+    <a href="/map">🕸️ Network Map</a>
     <a href="/config">&#9881; Config</a>
     <a href="/backups">💾 Backups</a>
     <a href="/logs">📋 Logs</a>
@@ -636,7 +637,7 @@
 
 <script>
 const REFRESH_SECONDS = {{ refresh }};
-const enabledColumns = {{ enabled_columns|tojson }} || ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes'];
+const enabledColumns = {{ enabled_columns|tojson }} || ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes'];
 
 let currentGraphIp = null;
 let currentGraphPort = null;
@@ -646,36 +647,16 @@ let currentGraphPortLabel = '';
 let speedUnit = 'Bps'; // 'bps' or 'Bps' (bytes per second)
 let pollingPaused = false;
 
-const defaultOrder = ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes'];
+const defaultOrder = ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes'];
 let columnOrder = [];
 
-// Cookie helper functions
-function setCookie(name, value, days) {
-  let expires = "";
-  if (days) {
-    let date = new Date();
-    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-    expires = "; expires=" + date.toUTCString();
-  }
-  document.cookie = name + "=" + (value || "")  + expires + "; path=/";
-}
-
-function getCookie(name) {
-  let nameEQ = name + "=";
-  let ca = document.cookie.split(';');
-  for(let i=0;i < ca.length;i++) {
-    let c = ca[i];
-    while (c.charAt(0)==' ') c = c.substring(1,c.length);
-    if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
-  }
-  return null;
-}
+const serverColumnWidths = {{ column_widths|tojson }};
+const serverColumnOrder = {{ column_order|tojson }};
 
 function initColumnOrder() {
-  const cookieVal = getCookie('switch_column_order');
-  let savedOrder = cookieVal ? cookieVal.split(',') : null;
+  let savedOrder = serverColumnOrder && serverColumnOrder.length > 0 ? serverColumnOrder : null;
   
-  if (!savedOrder || savedOrder.length === 0) {
+  if (!savedOrder) {
     savedOrder = defaultOrder;
   }
   
@@ -693,22 +674,30 @@ function initColumnOrder() {
 // Initialize Column Order
 initColumnOrder();
 
-let columnWidths = {};
+let columnWidths = serverColumnWidths || {};
+
+async function saveColumnSettings() {
+  try {
+    await fetch('/api/config/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        column_widths: columnWidths,
+        column_order: columnOrder
+      })
+    });
+  } catch (e) {
+    console.error("Failed to save column settings to server:", e);
+  }
+}
 
 function saveColumnWidth(colId, width) {
   columnWidths[colId] = width;
-  setCookie('switch_column_widths', JSON.stringify(columnWidths), 365);
+  saveColumnSettings();
 }
 
 function loadColumnWidths() {
-  const cookieVal = getCookie('switch_column_widths');
-  if (cookieVal) {
-    try {
-      columnWidths = JSON.parse(cookieVal);
-    } catch (e) {
-      columnWidths = {};
-    }
-  }
+  columnWidths = serverColumnWidths || {};
 }
 
 loadColumnWidths();
@@ -912,7 +901,7 @@ function handleDrop(event, targetColId) {
     if (fromIndex !== -1 && toIndex !== -1) {
       columnOrder.splice(fromIndex, 1);
       columnOrder.splice(toIndex, 0, draggedColumnId);
-      setCookie('switch_column_order', columnOrder.join(','), 365);
+      saveColumnSettings();
       updateDashboard();
     }
   }
@@ -965,6 +954,7 @@ function getMacState(ip) {
   if (!state.filters) {
     state.filters = {
       mac: '',
+      host: '',
       vendor: '',
       type: '',
       port: '',
@@ -1085,12 +1075,14 @@ function toggleIgmpTable(ip) {
 function filterMacTable(ip) {
   const state = getMacState(ip);
   const fMac = document.querySelector(`.mac-filter-mac-${CSS.escape(ip)}`);
+  const fHost = document.querySelector(`.mac-filter-host-${CSS.escape(ip)}`);
   const fVendor = document.querySelector(`.mac-filter-vendor-${CSS.escape(ip)}`);
   const fType = document.querySelector(`.mac-filter-type-${CSS.escape(ip)}`);
   const fPort = document.querySelector(`.mac-filter-port-${CSS.escape(ip)}`);
   const fVlan = document.querySelector(`.mac-filter-vlan-${CSS.escape(ip)}`);
   
   if (fMac) state.filters.mac = fMac.value.trim().toLowerCase();
+  if (fHost) state.filters.host = fHost.value.trim().toLowerCase();
   if (fVendor) state.filters.vendor = fVendor.value.trim().toLowerCase();
   if (fType) state.filters.type = fType.value.trim().toLowerCase();
   if (fPort) state.filters.port = fPort.value.trim().toLowerCase();
@@ -1185,7 +1177,7 @@ function renderMacTable(ip) {
   const tbody = document.querySelector(`.mac-tbody-${CSS.escape(ip)}`);
   if (!tbody) return;
   
-  ['mac', 'vendor', 'type', 'port', 'vlan'].forEach(col => {
+  ['mac', 'host', 'vendor', 'type', 'port', 'vlan'].forEach(col => {
     const indicator = document.querySelector(`.sort-indicator-${CSS.escape(ip)}-${col}`);
     if (indicator) {
       if (state.sortBy === col) {
@@ -1198,15 +1190,16 @@ function renderMacTable(ip) {
   });
 
   let rows = state.data;
-  const filters = state.filters || { mac: '', vendor: '', type: '', port: '', vlan: '' };
-  if (filters.mac || filters.vendor || filters.type || filters.port || filters.vlan) {
+  const filters = state.filters || { mac: '', host: '', vendor: '', type: '', port: '', vlan: '' };
+  if (filters.mac || filters.host || filters.vendor || filters.type || filters.port || filters.vlan) {
     rows = rows.filter(r => {
       const matchMac = !filters.mac || (r.mac || '').toLowerCase().includes(filters.mac);
+      const matchHost = !filters.host || (r.host || '').toLowerCase().includes(filters.host);
       const matchVendor = !filters.vendor || (r.vendor || '').toLowerCase().includes(filters.vendor);
       const matchType = !filters.type || (r.type || '').toLowerCase().includes(filters.type);
       const matchPort = !filters.port || (r.port || '').toString().toLowerCase().includes(filters.port);
       const matchVlan = !filters.vlan || (r.vlan || '').toString().toLowerCase().includes(filters.vlan);
-      return matchMac && matchVendor && matchType && matchPort && matchVlan;
+      return matchMac && matchHost && matchVendor && matchType && matchPort && matchVlan;
     });
   }
 
@@ -1231,7 +1224,7 @@ function renderMacTable(ip) {
   });
 
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="padding: 12px; text-align: center; color: #8b949e;">No MAC entries found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="padding: 12px; text-align: center; color: #8b949e;">No MAC entries found</td></tr>`;
     const container = document.querySelector(`.mac-scroll-container-${CSS.escape(ip)}`);
     if (container) {
       container.scrollTop = state.scrollTop || 0;
@@ -1241,9 +1234,19 @@ function renderMacTable(ip) {
 
   tbody.innerHTML = rows.map(r => {
     const vendorHtml = r.vendor ? r.vendor : `<a href="/config#vendor-editor-card" style="color: #8b949e; text-decoration: underline;" title="Edit custom vendor list">Unknown</a>`;
+    const hostInputHtml = `
+      <input type="text" value="${r.host || ''}" 
+             placeholder="Enter nickname..." 
+             onfocus="pausePolling()" 
+             onblur="saveHost(this, '${r.mac}')" 
+             style="width: 100%; max-width: 150px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" 
+             onfocus="this.style.borderColor='#58a6ff'" 
+             onblur="this.style.borderColor='#30363d'">
+    `;
     return `
       <tr style="border-bottom: 1px solid #21262d; transition: background 0.15s;" onmouseover="this.style.background='#1c2128'" onmouseout="this.style.background='transparent'">
         <td style="padding: 8px 12px; font-family: 'SF Mono', Monaco, monospace; color: #c9d1d9;">${r.mac}</td>
+        <td style="padding: 4px 12px; color: #b1bac4;">${hostInputHtml}</td>
         <td style="padding: 8px 12px; color: #b1bac4;">${vendorHtml}</td>
         <td style="padding: 8px 12px; color: #8b949e;">${r.type}</td>
         <td style="padding: 8px 12px; font-weight: 600; color: #58a6ff;">${r.port}</td>
@@ -1256,6 +1259,23 @@ function renderMacTable(ip) {
   if (container) {
     container.scrollTop = state.scrollTop || 0;
   }
+}
+
+async function saveHost(input, mac) {
+  const host = input.value;
+  try {
+    await fetch('/api/clients/update_host', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mac: mac, host: host})
+    });
+  } catch (e) {
+    console.error("Failed to save client host nickname:", e);
+  }
+  pollingPaused = false;
+  document.getElementById('live-dot').style.background = '#3fb950';
+  document.getElementById('live-text').textContent = 'Live';
+  updateDashboard();
 }
 
 function pausePolling() {
@@ -1472,6 +1492,7 @@ function renderSwitch(sw) {
             <thead>
               <tr style="background: #161b22; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid #30363d;">
                 <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'mac')">MAC Address <span class="sort-indicator-${sw.ip}-mac"></span></th>
+                <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'host')">Host <span class="sort-indicator-${sw.ip}-host"></span></th>
                 <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'vendor')">Vendor <span class="sort-indicator-${sw.ip}-vendor"></span></th>
                 <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'type')">Type <span class="sort-indicator-${sw.ip}-type"></span></th>
                 <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'port')">Port <span class="sort-indicator-${sw.ip}-port"></span></th>
@@ -1479,6 +1500,7 @@ function renderSwitch(sw) {
               </tr>
               <tr style="background: #0d1117; position: sticky; top: 31px; z-index: 2; border-bottom: 1px solid #30363d;">
                 <th style="padding: 4px 6px;"><input type="text" class="mac-filter-mac-${sw.ip}" placeholder="Filter MAC..." value="${macState.filters ? macState.filters.mac : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
+                <th style="padding: 4px 6px;"><input type="text" class="mac-filter-host-${sw.ip}" placeholder="Filter Host..." value="${macState.filters ? macState.filters.host : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
                 <th style="padding: 4px 6px;"><input type="text" class="mac-filter-vendor-${sw.ip}" placeholder="Filter Vendor..." value="${macState.filters ? macState.filters.vendor : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
                 <th style="padding: 4px 6px;"><input type="text" class="mac-filter-type-${sw.ip}" placeholder="Filter Type..." value="${macState.filters ? macState.filters.type : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
                 <th style="padding: 4px 6px;"><input type="text" class="mac-filter-port-${sw.ip}" placeholder="Port..." value="${macState.filters ? macState.filters.port : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>

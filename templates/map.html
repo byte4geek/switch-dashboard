@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }} - Network Map</title>
+<link rel="icon" href="/static/logo.png" type="image/png">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d0f14; color: #e1e4e8;
+    background-image: radial-gradient(circle at 10% 20%, rgba(20, 24, 33, 0.8) 0%, rgba(13, 15, 20, 1) 90.2%);
+    background-attachment: fixed;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Custom Monospace Scrollbars for High-End Code feel */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: rgba(22, 27, 34, 0.4); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb { background: rgba(88, 166, 255, 0.2); border-radius: 4px; border: 1px solid rgba(13, 15, 20, 0.5); }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(88, 166, 255, 0.4); }
+
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 24px; background: rgba(22, 27, 34, 0.7);
+    border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-left img { height: 32px; width: 32px; border-radius: 6px; }
+  .header h1 { font-size: 18px; font-weight: 600; color: #f0f6fc; display: flex; align-items: center; gap: 8px; }
+  .header .nav-links { display: flex; gap: 12px; align-items: center; }
+  .header a {
+    color: #8b949e; text-decoration: none; font-size: 13px; padding: 8px 16px;
+    border-radius: 8px; transition: all .2s; border: 1px solid transparent;
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .header a:hover { color: #e1e4e8; background: rgba(255, 255, 255, 0.08); border-color: rgba(255,255,255,0.1); }
+
+  .main-container {
+    flex: 1;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .map-canvas-container {
+    flex: 1;
+    position: relative;
+    cursor: grab;
+    background: radial-gradient(circle, rgba(22, 27, 34, 0.2) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+  .map-canvas-container:active { cursor: grabbing; }
+
+  #map-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    user-select: none;
+  }
+
+  /* Node UI styles */
+  .node {
+    cursor: pointer;
+  }
+  .node-bg {
+    fill: rgba(13, 17, 23, 0.9);
+    stroke-width: 1.5;
+    rx: 10; ry: 10;
+    transition: stroke 0.3s, filter 0.3s;
+  }
+  
+  /* Color coding by node type */
+  .node-router .node-bg { stroke: #a855f7; filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.3)); }
+  .node-switch .node-bg { stroke: #3b82f6; filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.3)); }
+  .node-unmanaged_switch .node-bg { stroke: #0284c7; filter: drop-shadow(0 0 6px rgba(2, 132, 199, 0.3)); }
+  .node-repeater .node-bg { stroke: #f97316; filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.3)); }
+  .node-client .node-bg { stroke: #10b981; filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.2)); }
+  
+  /* Offline states */
+  .node-offline .node-bg { stroke: #6b7280 !important; filter: none !important; }
+  .node-offline .node-icon-svg { fill: #6b7280 !important; }
+
+  .node:hover .node-bg {
+    stroke-width: 2.5;
+  }
+  .node-router:hover .node-bg { filter: drop-shadow(0 0 12px rgba(168, 85, 247, 0.6)); }
+  .node-switch:hover .node-bg { filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.6)); }
+  .node-repeater:hover .node-bg { filter: drop-shadow(0 0 12px rgba(249, 115, 22, 0.6)); }
+  .node-client:hover .node-bg { filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.5)); }
+
+  .node-icon-svg {
+    fill: #b1bac4;
+    transition: fill 0.3s;
+  }
+  .node-router .node-icon-svg { fill: #c084fc; }
+  .node-switch .node-icon-svg { fill: #60a5fa; }
+  .node-unmanaged_switch .node-icon-svg { fill: #38bdf8; }
+  .node-repeater .node-icon-svg { fill: #ff9d5c; }
+  .node-client .node-icon-svg { fill: #34d399; }
+
+  .node-label {
+    font-size: 11px;
+    font-weight: 600;
+    fill: #f0f6fc;
+    text-anchor: middle;
+    pointer-events: none;
+  }
+  .node-sublabel {
+    font-size: 9px;
+    fill: #8b949e;
+    text-anchor: middle;
+    pointer-events: none;
+    font-family: 'SF Mono', Monaco, monospace;
+  }
+
+  /* Status light indicator on nodes */
+  .node-status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+  .node-status-dot.online { fill: #3fb950; }
+  .node-status-dot.offline { fill: #f85149; }
+
+  /* Links and connections */
+  .link-bg {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 8px;
+    cursor: pointer;
+  }
+  .link-line {
+    fill: none;
+    stroke: #484f58; /* Default fallback slate gray */
+    stroke-width: 2.5;
+    transition: stroke 0.3s, stroke-width 0.3s;
+  }
+  .link-type-client .link-line {
+    stroke: #4b5563; /* Subtle slate gray for clients */
+    stroke-width: 1.5;
+    stroke-dasharray: 4, 4; /* Dashed lines for client connections */
+  }
+  .link-marching {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-dasharray: 6, 8;
+    animation: march 25s linear infinite;
+    pointer-events: none;
+    opacity: 0.8;
+  }
+  
+  @keyframes march {
+    to { stroke-dashoffset: -1000; }
+  }
+
+  /* Link speeds color coding */
+  .link-10g .link-line { stroke: #1f6feb; }
+  .link-10g .link-marching { stroke: #58a6ff; }
+  
+  .link-2500m .link-line { stroke: #58a6ff; }
+  .link-2500m .link-marching { stroke: #8b949e; }
+  
+  .link-1000m .link-line { stroke: #3fb950; }
+  .link-1000m .link-marching { stroke: #56d364; }
+  
+  .link-100m .link-line { stroke: #f08a24; }
+  .link-100m .link-marching { stroke: #f1aa5a; }
+
+  .link-down .link-line, .link-unknown .link-line { stroke: #484f58; stroke-dasharray: 4, 4; }
+  .link-down .link-marching, .link-unknown .link-marching { display: none; }
+
+  .link-group:hover .link-line {
+    stroke-width: 4.5;
+  }
+
+  .port-badge {
+    fill: #161b22;
+    stroke: #30363d;
+    stroke-width: 1;
+    rx: 4; ry: 4;
+  }
+  .port-badge-text {
+    font-size: 8px;
+    fill: #8b949e;
+    font-family: 'SF Mono', Monaco, monospace;
+    text-anchor: middle;
+    alignment-baseline: middle;
+  }
+
+  /* Floating UI Panels */
+  .sidebar {
+    width: 320px;
+    background: rgba(22, 27, 34, 0.8);
+    border-left: 1px solid rgba(48, 54, 61, 0.6);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .sidebar.closed {
+    transform: translateX(100%);
+    position: absolute;
+    right: 0;
+    height: 100%;
+  }
+
+  .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel-header h2 { font-size: 14px; font-weight: 600; color: #f0f6fc; }
+  .close-sidebar-btn {
+    background: none; border: none; color: #8b949e; cursor: pointer; font-size: 16px;
+    padding: 4px; display: flex; align-items: center; justify-content: center;
+  }
+  .close-sidebar-btn:hover { color: #e1e4e8; }
+
+  .panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .search-box {
+    position: relative;
+  }
+  .search-box input {
+    width: 100%;
+    background: #0d1117;
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    border-radius: 8px;
+    padding: 8px 12px 8px 32px;
+    color: #e1e4e8;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-box input:focus {
+    border-color: #58a6ff;
+  }
+  .search-icon {
+    position: absolute; left: 10px; top: 9px; width: 14px; height: 14px; fill: #8b949e;
+  }
+
+  .control-card {
+    background: rgba(13, 17, 23, 0.4);
+    border: 1px solid rgba(48, 54, 61, 0.4);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .control-card h3 { font-size: 11px; text-transform: uppercase; color: #8b949e; letter-spacing: 0.5px; margin-bottom: 10px; font-weight: 600; }
+  .control-row {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px;
+  }
+  .control-row:last-child { margin-bottom: 0; }
+  
+  /* Toggle Switches */
+  .switch-toggle {
+    position: relative; display: inline-block; width: 34px; height: 20px;
+  }
+  .switch-toggle input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #21262d; border: 1px solid #30363d; transition: .3s; border-radius: 20px;
+  }
+  .slider:before {
+    position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px;
+    background-color: #8b949e; transition: .3s; border-radius: 50%;
+  }
+  input:checked + .slider { background-color: rgba(56, 139, 253, 0.15); border-color: #388bfd; }
+  input:checked + .slider:before { transform: translateX(14px); background-color: #58a6ff; }
+
+  /* Device details styles */
+  .detail-avatar-container {
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+    padding-bottom: 14px;
+    margin-bottom: 4px;
+  }
+  .detail-avatar {
+    width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    background: rgba(22, 27, 34, 0.6); border: 1px solid rgba(48, 54, 61, 0.6);
+  }
+  .detail-avatar svg { width: 24px; height: 24px; }
+  .detail-title h3 { font-size: 14px; font-weight: 600; color: #f0f6fc; }
+  .detail-title p { font-size: 11px; color: #8b949e; font-family: 'SF Mono', Monaco, monospace; }
+
+  .detail-item {
+    margin-bottom: 10px; font-size: 12px;
+  }
+  .detail-item .label { color: #8b949e; font-size: 11px; margin-bottom: 2px; }
+  .detail-item .value { color: #c9d1d9; font-weight: 500; }
+  .detail-item .value.mono { font-family: 'SF Mono', Monaco, monospace; }
+
+  .empty-state {
+    text-align: center; color: #8b949e; padding: 40px 20px; font-size: 12px;
+  }
+  .empty-state svg { width: 36px; height: 36px; fill: #30363d; margin-bottom: 10px; }
+
+  /* Map controls floating buttons */
+  .map-controls {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 10;
+  }
+  .map-btn {
+    width: 38px; height: 38px; border-radius: 8px;
+    background: rgba(22, 27, 34, 0.85); border: 1px solid rgba(48, 54, 61, 0.8);
+    color: #c9d1d9; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    transition: all 0.2s;
+  }
+  .map-btn:hover { background: #30363d; color: #fff; border-color: #8b949e; }
+  
+  /* Pulse highlights on search find */
+  @keyframes highlight-pulse {
+    0% { r: 28px; opacity: 1; stroke-width: 1px; }
+    100% { r: 55px; opacity: 0; stroke-width: 3px; }
+  }
+  .highlight-ring {
+    fill: none;
+    stroke: #58a6ff;
+    pointer-events: none;
+    animation: highlight-pulse 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+  }
+  
+  /* Link tooltips */
+  .link-tooltip {
+    position: absolute;
+    background: rgba(22, 27, 34, 0.95);
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: #e1e4e8;
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    min-width: 180px;
+    backdrop-filter: blur(10px);
+  }
+  .link-tooltip .title { font-weight: 700; color: #58a6ff; margin-bottom: 6px; border-bottom: 1px solid #30363d; padding-bottom: 4px; display: flex; justify-content: space-between; }
+  .link-tooltip .row { display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .link-tooltip .val { font-family: 'SF Mono', Monaco, monospace; color: #c9d1d9; font-weight: 600; }
+  .link-tooltip .val.green { color: #3fb950; }
+  .link-tooltip .val.blue { color: #58a6ff; }
+  
+  /* Floating search suggestions popup */
+  .search-suggestions {
+    position: absolute;
+    top: 100%; left: 0; right: 0;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    margin-top: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 105;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    display: none;
+  }
+  .search-suggestion-item {
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #c9d1d9;
+    cursor: pointer;
+    border-bottom: 1px solid #21262d;
+    display: flex;
+    justify-content: space-between;
+  }
+  .search-suggestion-item:last-child { border-bottom: none; }
+  .search-suggestion-item:hover {
+    background: #1f242c;
+    color: #58a6ff;
+  }
+  .search-suggestion-item .type {
+    font-size: 10px; color: #8b949e; text-transform: uppercase;
+  }
+  
+  .legend-bar {
+    position: absolute; top: 24px; left: 24px;
+    display: flex; gap: 14px;
+    background: rgba(22, 27, 34, 0.8);
+    border: 1px solid rgba(48, 54, 61, 0.6);
+    border-radius: 8px; padding: 8px 14px;
+    font-size: 10px; color: #8b949e;
+    backdrop-filter: blur(8px);
+    z-index: 10;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-color { width: 12px; height: 3px; border-radius: 1px; }
+
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <img src="/static/logo.png" alt="Horaco Logo">
+    <h1>🕸️ Network Map</h1>
+  </div>
+  <div class="nav-links">
+    <a href="/">&larr; Dashboard</a>
+    <a href="/config">&#9881; Config</a>
+  </div>
+</div>
+
+<div class="main-container">
+  
+  <!-- Left Side Floating Map Legends -->
+  <div class="legend-bar">
+    <div class="legend-item"><span class="legend-color" style="background: #1f6feb;"></span> 10G</div>
+    <div class="legend-item"><span class="legend-color" style="background: #58a6ff;"></span> 2.5G</div>
+    <div class="legend-item"><span class="legend-color" style="background: #3fb950;"></span> 1G</div>
+    <div class="legend-item"><span class="legend-color" style="background: #f08a24;"></span> 100M</div>
+  </div>
+
+  <!-- Zoom & Center Controls -->
+  <div class="map-controls">
+    <button class="map-btn" onclick="zoom(1.2)" title="Zoom In">+</button>
+    <button class="map-btn" onclick="zoom(0.8)" title="Zoom Out">-</button>
+    <button class="map-btn" onclick="resetZoom()" title="Recenter Map">&#8982;</button>
+  </div>
+
+  <!-- Canvas Container -->
+  <div class="map-canvas-container" id="canvas-container">
+    <svg id="map-svg">
+      <defs>
+        <!-- Grids or gradients if needed -->
+      </defs>
+      <!-- Viewport group that is zoomed/panned -->
+      <g id="viewport" transform="translate(0,0) scale(1)">
+        <g id="links-group"></g>
+        <g id="nodes-group"></g>
+      </g>
+    </svg>
+  </div>
+
+  <!-- Device Details Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="panel-header">
+      <h2>Device Inspector</h2>
+      <button class="close-sidebar-btn" onclick="toggleSidebar(false)">&times;</button>
+    </div>
+    <div class="panel-content">
+      
+      <!-- Interactive Search -->
+      <div class="search-box">
+        <svg class="search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <input type="text" id="search-input" placeholder="Search MAC, vendor, IP or name..." oninput="handleSearchInput(this.value)">
+        <div class="search-suggestions" id="search-suggestions"></div>
+      </div>
+
+      <!-- Controls Panel -->
+      <div class="control-card">
+        <h3>Map Controls</h3>
+        <div class="control-row">
+          <span>Show Clients</span>
+          <label class="switch-toggle">
+            <input type="checkbox" id="toggle-clients" checked onchange="handleClientToggle()">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="control-row">
+          <span>Active Marching Lines</span>
+          <label class="switch-toggle">
+            <input type="checkbox" id="toggle-marching" checked onchange="handleMarchingToggle()">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="control-row" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(48, 54, 61, 0.4);">
+          <button type="button" class="map-btn" onclick="resetLayout()" style="width: 100%; height: auto; padding: 8px 12px; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600;">
+            🔄 Reset Layout
+          </button>
+        </div>
+      </div>
+
+      <!-- Detail Card (Dynamically Rendered) -->
+      <div class="control-card" id="detail-card">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+          <p>Select a node on the map to inspect properties and active links.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Hover tooltip for links -->
+<div class="link-tooltip" id="link-tooltip"></div>
+
+<script>
+  let rawNodes = [];
+  let rawLinks = [];
+  
+  // Layout representation
+  let nodes = {};
+  let links = [];
+  
+  let showClients = true;
+  let showMarching = true;
+  
+  // Drag state
+  let selectedNode = null;
+  let draggedNode = null;
+  let dragOffset = { x: 0, y: 0 };
+  let isDraggingCanvas = false;
+  
+  // Zoom & Pan state
+  let panX = 0;
+  let panY = 0;
+  let zoomScale = 1;
+  let canvasStartPan = { x: 0, y: 0 };
+
+  // Persistent coordinates (mac or ip -> {x, y})
+  const serverPositions = {{ map_positions|tojson }};
+  const positionCache = serverPositions || {};
+
+  const svg = document.getElementById('map-svg');
+  const viewport = document.getElementById('viewport');
+  const canvasContainer = document.getElementById('canvas-container');
+  const toggleClients = document.getElementById('toggle-clients');
+
+  // SVG Icons markup
+  const ICONS = {
+    router: `<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>`,
+    switch: `<path d="M19 13H5c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2zM9 19H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM19 3H5c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 9H7V7h2v2zm4 0h-2V7h2v2zm4 0h-2V7h2v2z"/>`,
+    unmanaged_switch: `<path d="M19 13H5c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2zM9 19H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM19 3H5c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 9H7V7h2v2zm4 0h-2V7h2v2zm4 0h-2V7h2v2z"/>`,
+    repeater: `<path d="M12 3C6.48 3 2 7.48 2 13c0 2.76 1.12 5.26 2.93 7.07l1.41-1.41C4.95 17.27 4 15.24 4 13c0-4.41 3.59-8 8-8s8 3.59 8 8c0 2.24-.95 4.27-2.34 5.66l1.41 1.41C20.88 18.26 22 15.76 22 13c0-5.52-4.48-10-10-10zm0 4c-3.31 0-6 2.69-6 6 0 1.66.67 3.16 1.76 4.24l1.42-1.42C8.44 15.1 8 14.1 8 13c0-2.21 1.79-4 4-4s4 1.79 4 4c0 1.1-.44 2.1-1.18 2.82l1.42 1.42C17.33 16.16 18 14.66 18 13c0-3.31-2.69-6-6-6zm0 4c-1.1 0-2 .9-2 2 0 .55.22 1.05.59 1.41l1.41-1.41V13c0-.55-.45-1-1-1z"/>`,
+    other: `<path d="M12 3C6.48 3 2 7.48 2 13c0 2.76 1.12 5.26 2.93 7.07l1.41-1.41C4.95 17.27 4 15.24 4 13c0-4.41 3.59-8 8-8s8 3.59 8 8c0 2.24-.95 4.27-2.34 5.66l1.41 1.41C20.88 18.26 22 15.76 22 13c0-5.52-4.48-10-10-10zm0 4c-3.31 0-6 2.69-6 6 0 1.66.67 3.16 1.76 4.24l1.42-1.42C8.44 15.1 8 14.1 8 13c0-2.21 1.79-4 4-4s4 1.79 4 4c0 1.1-.44 2.1-1.18 2.82l1.42 1.42C17.33 16.16 18 14.66 18 13c0-3.31-2.69-6-6-6zm0 4c-1.1 0-2 .9-2 2 0 .55.22 1.05.59 1.41l1.41-1.41V13c0-.55-.45-1-1-1z"/>`,
+    client: `<path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>`
+  };
+
+  // Fetch topology data
+  async function fetchTopology() {
+    try {
+      const response = await fetch('/api/topology');
+      const data = await response.json();
+      
+      rawNodes = data.nodes;
+      rawLinks = data.links;
+      
+      processAndRender();
+    } catch (e) {
+      console.error('Error fetching topology:', e);
+    }
+  }
+
+  // Auto-Layout: compute levels using BFS starting from the Router/first node
+  function computeLayout(filteredNodes, filteredLinks) {
+    const adj = {};
+    const parentMap = {};
+    
+    // Initialize adjacency list
+    filteredNodes.forEach(node => {
+      adj[node.id] = [];
+    });
+    
+    filteredLinks.forEach(link => {
+      // client links are strictly parent-child (source -> target)
+      // uplinks and infra links are also directed source -> target
+      if (adj[link.source] && adj[link.target]) {
+        adj[link.source].push(link.target);
+        adj[link.target].push(link.source);
+      }
+    });
+
+    // Find the Root (prefer Router, then switches)
+    let root = null;
+    const routers = filteredNodes.filter(n => n.type === 'router');
+    if (routers.length > 0) {
+      root = routers[0].id;
+    } else {
+      const switches = filteredNodes.filter(n => n.type === 'switch');
+      if (switches.length > 0) {
+        root = switches[0].id;
+      } else if (filteredNodes.length > 0) {
+        root = filteredNodes[0].id;
+      }
+    }
+
+    const levels = {};
+    const queue = [];
+    const visited = new Set();
+
+    if (root) {
+      queue.push({ id: root, level: 0 });
+      visited.add(root);
+    }
+
+    while (queue.length > 0) {
+      const curr = queue.shift();
+      levels[curr.id] = curr.level;
+
+      const neighbors = adj[curr.id] || [];
+      neighbors.forEach(neighbor => {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          parentMap[neighbor] = curr.id;
+          queue.push({ id: neighbor, level: curr.level + 1 });
+        }
+      });
+    }
+
+    // Place unreached/orphaned nodes on level 1
+    filteredNodes.forEach(node => {
+      if (!(node.id in levels)) {
+        levels[node.id] = 1;
+      }
+    });
+
+    // Group nodes by level
+    const nodesByLevel = {};
+    filteredNodes.forEach(node => {
+      const lvl = levels[node.id];
+      if (!nodesByLevel[lvl]) nodesByLevel[lvl] = [];
+      nodesByLevel[lvl].push(node);
+    });
+
+    // Let's filter out clients first from BFS to layout switches/infrastructure beautifully.
+    // Then we cluster client nodes in local fans around their parent switch/AP.
+    const switchesAndInfraByLevel = {};
+    const clientNodes = [];
+    
+    filteredNodes.forEach(node => {
+      if (node.type === 'client') {
+        clientNodes.push(node);
+      } else {
+        const lvl = levels[node.id];
+        if (!switchesAndInfraByLevel[lvl]) switchesAndInfraByLevel[lvl] = [];
+        switchesAndInfraByLevel[lvl].push(node);
+      }
+    });
+
+    // Dimensions
+    const svgWidth = Math.max(canvasContainer.clientWidth, 900);
+    const svgHeight = Math.max(canvasContainer.clientHeight, 600);
+
+    const maxLevel = Object.keys(switchesAndInfraByLevel).reduce((a, b) => Math.max(a, parseInt(b)), 0);
+    const levelHeight = Math.max((svgHeight - 160) / (maxLevel + 1), 180);
+
+    // 1. Layout switches and gateways level by level
+    Object.keys(switchesAndInfraByLevel).forEach(lvl => {
+      const levelNodes = switchesAndInfraByLevel[lvl];
+      const count = levelNodes.length;
+      
+      levelNodes.forEach((node, idx) => {
+        // If already positioned in cache, retrieve it
+        if (positionCache[node.id]) {
+          node.x = positionCache[node.id].x;
+          node.y = positionCache[node.id].y;
+        } else {
+          // Center-distribute horizontally
+          node.x = (idx + 0.5) * (svgWidth / count);
+          node.y = 80 + parseInt(lvl) * levelHeight;
+          
+          // Add a minor jitter to avoid direct line overlaps
+          node.x += (idx % 2 === 0 ? 15 : -15);
+          
+          // Save in cache
+          positionCache[node.id] = { x: node.x, y: node.y };
+        }
+      });
+    });
+
+    // 2. Layout client nodes in beautiful clusters / fans under their parent switch/AP
+    const clientsByParent = {};
+    clientNodes.forEach(client => {
+      // Find parent of this client
+      let parentId = null;
+      filteredLinks.forEach(link => {
+        if (link.target === client.id) {
+          parentId = link.source;
+        }
+      });
+      if (parentId) {
+        if (!clientsByParent[parentId]) clientsByParent[parentId] = [];
+        clientsByParent[parentId].push(client);
+      }
+    });
+
+    Object.keys(clientsByParent).forEach(parentId => {
+      const parentNode = filteredNodes.find(n => n.id === parentId);
+      if (!parentNode) return;
+
+      const clients = clientsByParent[parentId];
+      const count = clients.length;
+      clients.forEach((client, idx) => {
+        if (positionCache[client.id]) {
+          client.x = positionCache[client.id].x;
+          client.y = positionCache[client.id].y;
+        } else {
+          // Concentric staggered rings layout to avoid overlapping
+          const clientsPerRing = 4;
+          const ring = Math.floor(idx / clientsPerRing);
+          const idxInRing = idx % clientsPerRing;
+          
+          const clientsInThisRing = Math.min(clientsPerRing, count - ring * clientsPerRing);
+          const radius = 120 + ring * 95;
+          
+          const startAngle = Math.PI * 0.05; // ~9 degrees
+          const endAngle = Math.PI * 0.95;   // ~171 degrees
+          
+          let angle;
+          if (clientsInThisRing === 1) {
+            angle = Math.PI / 2;
+          } else {
+            angle = startAngle + idxInRing * (endAngle - startAngle) / (clientsInThisRing - 1);
+          }
+          
+          // Stagger alternate rings
+          if (ring % 2 === 1) {
+            angle += 0.15;
+          }
+          
+          client.x = parentNode.x + radius * Math.cos(angle);
+          client.y = parentNode.y + radius * Math.sin(angle);
+
+          positionCache[client.id] = { x: client.x, y: client.y };
+        }
+      });
+    });
+
+    // Ensure all nodes have valid x and y coordinates, preventing overlapping at (0,0)
+    filteredNodes.forEach((node, idx) => {
+      if (node.x === undefined || node.y === undefined || isNaN(node.x) || isNaN(node.y)) {
+        node.x = 120 + (idx % 5) * 180;
+        node.y = 80 + Math.floor(idx / 5) * 120;
+        positionCache[node.id] = { x: node.x, y: node.y };
+      }
+    });
+
+    // Assemble nodes map
+    nodes = {};
+    filteredNodes.forEach(node => {
+      nodes[node.id] = node;
+    });
+  }
+
+  // Draw links and nodes
+  function processAndRender() {
+    // 1. Filter elements based on client toggle
+    let filteredNodes = rawNodes;
+    let filteredLinks = rawLinks;
+    
+    if (!showClients) {
+      filteredNodes = rawNodes.filter(n => n.type !== 'client');
+      filteredLinks = rawLinks.filter(l => l.type !== 'client');
+    }
+
+    // Compute node coordinates
+    computeLayout(filteredNodes, filteredLinks);
+
+    // Render links
+    renderLinks(filteredLinks);
+
+    // Render nodes
+    renderNodes(filteredNodes);
+  }
+
+  function renderLinks(filteredLinks) {
+    const container = document.getElementById('links-group');
+    container.innerHTML = '';
+
+    filteredLinks.forEach((link, idx) => {
+      const sourceNode = nodes[link.source];
+      const targetNode = nodes[link.target];
+      if (!sourceNode || !targetNode) return;
+
+      // Draw a smooth S-curve Bezier path between nodes
+      const x1 = sourceNode.x;
+      const y1 = sourceNode.y;
+      const x2 = targetNode.x;
+      const y2 = targetNode.y;
+
+      const midY = (y1 + y2) / 2;
+      const pathData = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+
+      const speedClass = `link-${(link.speed || '').toLowerCase().replace('/', '')}`;
+      
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('class', `link-group ${speedClass}`);
+      g.setAttribute('id', `link-group-${idx}`);
+
+      // Transparent thick background path for easier hovering
+      const bgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      bgPath.setAttribute('d', pathData);
+      bgPath.setAttribute('class', 'link-bg');
+      
+      // The visible line
+      const linePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      linePath.setAttribute('d', pathData);
+      linePath.setAttribute('class', 'link-line');
+
+      // The marching dashes indicator
+      const marchPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      marchPath.setAttribute('d', pathData);
+      marchPath.setAttribute('class', 'link-marching');
+      if (!showMarching) marchPath.style.display = 'none';
+
+      g.appendChild(bgPath);
+      g.appendChild(linePath);
+      g.appendChild(marchPath);
+
+      // Render port speed label badge at 25% and 75% along the Bezier curve path
+      if (link.source_port && link.source_port !== 'unknown') {
+        const pt = getBezierPoint(0.25, x1, y1, x2, y2);
+        g.appendChild(createPortBadge(pt.x, pt.y - 8, link.source_port.replace('Port ', 'P'), 'source-badge'));
+      }
+      if (link.target_port && link.target_port !== 'unknown') {
+        const pt = getBezierPoint(0.75, x1, y1, x2, y2);
+        g.appendChild(createPortBadge(pt.x, pt.y + 8, link.target_port.replace('Port ', 'P'), 'target-badge'));
+      }
+
+      // Tooltip triggers
+      g.addEventListener('mouseenter', (e) => showLinkTooltip(e, link, sourceNode, targetNode));
+      g.addEventListener('mouseleave', hideLinkTooltip);
+      g.addEventListener('mousemove', moveLinkTooltip);
+
+      container.appendChild(g);
+    });
+  }
+
+  // Cubic Bezier curve calculator
+  function getBezierPoint(t, x1, y1, x2, y2) {
+    const midY = (y1 + y2) / 2;
+    const cx1 = x1;
+    const cy1 = midY;
+    const cx2 = x2;
+    const cy2 = midY;
+
+    const mt = 1 - t;
+    const mt2 = mt * mt;
+    const mt3 = mt2 * mt;
+    const t2 = t * t;
+    const t3 = t2 * t;
+
+    const x = mt3 * x1 + 3 * mt2 * t * cx1 + 3 * mt * t2 * cx2 + t3 * x2;
+    const y = mt3 * y1 + 3 * mt2 * t * cy1 + 3 * mt * t2 * cy2 + t3 * y2;
+
+    return { x, y };
+  }
+
+  function createPortBadge(x, y, text, extraClass) {
+    const badge = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    badge.setAttribute('transform', `translate(${x - 12}, ${y - 6})`);
+    badge.style.pointerEvents = 'none';
+    if (extraClass) {
+      badge.setAttribute('class', `port-badge-group ${extraClass}`);
+    } else {
+      badge.setAttribute('class', 'port-badge-group');
+    }
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('width', '24');
+    rect.setAttribute('height', '12');
+    rect.setAttribute('class', 'port-badge');
+
+    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    txt.setAttribute('x', '12');
+    txt.setAttribute('y', '6');
+    txt.setAttribute('class', 'port-badge-text');
+    txt.textContent = text;
+
+    badge.appendChild(rect);
+    badge.appendChild(txt);
+    return badge;
+  }
+
+  function renderNodes(filteredNodes) {
+    const container = document.getElementById('nodes-group');
+    container.innerHTML = '';
+
+    filteredNodes.forEach(node => {
+      const typeClass = `node-${node.type}`;
+      const statusClass = `node-${node.status}`;
+      
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('class', `node ${typeClass} ${statusClass}`);
+      g.setAttribute('id', `node-${node.id}`);
+      g.setAttribute('transform', `translate(${node.x}, ${node.y})`);
+
+      // Hover highlight ring container
+      const highlightRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      highlightRing.setAttribute('class', 'highlight-ring');
+      highlightRing.setAttribute('r', '36');
+      highlightRing.setAttribute('cx', '0');
+      highlightRing.setAttribute('cy', '0');
+      highlightRing.style.display = 'none';
+      highlightRing.setAttribute('id', `highlight-${node.id}`);
+      g.appendChild(highlightRing);
+
+      // Glassmorphism card rectangle or circle
+      let nodeShape;
+      const isClient = node.type === 'client';
+      let sublabelVal = '';
+      if (node.type === 'switch') sublabelVal = node.ip || '';
+      else if (node.type === 'unmanaged_switch') sublabelVal = `Unmanaged (Port ${node.parent_port})`;
+      else sublabelVal = node.mac || '';
+      const textLen = Math.max((node.name || '').length, sublabelVal.length);
+      // Auto width: base of 150px for clients, 160px for others, expanding if text is long
+      const nodeWidth = Math.max(isClient ? 150 : 160, textLen * 7.5 + 35);
+      const nodeHeight = isClient ? 44 : 52;
+
+      nodeShape = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      nodeShape.setAttribute('x', -nodeWidth / 2);
+      nodeShape.setAttribute('y', -nodeHeight / 2);
+      nodeShape.setAttribute('width', nodeWidth);
+      nodeShape.setAttribute('height', nodeHeight);
+      nodeShape.setAttribute('class', 'node-bg');
+      g.appendChild(nodeShape);
+
+      // Icon placeholder
+      const iconGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      iconGroup.setAttribute('transform', `translate(${-nodeWidth/2 + 10}, ${-12})`);
+      
+      const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      iconSvg.setAttribute('d', ICONS[node.type] ? ICONS[node.type].match(/d="([^"]+)"/)[1] : ICONS.other.match(/d="([^"]+)"/)[1]);
+      iconSvg.setAttribute('class', 'node-icon-svg');
+      iconSvg.setAttribute('transform', 'scale(1)');
+      
+      const iconWrapper = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      iconWrapper.setAttribute('width', '24');
+      iconWrapper.setAttribute('height', '24');
+      iconWrapper.setAttribute('viewBox', '0 0 24 24');
+      iconWrapper.appendChild(iconSvg);
+
+      iconGroup.appendChild(iconWrapper);
+      g.appendChild(iconGroup);
+
+      // Main Text Label (x=19 centers text inside the remaining card space)
+      const labelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      labelText.setAttribute('x', '19');
+      labelText.setAttribute('y', '-2');
+      labelText.setAttribute('class', 'node-label');
+      
+      // Expand truncation threshold to 26 characters due to auto width
+      let displayName = node.name || '';
+      if (displayName.length > 26) {
+        displayName = displayName.substring(0, 23) + '...';
+      }
+      labelText.textContent = displayName;
+      g.appendChild(labelText);
+
+      // Sub-label (IP or MAC) (x=19 centers text inside remaining card space)
+      const subLabelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      subLabelText.setAttribute('x', '19');
+      subLabelText.setAttribute('y', '12');
+      subLabelText.setAttribute('class', 'node-sublabel');
+      if (node.type === 'switch') {
+        subLabelText.textContent = node.ip;
+      } else if (node.type === 'unmanaged_switch') {
+        subLabelText.textContent = `Unmanaged (Port ${node.parent_port})`;
+      } else {
+        subLabelText.textContent = formatMacAddress(node.mac);
+      }
+      g.appendChild(subLabelText);
+
+      // Small Active Status indicator dot
+      const statusDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      statusDot.setAttribute('cx', nodeWidth / 2 - 10);
+      statusDot.setAttribute('cy', -nodeHeight / 2 + 10);
+      statusDot.setAttribute('r', '3.5');
+      statusDot.setAttribute('fill', node.status === 'online' ? '#3fb950' : '#f85149');
+      g.appendChild(statusDot);
+
+      // Mouse drag and click handlers
+      g.addEventListener('mousedown', (e) => startDragNode(e, node));
+      g.addEventListener('click', (e) => selectNode(node));
+
+      container.appendChild(g);
+    });
+  }
+
+  function formatMacAddress(mac) {
+    if (!mac) return '';
+    // Format MAC into standard colon-separated 6-byte notation
+    const cleaned = mac.replace(/[^A-Fa-f0-9]/g, '').toUpperCase();
+    if (cleaned.length === 12) {
+      return cleaned.match(/.{2}/g).join(':');
+    }
+    return mac;
+  }
+
+  // ==========================================
+  // DRAG & DROP FOR NODES
+  // ==========================================
+  function startDragNode(e, node) {
+    e.stopPropagation();
+    if (e.button !== 0) return; // Only left click
+    
+    draggedNode = node;
+    
+    // Transform coordinates based on current zoom scale & panning
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+    
+    dragOffset.x = (mouseX / zoomScale) - node.x;
+    dragOffset.y = (mouseY / zoomScale) - node.y;
+
+    document.addEventListener('mousemove', dragNode);
+    document.addEventListener('mouseup', stopDragNode);
+  }
+
+  function dragNode(e) {
+    if (!draggedNode) return;
+    
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+    
+    const newX = (mouseX / zoomScale) - dragOffset.x;
+    const newY = (mouseY / zoomScale) - dragOffset.y;
+    
+    draggedNode.x = newX;
+    draggedNode.y = newY;
+    
+    // Save to position cache
+    positionCache[draggedNode.id] = { x: newX, y: newY };
+    
+    // Update visual node position
+    const nodeEl = document.getElementById(`node-${draggedNode.id}`);
+    if (nodeEl) {
+      nodeEl.setAttribute('transform', `translate(${newX}, ${newY})`);
+    }
+
+    // Redraw linking lines (very fast)
+    processAndRender();
+  }
+
+  async function stopDragNode() {
+    draggedNode = null;
+    document.removeEventListener('mousemove', dragNode);
+    document.removeEventListener('mouseup', stopDragNode);
+    
+    // Save to server config
+    try {
+      await fetch('/api/config/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ map_positions: positionCache })
+      });
+    } catch (e) {
+      console.error("Failed to save map coordinates to server:", e);
+    }
+  }
+
+  // ==========================================
+  // ZOOM & PAN CANVAS
+  // ==========================================
+  canvasContainer.addEventListener('mousedown', (e) => {
+    if (e.target === svg || e.target.tagName === 'path' || e.target.classList.contains('link-bg')) {
+      isDraggingCanvas = true;
+      canvasStartPan.x = e.clientX - panX;
+      canvasStartPan.y = e.clientY - panY;
+      document.addEventListener('mousemove', panCanvas);
+      document.addEventListener('mouseup', stopPanCanvas);
+    }
+  });
+
+  function panCanvas(e) {
+    if (!isDraggingCanvas) return;
+    panX = e.clientX - canvasStartPan.x;
+    panY = e.clientY - canvasStartPan.y;
+    updateViewportTransform();
+  }
+
+  function stopPanCanvas() {
+    isDraggingCanvas = false;
+    document.removeEventListener('mousemove', panCanvas);
+    document.removeEventListener('mouseup', stopPanCanvas);
+  }
+
+  svg.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+    zoom(zoomFactor);
+  });
+
+  function zoom(factor) {
+    const newScale = Math.min(Math.max(zoomScale * factor, 0.15), 4);
+    
+    // Zoom centered on the middle of the viewport
+    const containerWidth = canvasContainer.clientWidth;
+    const containerHeight = canvasContainer.clientHeight;
+    
+    panX = containerWidth / 2 - (containerWidth / 2 - panX) * (newScale / zoomScale);
+    panY = containerHeight / 2 - (containerHeight / 2 - panY) * (newScale / zoomScale);
+    
+    zoomScale = newScale;
+    updateViewportTransform();
+  }
+
+  function resetZoom() {
+    const containerWidth = canvasContainer.clientWidth;
+    panX = Math.max(20, (containerWidth - 960) / 2);
+    panY = 30;
+    zoomScale = 1;
+    updateViewportTransform();
+  }
+
+  function updateViewportTransform() {
+    viewport.setAttribute('transform', `translate(${panX}, ${panY}) scale(${zoomScale})`);
+  }
+
+  // ==========================================
+  // CONTROLS & SIDEBAR HANDLERS
+  // ==========================================
+  function handleClientToggle() {
+    showClients = document.getElementById('toggle-clients').checked;
+    processAndRender();
+  }
+
+  function handleMarchingToggle() {
+    showMarching = document.getElementById('toggle-marching').checked;
+    const marchings = document.querySelectorAll('.link-marching');
+    marchings.forEach(el => {
+      el.style.display = showMarching ? 'block' : 'none';
+    });
+  }
+
+  function toggleSidebar(open) {
+    const sidebar = document.getElementById('sidebar');
+    if (open) {
+      sidebar.classList.remove('closed');
+    } else {
+      sidebar.classList.add('closed');
+    }
+  }
+
+  function selectNode(node) {
+    selectedNode = node;
+    toggleSidebar(true);
+    renderDetailCard(node);
+  }
+
+  function renderDetailCard(node) {
+    const card = document.getElementById('detail-card');
+    let avatarColor = '#10b981';
+    let iconSvg = ICONS.client;
+    
+    if (node.type === 'router') { avatarColor = '#a855f7'; iconSvg = ICONS.router; }
+    else if (node.type === 'switch') { avatarColor = '#3b82f6'; iconSvg = ICONS.switch; }
+    else if (node.type === 'unmanaged_switch') { avatarColor = '#0284c7'; iconSvg = ICONS.unmanaged_switch; }
+    else if (node.type === 'repeater') { avatarColor = '#f97316'; iconSvg = ICONS.repeater; }
+
+    const formattedMac = formatMacAddress(node.mac) || 'N/A';
+    
+    let html = `
+      <div class="detail-avatar-container">
+        <div class="detail-avatar" style="border-color: ${avatarColor}; color: ${avatarColor};">
+          <svg viewBox="0 0 24 24" style="fill: currentColor;">${iconSvg}</svg>
+        </div>
+        <div class="detail-title">
+          <h3>${node.name}</h3>
+          <p style="color: ${avatarColor};">${node.type === 'unmanaged_switch' ? 'UNMANAGED SWITCH' : node.type.toUpperCase()}</p>
+        </div>
+      </div>
+    `;
+
+    if (node.type === 'switch') {
+      html += `
+        <div class="detail-item">
+          <div class="label">IP Address</div>
+          <div class="value mono">${node.ip}</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">MAC Address</div>
+          <div class="value mono">${formattedMac}</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Hardware Model</div>
+          <div class="value">${node.model || 'Generic Model'}</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Status</div>
+          <div class="value" style="color: ${node.status === 'online' ? '#3fb950' : '#f85149'}">
+            ${node.status.toUpperCase()}
+          </div>
+        </div>
+        <div class="control-row" style="margin-top: 14px;">
+          <a href="/config" class="map-btn" style="width: auto; height: auto; padding: 6px 12px; font-size: 11px; text-decoration: none;">Configure Switch</a>
+        </div>
+      `;
+    } else if (node.type === 'unmanaged_switch') {
+      html += `
+        <div class="detail-item">
+          <div class="label">Parent Switch</div>
+          <div class="value">${node.parent_ip}</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Parent Port</div>
+          <div class="value">Port ${node.parent_port}</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Status</div>
+          <div class="value" style="color: ${node.status === 'online' ? '#3fb950' : '#f85149'}">
+            ${node.status.toUpperCase()}
+          </div>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="detail-item">
+          <div class="label">MAC Address</div>
+          <div class="value mono">${formattedMac}</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Status</div>
+          <div class="value" style="color: ${node.status === 'online' ? '#3fb950' : '#f85149'}">
+            ${node.status.toUpperCase()}
+          </div>
+        </div>
+      `;
+      if (node.vendor) {
+        html += `
+          <div class="detail-item">
+            <div class="label">Manufacturer Vendor</div>
+            <div class="value">${node.vendor}</div>
+          </div>
+        `;
+      }
+      
+      if (node.type === 'client') {
+        const lastSeenStr = node.last_seen_time ? new Date(node.last_seen_time * 1000).toLocaleString() : 'Never';
+        html += `
+          <div class="detail-item">
+            <div class="label">Host Nickname</div>
+            <div class="value" style="margin-top: 4px;">
+              <input type="text" id="inspect-host-input" value="${node.host || ''}" 
+                     placeholder="Enter device nickname..." 
+                     onblur="updateClientHost('${node.id}', this.value)"
+                     style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px 10px; color: #e1e4e8; font-size: 12px; outline: none; transition: border-color 0.2s;"
+                     onfocus="this.style.borderColor='#58a6ff'" 
+                     onblur="this.style.borderColor='#30363d'">
+            </div>
+          </div>
+          <div class="detail-item">
+            <div class="label">Last Location</div>
+            <div class="value">${node.last_seen_ip}:${node.last_seen_port}</div>
+          </div>
+          <div class="detail-item">
+            <div class="label">Last Active</div>
+            <div class="value">${lastSeenStr}</div>
+          </div>
+          <div class="control-row" style="margin-top: 18px;">
+            <button type="button" onclick="forgetClient('${node.id}')" class="map-btn" style="width: 100%; background: #da3637; border-color: #f85149; height: auto; padding: 8px 12px;" onmouseover="this.style.background='#f85149'" onmouseout="this.style.background='#da3637'">
+              Forget Device
+            </button>
+          </div>
+        `;
+      }
+    }
+
+    // Find links connected to this node
+    const connectedLinks = rawLinks.filter(l => l.source === node.id || l.target === node.id);
+    if (connectedLinks.length > 0) {
+      html += `
+        <div style="border-top: 1px solid rgba(48, 54, 61, 0.4); margin-top: 14px; padding-top: 10px;">
+          <h3 style="font-size: 11px; text-transform: uppercase; color: #8b949e; letter-spacing: 0.5px; margin-bottom: 8px; font-weight: 600;">Active Connections</h3>
+      `;
+      connectedLinks.forEach(link => {
+        const isSource = link.source === node.id;
+        const otherNodeId = isSource ? link.target : link.source;
+        
+        // Find other node details
+        const otherNode = rawNodes.find(n => n.id === otherNodeId);
+        if (!otherNode) return;
+
+        const portLabel = isSource ? link.source_port : link.target_port;
+        const otherPortLabel = isSource ? link.target_port : link.source_port;
+
+        html += `
+          <div style="background: rgba(13, 17, 23, 0.4); border: 1px solid rgba(48, 54, 61, 0.3); border-radius: 6px; padding: 8px; margin-bottom: 6px; font-size: 11px;">
+            <div style="display: flex; justify-content: space-between; font-weight: 600; color: #f0f6fc;">
+              <span>${otherNode.name}</span>
+              <span style="color: #58a6ff;">${link.speed}</span>
+            </div>
+            <div style="color: #8b949e; margin-top: 4px; display: flex; justify-content: space-between;">
+              <span>${portLabel ? portLabel : 'Direct'}</span>
+              <span>${otherPortLabel ? otherPortLabel : ''}</span>
+            </div>
+          </div>
+        `;
+      });
+      html += `</div>`;
+    }
+
+    card.innerHTML = html;
+  }
+
+  // ==========================================
+  // TOOLTIPS FOR LINKS
+  // ==========================================
+  const tooltip = document.getElementById('link-tooltip');
+
+  function showLinkTooltip(e, link, source, target) {
+    let speedColor = '#8b949e';
+    if (link.speed.includes('10G')) speedColor = '#1f6feb';
+    else if (link.speed.includes('2.5G')) speedColor = '#58a6ff';
+    else if (link.speed.includes('1G') || link.speed.includes('1000M')) speedColor = '#3fb950';
+    else if (link.speed.includes('100M')) speedColor = '#f08a24';
+
+    let trafficHtml = '';
+    if (link.tx_bps || link.rx_bps) {
+      trafficHtml = `
+        <div class="row" style="margin-top: 4px; border-top: 1px dashed rgba(48, 54, 61, 0.4); padding-top: 4px;">
+          <span>TX Speed:</span>
+          <span class="val blue">${formatTraffic(link.tx_bps)}</span>
+        </div>
+        <div class="row">
+          <span>RX Speed:</span>
+          <span class="val green">${formatTraffic(link.rx_bps)}</span>
+        </div>
+      `;
+    }
+
+    tooltip.innerHTML = `
+      <div class="title">
+        <span>Connection Link</span>
+        <span style="color: ${speedColor}">${link.speed}</span>
+      </div>
+      <div class="row">
+        <span>Source:</span>
+        <span class="val">${source.name}</span>
+      </div>
+      ${link.source_port ? `<div class="row"><span>Port:</span><span class="val">${link.source_port}</span></div>` : ''}
+      <div class="row" style="margin-top: 4px;">
+        <span>Destination:</span>
+        <span class="val">${target.name}</span>
+      </div>
+      ${link.target_port ? `<div class="row"><span>Port:</span><span class="val">${link.target_port}</span></div>` : ''}
+      ${trafficHtml}
+    `;
+    tooltip.style.display = 'block';
+    moveLinkTooltip(e);
+  }
+
+  function moveLinkTooltip(e) {
+    // Position floating tooltip near cursor
+    tooltip.style.left = (e.clientX + 14) + 'px';
+    tooltip.style.top = (e.clientY + 14) + 'px';
+  }
+
+  function hideLinkTooltip() {
+    tooltip.style.display = 'none';
+  }
+
+  function formatTraffic(bps) {
+    if (!bps) return '0 bps';
+    if (bps >= 1000000000) return (bps / 1000000000).toFixed(1) + ' Gbps';
+    if (bps >= 1000000) return (bps / 1000000).toFixed(1) + ' Mbps';
+    if (bps >= 1000) return (bps / 1000).toFixed(1) + ' Kbps';
+    return bps + ' bps';
+  }
+
+  // ==========================================
+  // SEARCH & HIGHLIGHT
+  // ==========================================
+  let activeHighlightTimer = null;
+
+  function handleSearchInput(query) {
+    const suggestionsPanel = document.getElementById('search-suggestions');
+    if (!query.trim()) {
+      suggestionsPanel.style.display = 'none';
+      return;
+    }
+    
+    const q = query.toLowerCase();
+    const matches = rawNodes.filter(n => {
+      return (n.name && n.name.toLowerCase().includes(q)) ||
+             (n.mac && n.mac.toLowerCase().includes(q.replace(/:/g, ''))) ||
+             (n.ip && n.ip.toLowerCase().includes(q)) ||
+             (n.vendor && n.vendor.toLowerCase().includes(q));
+    });
+
+    if (matches.length === 0) {
+      suggestionsPanel.innerHTML = '<div style="padding:8px 12px; font-size:11px; color:#8b949e;">No devices found</div>';
+      suggestionsPanel.style.display = 'block';
+      return;
+    }
+
+    let html = '';
+    matches.slice(0, 5).forEach(node => {
+      html += `
+        <div class="search-suggestion-item" onclick="triggerDeviceHighlight('${node.id}')">
+          <span>${node.name} <span style="font-size:10px; color:#8b949e; margin-left:6px;">(${node.type === 'switch' ? node.ip : (node.type === 'unmanaged_switch' ? 'Port ' + node.parent_port : formatMacAddress(node.mac))})</span></span>
+          <span class="type">${node.type}</span>
+        </div>
+      `;
+    });
+    suggestionsPanel.innerHTML = html;
+    suggestionsPanel.style.display = 'block';
+  }
+
+  function triggerDeviceHighlight(nodeId) {
+    // Hide suggestions
+    document.getElementById('search-suggestions').style.display = 'none';
+    document.getElementById('search-input').value = '';
+
+    const node = rawNodes.find(n => n.id === nodeId);
+    if (!node) return;
+
+    // Center map view on this node
+    const containerWidth = canvasContainer.clientWidth;
+    const containerHeight = canvasContainer.clientHeight;
+    
+    panX = containerWidth / 2 - node.x;
+    panY = containerHeight / 2 - node.y;
+    zoomScale = 1.1; // zoom in slightly
+    updateViewportTransform();
+
+    // Select the node in details panel
+    selectNode(node);
+
+    // Trigger visual pulse ring
+    const pulseRing = document.getElementById(`highlight-${node.id}`);
+    if (pulseRing) {
+      pulseRing.style.display = 'block';
+      
+      if (activeHighlightTimer) clearTimeout(activeHighlightTimer);
+      activeHighlightTimer = setTimeout(() => {
+        pulseRing.style.display = 'none';
+      }, 5000);
+    }
+  }
+
+  async function resetLayout() {
+    if (!confirm("Are you sure you want to reset the map layout? This will clear all custom device coordinates and cannot be undone.")) {
+      return;
+    }
+    for (let key in positionCache) {
+      delete positionCache[key];
+    }
+    try {
+      await fetch('/api/config/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ map_positions: {} })
+      });
+    } catch (e) {
+      console.error("Failed to clear map coordinates on server:", e);
+    }
+    processAndRender();
+  }
+
+  async function updateClientHost(mac, host) {
+    try {
+      await fetch('/api/clients/update_host', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ mac: mac, host: host })
+      });
+      fetchTopology();
+    } catch (e) {
+      console.error("Failed to update client host:", e);
+    }
+  }
+
+  async function forgetClient(mac) {
+    if (!confirm("Are you sure you want to forget and remove this client device?")) {
+      return;
+    }
+    try {
+      await fetch('/api/clients/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ mac: mac })
+      });
+      toggleSidebar(false);
+      delete positionCache[mac];
+      fetchTopology();
+    } catch (e) {
+      console.error("Failed to forget client:", e);
+    }
+  }
+
+  // Dismiss suggestions when clicking outside search
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-box')) {
+      document.getElementById('search-suggestions').style.display = 'none';
+    }
+  });
+
+  // ==========================================
+  // INITIALIZE AND AUTO-POLL
+  // ==========================================
+  window.addEventListener('DOMContentLoaded', () => {
+    fetchTopology();
+    // Refresh topology telemetry every 10 seconds to fetch active speed counters
+    setInterval(fetchTopology, 10000);
+  });
+
+</script>
+</body>
+</html>

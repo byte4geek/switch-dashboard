@@ -10,17 +10,19 @@ from datetime import datetime
 
 BASE = os.path.dirname(__file__)
 DATA_DIR = os.environ.get("DASHBOARD_DATA_DIR", BASE)
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
+NOTES_PATH = os.path.join(DATA_DIR, "notes.json")
 LOG_FILE_PATH = os.path.join(DATA_DIR, "logs", "dashboard.log")
 
 
 def setup_logging(level_name=None):
     if not level_name:
         try:
-            if os.path.exists(SETTINGS_PATH):
-                with open(SETTINGS_PATH) as f:
-                    settings = json.load(f)
-                    level_name = settings.get("log_level", "INFO")
+            if os.path.exists(CONFIG_PATH):
+                with open(CONFIG_PATH) as f:
+                    cfg = json.load(f)
+                    level_name = cfg.get("settings", {}).get("log_level", "INFO")
             else:
                 level_name = "INFO"
         except Exception:
@@ -84,9 +86,7 @@ if DATA_DIR != BASE:
             except Exception as e:
                 logger.error(f"Failed to initialize default config.json: {e}")
 
-CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 COUNTERS_PATH = os.path.join(DATA_DIR, "counters.json")
-NOTES_PATH = os.path.join(DATA_DIR, "notes.json")
 HOURLY_PATH = os.path.join(DATA_DIR, "history_hourly.json")
 DAILY_PATH = os.path.join(DATA_DIR, "history_daily.json")
 BACKUP_DIR = os.path.join(DATA_DIR, "backup")
@@ -245,6 +245,7 @@ switch_configs = []
 cached_data = {}
 cached_speeds = {}
 cache_lock = threading.Lock()
+config_lock = threading.Lock()
 counters_lock = threading.Lock()
 history_lock = threading.Lock()
 _cache_thread = None
@@ -258,21 +259,34 @@ history_daily = {}  # {(ip, port): list of {ts, tx, rx}, maxlen=96}
 
 def load_config():
     global config, switch_configs
-    with open(CONFIG_PATH) as f:
-        config = json.load(f)
-    switch_configs = config.get("switches", [])
+    with config_lock:
+        if os.path.exists(CONFIG_PATH):
+            try:
+                with open(CONFIG_PATH) as f:
+                    config = json.load(f)
+            except Exception as e:
+                logger.error(f"Error loading config: {e}")
+        switch_configs = config.get("switches", [])
+
+
+def save_config():
+    with config_lock:
+        try:
+            with open(CONFIG_PATH, "w") as f:
+                json.dump(config, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving config: {e}")
 
 
 def load_notes():
-    if os.path.exists(NOTES_PATH):
-        with open(NOTES_PATH) as f:
-            return json.load(f)
-    return {}
+    load_config()
+    return config.get("notes", {})
 
 
 def save_notes(n):
-    with open(NOTES_PATH, "w") as f:
-        json.dump(n, f, indent=2)
+    load_config()
+    config["notes"] = n
+    save_config()
 
 
 def load_counters():
@@ -383,7 +397,16 @@ def update_cache():
 
         mac_refresh_multiplier = config.get("mac_refresh_multiplier", 5)
 
+        # Purge disabled or deleted switches from cache
+        enabled_ips = {sw["ip"] for sw in switch_configs if sw.get("enabled", True)}
+        with cache_lock:
+            for ip in list(cached_data.keys()):
+                if ip not in enabled_ips:
+                    del cached_data[ip]
+
         for sw in switch_configs:
+            if not sw.get("enabled", True):
+                continue
             ip = sw["ip"]
             
             from scraper import HCSwitchScraper
@@ -487,7 +510,6 @@ def update_cache():
                         if len(points_d) > 96:
                             points_d.pop(0)
                         should_save = True
-
             results[ip] = data
 
             # Per-switch speed overview (TX max per port)
@@ -498,6 +520,97 @@ def update_cache():
                     "speed_rx": p.get("speed_rx_bps", 0),
                 }
             speeds[ip] = sw_speeds
+
+        # Collect successfully scraped switches and active client MACs
+        scraped_switch_ips = set()
+        active_clients = {} # mac -> {ip, port, vlan}
+        
+        # Build maps of Switch MACs and Infrastructure MACs to distinguish clients
+        sw_macs = set()
+        for sw_conf in switch_configs:
+            sw_ip = sw_conf["ip"]
+            sw_data = results.get(sw_ip, {})
+            sw_mac = sw_data.get("mac", "").replace(":", "").replace("-", "").replace(" ", "").upper()
+            if sw_mac:
+                sw_macs.add(sw_mac)
+        
+        infra_macs = set()
+        for dev in config.get("infrastructure_devices", []):
+            infra_mac = dev.get("mac", "").replace(":", "").replace("-", "").replace(" ", "").upper()
+            if infra_mac:
+                infra_macs.add(infra_mac)
+
+        for sw_conf in switch_configs:
+            sw_ip = sw_conf["ip"]
+            sw_data = results.get(sw_ip)
+            if sw_data and "error" not in sw_data:
+                scraped_switch_ips.add(sw_ip)
+
+        # Map ports to learned MACs for all successfully scraped switches
+        sw_port_learned_macs = {}
+        for sw_ip in scraped_switch_ips:
+            sw_data = results[sw_ip]
+            sw_port_learned_macs[sw_ip] = {}
+            for entry in sw_data.get("mac_table", []):
+                port = str(entry.get("port", ""))
+                mac = entry.get("mac", "").replace(":", "").replace("-", "").replace(" ", "").upper()
+                if port and mac:
+                    if port not in sw_port_learned_macs[sw_ip]:
+                        sw_port_learned_macs[sw_ip][port] = []
+                    sw_port_learned_macs[sw_ip][port].append((mac, entry.get("vlan", "")))
+
+        # Find active clients
+        for sw_ip, ports in sw_port_learned_macs.items():
+            for port, mac_vlan_list in ports.items():
+                has_switch = any(mac in sw_macs for mac, vlan in mac_vlan_list)
+                if not has_switch:
+                    for mac, vlan in mac_vlan_list:
+                        if mac not in sw_macs and mac not in infra_macs:
+                            formatted_mac = ":".join(mac[i:i+2] for i in range(0, len(mac), 2)).upper()
+                            active_clients[mac] = {
+                                "mac": formatted_mac,
+                                "ip": sw_ip,
+                                "port": port,
+                                "vlan": str(vlan)
+                            }
+
+        # Update client database in config
+        try:
+            load_config()
+            db_clients = config.get("clients", {})
+            
+            # 1. Update/Add online clients
+            for mac, info in active_clients.items():
+                if mac in db_clients:
+                    db_clients[mac].update({
+                        "ip": info["ip"],
+                        "port": info["port"],
+                        "vlan": info["vlan"],
+                        "status": "online",
+                        "last_seen": now
+                    })
+                else:
+                    db_clients[mac] = {
+                        "mac": info["mac"],
+                        "host": "",
+                        "ip": info["ip"],
+                        "port": info["port"],
+                        "vlan": info["vlan"],
+                        "status": "online",
+                        "last_seen": now
+                    }
+            
+            # 2. Mark offline clients
+            for mac, client_entry in db_clients.items():
+                if mac not in active_clients:
+                    last_ip = client_entry.get("ip")
+                    if last_ip in scraped_switch_ips:
+                        client_entry["status"] = "offline"
+            
+            config["clients"] = db_clients
+            save_config()
+        except Exception as ex:
+            logger.error(f"Error updating clients in database: {ex}")
 
         save_counters(counters)
         if should_save:
@@ -517,6 +630,48 @@ def start_cache_thread():
     _cache_thread.start()
 
 
+def migrate_old_files():
+    migrated = False
+    global config
+    
+    notes_path = NOTES_PATH
+    settings_path = SETTINGS_PATH
+    
+    if os.path.exists(notes_path) or os.path.exists(settings_path):
+        logger.info("Migrating legacy settings/notes to config.json...")
+        load_config()
+        
+        if os.path.exists(notes_path):
+            try:
+                with open(notes_path, "r", encoding="utf-8") as f:
+                    legacy_notes = json.load(f)
+                if "notes" not in config:
+                    config["notes"] = {}
+                config["notes"].update(legacy_notes)
+                os.remove(notes_path)
+                logger.info("Migrated notes.json to config.json successfully and deleted it.")
+                migrated = True
+            except Exception as e:
+                logger.error(f"Error migrating notes.json: {e}")
+                
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, "r", encoding="utf-8") as f:
+                    legacy_settings = json.load(f)
+                if "settings" not in config:
+                    config["settings"] = {}
+                config["settings"].update(legacy_settings)
+                os.remove(settings_path)
+                logger.info("Migrated settings.json to config.json successfully and deleted it.")
+                migrated = True
+            except Exception as e:
+                logger.error(f"Error migrating settings.json: {e}")
+                
+        if migrated:
+            save_config()
+
+
+migrate_old_files()
 load_config()
 load_history()
 start_cache_thread()
@@ -537,11 +692,23 @@ def _format_bps(bps):
 
 @app.route("/")
 def dashboard():
+    load_config()
     return render_template("index.html",
                            title=config.get("title", "Switch Dashboard"),
                            refresh=config.get("refresh_interval", 30),
-                           enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes']),
+                           enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes']),
                            grid_columns=config.get("grid_columns", "auto"),
+                           column_widths=config.get("column_widths", {}),
+                           column_order=config.get("column_order", []),
+                           version=VERSION)
+
+
+@app.route("/map")
+def network_map():
+    load_config()
+    return render_template("map.html",
+                           title=config.get("title", "Switch Dashboard"),
+                           map_positions=config.get("map_positions", {}),
                            version=VERSION)
 
 
@@ -551,11 +718,20 @@ def api_switches():
     notes = load_notes()
     vendors = load_mac_vendors()
     ieee_vendors = get_ieee_vendors()
+    load_config()
+    active_ips = {sw["ip"] for sw in switch_configs if sw.get("enabled", True)}
     with cache_lock:
-        data = list(cached_data.values())
+        data = [cached_data[ip] for ip in active_ips if ip in cached_data]
+    db_clients = config.get("clients", {})
+    
     for sw in data:
         for entry in sw.get("mac_table", []):
             entry["vendor"] = lookup_vendor(entry.get("mac"), vendors, ieee_vendors)
+            norm_mac = entry.get("mac", "").replace(":", "").replace("-", "").replace(" ", "").upper()
+            if norm_mac in db_clients:
+                entry["host"] = db_clients[norm_mac].get("host", "")
+            else:
+                entry["host"] = ""
         for p in sw.get("ports", []):
             p["note"] = notes.get(f"{sw['ip']}:{p['port']}", "")
     return jsonify(data)
@@ -632,6 +808,418 @@ def get_switch_image(ip):
                     return send_from_directory(DEVICE_TEMPLATES_DIR, img_name)
     # Default fallback switch icon
     return send_from_directory(os.path.join(BASE, "static"), "switch_icon.png")
+
+
+@app.route("/api/topology")
+def api_topology():
+    def normalize_mac(mac):
+        if not mac:
+            return ""
+        return mac.replace(":", "").replace("-", "").replace(" ", "").upper()
+
+    notes = load_notes()
+    vendors = load_mac_vendors()
+    ieee_vendors = get_ieee_vendors()
+    
+    load_config()
+    unmanaged_switches = config.get("unmanaged_switches", [])
+    unmanaged_by_port = {}
+    for us in unmanaged_switches:
+        p_ip = us.get("parent_ip", "")
+        p_port = str(us.get("parent_port", ""))
+        if p_ip and p_port:
+            unmanaged_by_port[(p_ip, p_port)] = {
+                "id": f"unmanaged_{p_ip}_{p_port}",
+                "name": us.get("name", "Unmanaged Switch"),
+                "parent_ip": p_ip,
+                "parent_port": p_port
+            }
+    
+    # 1. Get all switches and their MACs
+    with cache_lock:
+        sw_data_copy = {ip: dict(data) for ip, data in cached_data.items()}
+        
+    switches_by_ip = {}
+    mac_to_switch_ip = {}
+    
+    for sw in switch_configs:
+        if not sw.get("enabled", True):
+            continue
+        ip = sw["ip"]
+        sw_data = sw_data_copy.get(ip, {})
+        sw_mac = normalize_mac(sw_data.get("mac", ""))
+        
+        switches_by_ip[ip] = {
+            "ip": ip,
+            "name": sw["name"],
+            "model": sw.get("model", ""),
+            "mac": sw_mac,
+            "ports": sw_data.get("ports", []),
+            "mac_table": sw_data.get("mac_table", []),
+            "status": "online" if "error" not in sw_data and sw_data else "offline"
+        }
+        if sw_mac:
+            mac_to_switch_ip[sw_mac] = ip
+            
+    # 2. Get infrastructure devices from config
+    infra_devices = config.get("infrastructure_devices", [])
+    infra_by_mac = {}
+    router_mac = None
+    for dev in infra_devices:
+        norm_mac = normalize_mac(dev["mac"])
+        if norm_mac:
+            dev_type = dev.get("type", "other")
+            infra_by_mac[norm_mac] = {
+                "mac": norm_mac,
+                "name": dev["name"],
+                "type": dev_type,
+                "vendor": lookup_vendor(norm_mac, vendors, ieee_vendors)
+            }
+            if dev_type == "router" and not router_mac:
+                router_mac = norm_mac
+            
+    # Helper to check if a MAC is a switch
+    def is_switch_mac(mac):
+        return mac in mac_to_switch_ip
+        
+    # Helper to check if a MAC is infra
+    def is_infra_mac(mac):
+        return mac in infra_by_mac
+        
+    # 3. For each switch, parse the MAC table to see what is on each port
+    # sw_port_macs[ip][port] = list of normalized MACs
+    sw_port_macs = {}
+    for ip, sw in switches_by_ip.items():
+        sw_port_macs[ip] = {}
+        for entry in sw["mac_table"]:
+            port = str(entry.get("port", ""))
+            mac = normalize_mac(entry.get("mac", ""))
+            if port and mac:
+                if port not in sw_port_macs[ip]:
+                    sw_port_macs[ip][port] = []
+                if mac not in sw_port_macs[ip][port]:
+                    sw_port_macs[ip][port].append(mac)
+                    
+    # 4. Find switch-to-switch direct links
+    # For each switch S and port P, find which switches are learned on it.
+    # Then filter out those that are "behind" others.
+    direct_switch_links = [] # list of tuples: (src_ip, port, dst_ip)
+    
+    for src_ip, ports in sw_port_macs.items():
+        src_mac = switches_by_ip[src_ip]["mac"]
+        for port, macs in ports.items():
+            # Find all switches learned on this port
+            switches_on_port = []
+            for mac in macs:
+                if is_switch_mac(mac):
+                    switches_on_port.append(mac_to_switch_ip[mac])
+            
+            if not switches_on_port:
+                continue
+                
+            direct_neighbors = []
+            for t_ip in switches_on_port:
+                t_mac = switches_by_ip[t_ip]["mac"]
+                is_behind_any = False
+                for u_ip in switches_on_port:
+                    if u_ip == t_ip:
+                        continue
+                    # Check if t is behind u relative to src_ip
+                    u_ports = sw_port_macs.get(u_ip, {})
+                    
+                    port_u_t = None
+                    port_u_s = None
+                    
+                    for u_p, u_macs in u_ports.items():
+                        if t_mac in u_macs:
+                            port_u_t = u_p
+                        if src_mac in u_macs:
+                            port_u_s = u_p
+                            
+                    # Fallback for port_u_s if src_mac is not in U's MAC table
+                    if not port_u_s and router_mac:
+                        for u_p, u_macs in u_ports.items():
+                            if router_mac in u_macs:
+                                port_u_s = u_p
+                                break
+                                
+                    if port_u_t and port_u_s and port_u_t != port_u_s:
+                        is_behind_any = True
+                        break
+                if not is_behind_any:
+                    direct_neighbors.append(t_ip)
+            
+            for dst_ip in direct_neighbors:
+                direct_switch_links.append((src_ip, port, dst_ip))
+
+    # Bidirectional links
+    processed_links = set()
+    links = []
+    
+    switch_link_ports = {}
+    for src_ip, port, dst_ip in direct_switch_links:
+        switch_link_ports[(src_ip, dst_ip)] = port
+        
+    for src_ip, port, dst_ip in direct_switch_links:
+        link_key = tuple(sorted([src_ip, dst_ip]))
+        if link_key in processed_links:
+            continue
+            
+        processed_links.add(link_key)
+        dst_port = switch_link_ports.get((dst_ip, src_ip), "unknown")
+        
+        speed = "Unknown"
+        tx_bps = 0
+        rx_bps = 0
+        src_ports_info = switches_by_ip[src_ip]["ports"]
+        for p_info in src_ports_info:
+            if str(p_info.get("port")) == str(port):
+                speed = p_info.get("speed", "Unknown")
+                tx_bps = p_info.get("speed_tx_bps", 0)
+                rx_bps = p_info.get("speed_rx_bps", 0)
+                break
+                
+        links.append({
+            "source": src_ip,
+            "target": dst_ip,
+            "source_port": f"Port {port}",
+            "target_port": f"Port {dst_port}" if dst_port != "unknown" else "unknown",
+            "speed": speed,
+            "tx_bps": tx_bps,
+            "rx_bps": rx_bps,
+            "type": "uplink"
+        })
+
+    # 5. Direct connections for infra devices
+    infra_connections = {} # mac -> (switch_ip, port)
+    for mac, dev in infra_by_mac.items():
+        candidates = []
+        for ip, ports in sw_port_macs.items():
+            for port, macs in ports.items():
+                if mac in macs:
+                    has_switch = any(is_switch_mac(m) for m in macs)
+                    if not has_switch:
+                        candidates.append((ip, port))
+        if candidates:
+            infra_connections[mac] = candidates[0]
+
+    # Add infra links
+    for mac, conn in infra_connections.items():
+        ip, port = conn
+        speed = "Unknown"
+        src_ports_info = switches_by_ip[ip]["ports"]
+        for p_info in src_ports_info:
+            if str(p_info.get("port")) == str(port):
+                speed = p_info.get("speed", "Unknown")
+                break
+                
+        if (ip, str(port)) in unmanaged_by_port:
+            source_id = unmanaged_by_port[(ip, str(port))]["id"]
+            source_port = ""
+        else:
+            source_id = ip
+            source_port = f"Port {port}"
+            
+        links.append({
+            "source": source_id,
+            "target": mac,
+            "source_port": source_port,
+            "target_port": "",
+            "speed": speed,
+            "type": "infra"
+        })
+
+    # 6. Direct connections for Client devices
+    clients = {}
+    client_links = []
+    
+    # Process all clients in config["clients"] + any newly active client MACs
+    load_config()
+    db_clients = config.get("clients", {})
+    all_known_client_macs = set(db_clients.keys())
+    
+    # Add active client MACs
+    active_macs_to_port = {} # normalized_mac -> (switch_ip, port)
+    for ip, ports in sw_port_macs.items():
+        for port, macs in ports.items():
+            for mac in macs:
+                if not is_switch_mac(mac) and not is_infra_mac(mac):
+                    has_switch = any(is_switch_mac(m) for m in macs)
+                    if not has_switch:
+                        active_macs_to_port[mac] = (ip, port)
+                        all_known_client_macs.add(mac)
+                        
+    for mac in all_known_client_macs:
+        if is_switch_mac(mac) or is_infra_mac(mac):
+            continue
+        is_active = mac in active_macs_to_port
+        client_entry = db_clients.get(mac, {})
+        host_name = client_entry.get("host", "")
+        
+        if is_active:
+            ip, port = active_macs_to_port[mac]
+            status = "online"
+        else:
+            ip = client_entry.get("ip", "")
+            port = client_entry.get("port", "")
+            status = "offline"
+            
+        if not ip or not port:
+            continue
+            
+        # Skip clients whose parent switch is currently disabled or deleted
+        all_switch_ips = {sw["ip"] for sw in switch_configs}
+        if ip in all_switch_ips and ip not in switches_by_ip:
+            continue
+            
+        attached_infra = None
+        for infra_mac, conn in infra_connections.items():
+            if conn == (ip, port):
+                attached_infra = infra_mac
+                break
+                
+        vendor = lookup_vendor(mac, vendors, ieee_vendors)
+        
+        formatted_mac = client_entry.get("mac", "")
+        if not formatted_mac:
+            formatted_mac = ":".join(mac[i:i+2] for i in range(0, len(mac), 2)).upper()
+            
+        display_name = host_name if host_name else (vendor if vendor else f"Client {formatted_mac[-8:]}")
+        
+        clients[mac] = {
+            "id": mac,
+            "name": display_name,
+            "mac": formatted_mac,
+            "host": host_name,
+            "type": "client",
+            "vendor": vendor,
+            "status": status,
+            "last_seen_ip": ip,
+            "last_seen_port": port,
+            "last_seen_time": client_entry.get("last_seen", 0)
+        }
+        
+        target_node = mac
+        if attached_infra:
+            source_node = attached_infra
+            source_port = ""
+        elif (ip, str(port)) in unmanaged_by_port:
+            source_node = unmanaged_by_port[(ip, str(port))]["id"]
+            source_port = ""
+        else:
+            source_node = ip
+            source_port = f"Port {port}"
+            
+        speed = ""
+        if not attached_infra and is_active:
+            src_ports_info = switches_by_ip[ip]["ports"]
+            for p_info in src_ports_info:
+                if str(p_info.get("port")) == str(port):
+                    speed = p_info.get("speed", "Unknown")
+                    break
+        elif not attached_infra and not is_active:
+            speed = "offline"
+            
+        client_links.append({
+            "source": source_node,
+            "target": target_node,
+            "source_port": source_port,
+            "target_port": "",
+            "speed": speed,
+            "type": "client"
+        })
+
+    # Assemble nodes
+    nodes = []
+    
+    # Add Switches
+    for ip, sw in switches_by_ip.items():
+        nodes.append({
+            "id": ip,
+            "name": sw["name"],
+            "type": "switch",
+            "ip": ip,
+            "mac": sw["mac"],
+            "model": sw["model"],
+            "status": sw["status"]
+        })
+        
+    # Add Infra devices
+    for mac, dev in infra_by_mac.items():
+        status = "online" if mac in infra_connections or dev["type"] == "router" else "offline"
+        nodes.append({
+            "id": mac,
+            "name": dev["name"],
+            "type": dev["type"],
+            "mac": mac,
+            "vendor": dev["vendor"],
+            "status": status
+        })
+        
+    # Add Unmanaged Switches and links
+    for us_info in unmanaged_by_port.values():
+        parent_sw_status = "online"
+        parent_sw = switches_by_ip.get(us_info["parent_ip"])
+        if parent_sw:
+            parent_sw_status = parent_sw["status"]
+            
+        nodes.append({
+            "id": us_info["id"],
+            "name": us_info["name"],
+            "type": "unmanaged_switch",
+            "status": parent_sw_status,
+            "parent_ip": us_info["parent_ip"],
+            "parent_port": us_info["parent_port"]
+        })
+        
+        p_ip = us_info["parent_ip"]
+        p_port = us_info["parent_port"]
+        speed = "Unknown"
+        if p_ip in switches_by_ip:
+            for p_info in switches_by_ip[p_ip]["ports"]:
+                if str(p_info.get("port")) == str(p_port):
+                    speed = p_info.get("speed", "Unknown")
+                    break
+                    
+        links.append({
+            "source": p_ip,
+            "target": us_info["id"],
+            "source_port": f"Port {p_port}",
+            "target_port": "",
+            "speed": speed,
+            "type": "infra"
+        })
+
+    # Add Clients
+    for mac, dev in clients.items():
+        nodes.append({
+            "id": mac,
+            "name": dev["name"],
+            "type": "client",
+            "mac": dev["mac"],
+            "vendor": dev["vendor"],
+            "status": dev["status"],
+            "host": dev["host"],
+            "last_seen_ip": dev["last_seen_ip"],
+            "last_seen_port": dev["last_seen_port"],
+            "last_seen_time": dev["last_seen_time"]
+        })
+
+    if router_mac and router_mac not in infra_connections and switch_configs:
+        first_ip = switch_configs[0]["ip"]
+        links.append({
+            "source": first_ip,
+            "target": router_mac,
+            "source_port": "Port 1",
+            "target_port": "",
+            "speed": "1G",
+            "type": "infra"
+        })
+
+    return jsonify({
+        "nodes": nodes,
+        "links": links + client_links
+    })
 
 
 @app.route("/api/speeds")
@@ -785,10 +1373,14 @@ def config_page():
         models = request.form.getlist("model[]")
         port_counts = request.form.getlist("port_count[]")
         keep = request.form.getlist("keep[]")
+        enabled_vals = request.form.getlist("switch_enabled[]")
 
         for i in range(len(ips)):
             if i >= len(keep) or keep[i] != "1":
                 continue
+            is_enabled = True
+            if i < len(enabled_vals):
+                is_enabled = (enabled_vals[i] == "1")
             new_switches.append({
                 "name": names[i] if i < len(names) else f"Switch {i+1}",
                 "ip": ips[i].strip(),
@@ -796,27 +1388,65 @@ def config_page():
                 "password": passwords[i].strip() if i < len(passwords) else "admin",
                 "model": models[i].strip() if i < len(models) else "",
                 "port_count": int(port_counts[i]) if i < len(port_counts) else 9,
+                "enabled": is_enabled
             })
+
+        # Parse infrastructure devices
+        infra_names = request.form.getlist("infra_name[]")
+        infra_macs = request.form.getlist("infra_mac[]")
+        infra_types = request.form.getlist("infra_type[]")
+        infra_keeps = request.form.getlist("infra_keep[]")
+
+        new_infra = []
+        for i in range(len(infra_macs)):
+            if i >= len(infra_keeps) or infra_keeps[i] != "1":
+                continue
+            mac = infra_macs[i].strip().replace("-", ":").upper()
+            if mac:
+                new_infra.append({
+                    "name": infra_names[i].strip() if i < len(infra_names) else f"Device {i+1}",
+                    "mac": mac,
+                    "type": infra_types[i].strip() if i < len(infra_types) else "other"
+                })
+
+        # Parse unmanaged switches
+        unmanaged_names = request.form.getlist("unmanaged_name[]")
+        unmanaged_parent_ips = request.form.getlist("unmanaged_parent_ip[]")
+        unmanaged_parent_ports = request.form.getlist("unmanaged_parent_port[]")
+        unmanaged_keeps = request.form.getlist("unmanaged_keep[]")
+
+        new_unmanaged = []
+        for i in range(len(unmanaged_names)):
+            if i >= len(unmanaged_keeps) or unmanaged_keeps[i] != "1":
+                continue
+            name = unmanaged_names[i].strip()
+            parent_ip = unmanaged_parent_ips[i].strip() if i < len(unmanaged_parent_ips) else ""
+            parent_port = unmanaged_parent_ports[i].strip() if i < len(unmanaged_parent_ports) else ""
+            if name and parent_ip and parent_port:
+                new_unmanaged.append({
+                    "name": name,
+                    "parent_ip": parent_ip,
+                    "parent_port": parent_port
+                })
 
         new_title = request.form.get("title", config.get("title", ""))
         new_refresh = int(request.form.get("refresh_interval", 30))
         new_mac_multiplier = int(request.form.get("mac_refresh_multiplier", 5))
         new_columns = request.form.getlist("columns[]")
         if not new_columns:
-            new_columns = ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes']
+            new_columns = ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes']
         new_grid_columns = request.form.get("grid_columns", "auto")
 
-        new_config = {
-            "title": new_title,
-            "refresh_interval": new_refresh,
-            "mac_refresh_multiplier": new_mac_multiplier,
-            "enabled_columns": new_columns,
-            "grid_columns": new_grid_columns,
-            "switches": new_switches,
-        }
-
-        with open(CONFIG_PATH, "w") as f:
-            json.dump(new_config, f, indent=2)
+        load_config()
+        config["title"] = new_title
+        config["refresh_interval"] = new_refresh
+        config["mac_refresh_multiplier"] = new_mac_multiplier
+        config["enabled_columns"] = new_columns
+        config["grid_columns"] = new_grid_columns
+        config["switches"] = new_switches
+        config["infrastructure_devices"] = new_infra
+        config["unmanaged_switches"] = new_unmanaged
+        save_config()
 
         global _stop_thread
         _stop_thread = True
@@ -828,6 +1458,8 @@ def config_page():
 
     return render_template("config.html", title=config.get("title", "Switch Dashboard"),
                            switches=switch_configs,
+                           infrastructure_devices=config.get("infrastructure_devices", []),
+                           unmanaged_switches=config.get("unmanaged_switches", []),
                            refresh=config.get("refresh_interval", 30),
                            mac_multiplier=config.get("mac_refresh_multiplier", 5),
                            enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes']),
@@ -837,23 +1469,160 @@ def config_page():
 
 @app.route("/api/settings", methods=["GET", "POST"])
 def api_settings():
+    load_config()
     if request.method == "POST":
         data = request.get_json(force=True, silent=True) or {}
-        existing = {}
-        if os.path.exists(SETTINGS_PATH):
-            try:
-                with open(SETTINGS_PATH) as f:
-                    existing = json.load(f)
-            except Exception:
-                pass
-        existing.update(data)
-        with open(SETTINGS_PATH, "w") as f:
-            json.dump(existing, f, indent=2)
+        if "settings" not in config:
+            config["settings"] = {}
+        config["settings"].update(data)
+        save_config()
         return jsonify({"status": "ok"})
-    if os.path.exists(SETTINGS_PATH):
-        with open(SETTINGS_PATH) as f:
-            return jsonify(json.load(f))
-    return jsonify({"font_size": "md"})
+    return jsonify(config.get("settings", {"font_size": "md"}))
+
+
+@app.route("/api/config/settings", methods=["GET", "POST"])
+def api_config_settings():
+    if request.method == "POST":
+        data = request.get_json(force=True, silent=True) or {}
+        load_config()
+        for key in ["column_widths", "column_order", "map_positions"]:
+            if key in data:
+                config[key] = data[key]
+        save_config()
+        return jsonify({"status": "ok"})
+    
+    # GET method
+    load_config()
+    return jsonify({
+        "column_widths": config.get("column_widths", {}),
+        "column_order": config.get("column_order", []),
+        "map_positions": config.get("map_positions", {})
+    })
+
+
+@app.route("/api/clients/update_host", methods=["POST"])
+def api_clients_update_host():
+    data = request.get_json(force=True, silent=True) or {}
+    mac = data.get("mac", "").replace(":", "").replace("-", "").replace(" ", "").upper()
+    host = data.get("host", "").strip()
+    if not mac:
+        return jsonify({"error": "Missing mac"}), 400
+        
+    load_config()
+    db_clients = config.get("clients", {})
+    
+    if mac in db_clients:
+        db_clients[mac]["host"] = host
+    else:
+        # Create a new entry if not exists
+        formatted_mac = ":".join(mac[i:i+2] for i in range(0, len(mac), 2)).upper()
+        db_clients[mac] = {
+            "mac": formatted_mac,
+            "host": host,
+            "ip": "",
+            "port": "",
+            "vlan": "",
+            "status": "offline",
+            "last_seen": 0
+        }
+        
+    config["clients"] = db_clients
+    save_config()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/clients/delete", methods=["POST"])
+def api_clients_delete():
+    data = request.get_json(force=True, silent=True) or {}
+    mac = data.get("mac", "").replace(":", "").replace("-", "").replace(" ", "").upper()
+    if not mac:
+        return jsonify({"error": "Missing mac"}), 400
+        
+    load_config()
+    db_clients = config.get("clients", {})
+    map_positions = config.get("map_positions", {})
+    
+    deleted = False
+    if mac in db_clients:
+        del db_clients[mac]
+        deleted = True
+    if mac in map_positions:
+        del map_positions[mac]
+        deleted = True
+        
+    if deleted:
+        config["clients"] = db_clients
+        config["map_positions"] = map_positions
+        save_config()
+        
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/clients/import_csv", methods=["POST"])
+def api_clients_import_csv():
+    if "file" not in request.files:
+        return jsonify({"error": "No file part in the request"}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No file selected for uploading"}), 400
+    if not file.filename.endswith(".csv"):
+        return jsonify({"error": "Only CSV files are allowed"}), 400
+
+    try:
+        content = file.read().decode("utf-8", errors="ignore")
+        import csv
+        import io
+        
+        reader = csv.reader(io.StringIO(content))
+        imported_count = 0
+        
+        load_config()
+        db_clients = config.get("clients", {})
+        
+        for row in reader:
+            if not row:
+                continue
+            # Trim all spaces
+            row = [cell.strip() for cell in row]
+            
+            # Skip header row if matches common terms
+            if len(row) >= 2:
+                c0_lower = row[0].lower()
+                c1_lower = row[1].lower()
+                if "host" in c0_lower or "name" in c0_lower or "mac" in c1_lower:
+                    continue
+                    
+                host_name = row[0]
+                mac_raw = row[1]
+                
+                # Normalize MAC
+                mac = mac_raw.replace(":", "").replace("-", "").replace(" ", "").upper()
+                if len(mac) == 12 and all(c in "0123456789ABCDEF" for c in mac):
+                    formatted_mac = ":".join(mac[i:i+2] for i in range(0, len(mac), 2)).upper()
+                    
+                    if mac in db_clients:
+                        db_clients[mac]["host"] = host_name
+                    else:
+                        db_clients[mac] = {
+                            "mac": formatted_mac,
+                            "host": host_name,
+                            "ip": "",
+                            "port": "",
+                            "vlan": "",
+                            "status": "offline",
+                            "last_seen": 0
+                        }
+                    imported_count += 1
+                    
+        if imported_count > 0:
+            config["clients"] = db_clients
+            save_config()
+            
+        return jsonify({"status": "ok", "imported": imported_count})
+    except Exception as e:
+        logger.error(f"Failed to import client CSV: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 
 @app.route("/api/vendors", methods=["GET", "POST"])
@@ -1105,16 +1874,11 @@ def api_logs_level():
         return jsonify({"error": "Invalid log level"}), 400
 
     try:
-        existing = {}
-        if os.path.exists(SETTINGS_PATH):
-            try:
-                with open(SETTINGS_PATH) as f:
-                    existing = json.load(f)
-            except Exception:
-                pass
-        existing["log_level"] = level_name
-        with open(SETTINGS_PATH, "w") as f:
-            json.dump(existing, f, indent=2)
+        load_config()
+        if "settings" not in config:
+            config["settings"] = {}
+        config["settings"]["log_level"] = level_name
+        save_config()
 
         setup_logging(level_name)
         logger.warning(f"Log level dynamically changed to {level_name} by user request.")

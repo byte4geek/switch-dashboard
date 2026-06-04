@@ -306,6 +306,22 @@
   .spinner { width: 32px; height: 32px; border: 3px solid rgba(240, 136, 62, 0.15); border-top-color: #f0883e; border-radius: 50%; animation: spin 1s infinite linear; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .reboot-status { position: absolute; inset: 0; background: rgba(22, 27, 34, 0.95); border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-size: 15px; font-weight: 500; }
+
+  /* Toggle Switches */
+  .switch-toggle {
+    position: relative; display: inline-block; width: 34px; height: 20px; min-width: 34px !important;
+  }
+  .switch-toggle input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #21262d; border: 1px solid #30363d; transition: .3s; border-radius: 20px;
+  }
+  .slider:before {
+    position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px;
+    background-color: #8b949e; transition: .3s; border-radius: 50%;
+  }
+  input:checked + .slider { background-color: rgba(56, 139, 253, 0.15); border-color: #388bfd; }
+  input:checked + .slider:before { transform: translateX(14px); background-color: #58a6ff; }
 </style>
 </head>
 <body>
@@ -368,6 +384,7 @@
               ('bytes', 'Traffic (bytes)'),
               ('raw_bytes', 'Traffic (RAW bytes)'),
               ('info', 'Info'),
+              ('host', 'Host'),
               ('notes', 'Notes')
             ] %}
             <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #b1bac4; font-weight: 500; cursor: pointer; user-select: none; padding: 6px 0;">
@@ -421,12 +438,74 @@
                 <label>Port Count</label>
                 <input type="number" name="port_count[]" value="{{ sw.get('port_count', 9) }}" min="1" max="52" style="max-width:80px">
               </div>
+              <div class="form-row" style="display: flex; align-items: center; gap: 8px;">
+                <input type="hidden" name="switch_enabled[]" id="switch_enabled_hidden_{{ loop.index0 }}" value="{% if sw.get('enabled', True) %}1{% else %}0{% endif %}">
+                <label class="switch-toggle" style="margin: 0;">
+                  <input type="checkbox" {% if sw.get('enabled', True) %}checked{% endif %} onchange="document.getElementById('switch_enabled_hidden_{{ loop.index0 }}').value = this.checked ? '1' : '0'">
+                  <span class="slider round"></span>
+                </label>
+                <span style="font-size: 13px; color: #e1e4e8;">Enabled (Query and display this switch)</span>
+              </div>
             </div>
           </div>
           {% endfor %}
         </div>
 
         <button type="button" class="add-btn" onclick="addSwitch()">+ Add Switch</button>
+      </div>
+
+      <div class="card">
+        <h2>
+          <span>🖥️ Infrastructure Devices</span>
+        </h2>
+        <span class="note" style="display:block; margin-bottom: 12px;">
+          Define key network infrastructure nodes (e.g., Router/WiFi, Access Points, Repeaters). These MAC addresses are used to correctly root the network map and group client devices.
+        </span>
+        <div id="infra-list" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+          {% for dev in infrastructure_devices %}
+          <div class="form-row infra-item" style="border: 1px solid rgba(48, 54, 61, 0.4); padding: 12px; border-radius: 8px; background: rgba(22, 27, 34, 0.4);" data-index="{{ loop.index0 }}">
+            <input type="hidden" name="infra_keep[]" value="1">
+            <div style="display: flex; gap: 10px; width: 100%; flex-wrap: wrap; align-items: center;">
+              <input type="text" name="infra_name[]" value="{{ dev.name }}" placeholder="Device Name (e.g. Router)" style="flex: 2; min-width: 150px;">
+              <input type="text" name="infra_mac[]" value="{{ dev.mac }}" placeholder="MAC Address (e.g. AA:BB:CC:...)" style="flex: 2; min-width: 150px;">
+              <select name="infra_type[]" style="background: #0d1117; border: 1px solid rgba(48, 54, 61, 0.8); border-radius: 6px; padding: 8px 12px; color: #e1e4e8; font-size: 13px; flex: 1.5; min-width: 110px; outline: none; cursor: pointer;">
+                <option value="router" {% if dev.type == 'router' %}selected{% endif %}>Router/Gateway</option>
+                <option value="repeater" {% if dev.type == 'repeater' %}selected{% endif %}>Repeater/AP</option>
+                <option value="other" {% if dev.type == 'other' %}selected{% endif %}>Other Infra</option>
+              </select>
+              <button type="button" class="inline-remove-btn" onclick="removeInfra(this)" style="margin-left: auto;">Delete</button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <button type="button" class="add-btn" onclick="addInfra()">+ Add Infrastructure Device</button>
+      </div>
+
+      <div class="card">
+        <h2>
+          <span>🔌 Unmanaged Switches</span>
+        </h2>
+        <span class="note" style="display:block; margin-bottom: 12px;">
+          Define unmanaged switches connected to a specific managed switch port. All devices learned on that parent port will be grouped under this unmanaged switch.
+        </span>
+        <div id="unmanaged-list" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+          {% for us in unmanaged_switches %}
+          <div class="form-row unmanaged-item" style="border: 1px solid rgba(48, 54, 61, 0.4); padding: 12px; border-radius: 8px; background: rgba(22, 27, 34, 0.4);" data-index="{{ loop.index0 }}">
+            <input type="hidden" name="unmanaged_keep[]" value="1">
+            <div style="display: flex; gap: 10px; width: 100%; flex-wrap: wrap; align-items: center;">
+              <input type="text" name="unmanaged_name[]" value="{{ us.name }}" placeholder="Switch Name (e.g. Desk Switch)" style="flex: 2; min-width: 150px;">
+              <select name="unmanaged_parent_ip[]" style="background: #0d1117; border: 1px solid rgba(48, 54, 61, 0.8); border-radius: 6px; padding: 8px 12px; color: #e1e4e8; font-size: 13px; flex: 2; min-width: 150px; outline: none; cursor: pointer;">
+                {% for sw in switches %}
+                <option value="{{ sw.ip }}" {% if us.parent_ip == sw.ip %}selected{% endif %}>{{ sw.name }} ({{ sw.ip }})</option>
+                {% endfor %}
+              </select>
+              <input type="number" name="unmanaged_parent_port[]" value="{{ us.parent_port }}" placeholder="Port (e.g. 2)" min="1" max="52" style="flex: 1; min-width: 80px;">
+              <button type="button" class="inline-remove-btn" onclick="removeUnmanaged(this)" style="margin-left: auto;">Delete</button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <button type="button" class="add-btn" onclick="addUnmanaged()">+ Add Unmanaged Switch</button>
       </div>
 
       <div class="card">
@@ -529,6 +608,35 @@
         Update IEEE OUI Database
       </button>
     </div>
+
+    <!-- NEW CARD: CSV Import -->
+    <div class="card" id="csv-import-card" style="margin-top: 20px;">
+      <h2>
+        <span>📋 Import Client Hostnames</span>
+        <span class="version-badge" style="background: rgba(88, 166, 255, 0.15); color: #58a6ff;">CSV Import</span>
+      </h2>
+      <div class="yaml-feedback" id="csv-feedback"></div>
+      
+      <span class="note" style="display:block; margin-bottom: 12px;">
+        Upload a CSV file containing client hostnames and MAC addresses to import them.
+        Format: <code>Host name,MAC Address,IP Address</code> (one per line, comma-separated, header line is optional).
+      </span>
+
+      <div style="display: flex; gap: 10px; align-items: center; margin-top: 15px;">
+        <input type="file" id="csv-file-input" accept=".csv" style="display: none;" onchange="updateCsvFileName(this)">
+        <button type="button" class="yaml-save-btn" onclick="document.getElementById('csv-file-input').click()" style="background: #21262d; border: 1px solid #30363d; margin: 0; width: auto;">
+          Choose CSV File...
+        </button>
+        <span id="csv-file-name" style="font-size: 13px; color: #8b949e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px;">No file chosen</span>
+      </div>
+
+      <button type="button" class="yaml-save-btn" id="csv-import-btn" onclick="importCsvFile()" style="background: #238636; box-shadow: 0 4px 12px rgba(35, 134, 54, 0.25); margin-top: 15px;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+          <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+        </svg>
+        Upload and Import
+      </button>
+    </div>
   </div>
 </div>
 
@@ -568,6 +676,65 @@
 </div>
 
 <script>
+// CSV Import Logic
+function updateCsvFileName(input) {
+  const fileNameSpan = document.getElementById('csv-file-name');
+  if (input.files && input.files.length > 0) {
+    fileNameSpan.textContent = input.files[0].name;
+  } else {
+    fileNameSpan.textContent = 'No file chosen';
+  }
+}
+
+async function importCsvFile() {
+  const fileInput = document.getElementById('csv-file-input');
+  const feedback = document.getElementById('csv-feedback');
+  const importBtn = document.getElementById('csv-import-btn');
+  
+  if (!fileInput.files || fileInput.files.length === 0) {
+    feedback.className = 'yaml-feedback error';
+    feedback.textContent = 'Error: Please choose a CSV file to upload.';
+    feedback.style.display = 'block';
+    return;
+  }
+  
+  const file = fileInput.files[0];
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  importBtn.disabled = true;
+  feedback.className = 'yaml-feedback';
+  feedback.textContent = 'Uploading and processing CSV...';
+  feedback.style.display = 'block';
+  feedback.style.color = '#58a6ff';
+  
+  try {
+    const response = await fetch('/api/clients/import_csv', {
+      method: 'POST',
+      body: formData
+    });
+    const result = await response.json();
+    
+    if (response.ok) {
+      feedback.className = 'yaml-feedback success';
+      feedback.textContent = `Success: Successfully imported ${result.imported} client hostnames.`;
+      feedback.style.color = '#3fb950';
+      fileInput.value = '';
+      document.getElementById('csv-file-name').textContent = 'No file chosen';
+    } else {
+      feedback.className = 'yaml-feedback error';
+      feedback.textContent = `Error: ${result.error || 'Failed to import CSV'}`;
+      feedback.style.color = '#f85149';
+    }
+  } catch (e) {
+    feedback.className = 'yaml-feedback error';
+    feedback.textContent = `Error: ${e.message}`;
+    feedback.style.color = '#f85149';
+  } finally {
+    importBtn.disabled = false;
+  }
+}
+
 // Switch Collapsing Logic
 function toggleSwitchExpand(header) {
   const content = header.nextElementSibling;
@@ -636,6 +803,14 @@ function addSwitch() {
         <label>Port Count</label>
         <input type="number" name="port_count[]" value="9" min="1" max="52" style="max-width:80px">
       </div>
+      <div class="form-row" style="display: flex; align-items: center; gap: 8px;">
+        <input type="hidden" name="switch_enabled[]" id="switch_enabled_hidden_${count}" value="1">
+        <label class="switch-toggle" style="margin: 0;">
+          <input type="checkbox" checked onchange="document.getElementById('switch_enabled_hidden_\${count}').value = this.checked ? '1' : '0'">
+          <span class="slider round"></span>
+        </label>
+        <span style="font-size: 13px; color: #e1e4e8;">Enabled (Query and display this switch)</span>
+      </div>
     </div>`;
   list.appendChild(div);
   renumber();
@@ -661,6 +836,86 @@ function renumber() {
       activeIndex++;
     }
   });
+}
+
+// Infrastructure Devices Management
+function addInfra() {
+  const list = document.getElementById('infra-list');
+  const count = list.querySelectorAll('.infra-item').length;
+  const div = document.createElement('div');
+  div.className = 'form-row infra-item';
+  div.style.cssText = 'border: 1px solid rgba(48, 54, 61, 0.4); padding: 12px; border-radius: 8px; background: rgba(22, 27, 34, 0.4);';
+  div.setAttribute('data-index', count);
+  div.innerHTML = `
+    <input type="hidden" name="infra_keep[]" value="1">
+    <div style="display: flex; gap: 10px; width: 100%; flex-wrap: wrap; align-items: center;">
+      <input type="text" name="infra_name[]" value="" placeholder="Device Name (e.g. Router)" style="flex: 2; min-width: 150px;">
+      <input type="text" name="infra_mac[]" value="" placeholder="MAC Address (e.g. AA:BB:CC:...)" style="flex: 2; min-width: 150px;">
+      <select name="infra_type[]" style="background: #0d1117; border: 1px solid rgba(48, 54, 61, 0.8); border-radius: 6px; padding: 8px 12px; color: #e1e4e8; font-size: 13px; flex: 1.5; min-width: 110px; outline: none; cursor: pointer;">
+        <option value="router">Router/Gateway</option>
+        <option value="repeater">Repeater/AP</option>
+        <option value="other">Other Infra</option>
+      </select>
+      <button type="button" class="inline-remove-btn" onclick="removeInfra(this)" style="margin-left: auto;">Delete</button>
+    </div>
+  `;
+  list.appendChild(div);
+}
+
+function removeInfra(btn) {
+  const item = btn.closest('.infra-item');
+  const hidden = item.querySelector('input[name="infra_keep[]"]');
+  hidden.value = '0';
+  item.style.display = 'none';
+}
+
+// Unmanaged Switches Management
+function addUnmanaged() {
+  const list = document.getElementById('unmanaged-list');
+  const count = list.querySelectorAll('.unmanaged-item').length;
+  
+  // Find current switches from the DOM
+  let optionsHtml = '';
+  document.querySelectorAll('.switch-group').forEach(g => {
+    const keepInput = g.querySelector('input[name="keep[]"]');
+    if (keepInput && keepInput.value === '1') {
+      const nameInput = g.querySelector('input[name="name[]"]');
+      const ipInput = g.querySelector('input[name="ip[]"]');
+      if (ipInput && ipInput.value) {
+        const name = nameInput ? nameInput.value.trim() : 'Switch';
+        const ip = ipInput.value.trim();
+        optionsHtml += `<option value="${ip}">${name} (${ip})</option>`;
+      }
+    }
+  });
+
+  if (!optionsHtml) {
+    optionsHtml = '<option value="" disabled>No managed switches configured</option>';
+  }
+
+  const div = document.createElement('div');
+  div.className = 'form-row unmanaged-item';
+  div.style.cssText = 'border: 1px solid rgba(48, 54, 61, 0.4); padding: 12px; border-radius: 8px; background: rgba(22, 27, 34, 0.4);';
+  div.setAttribute('data-index', count);
+  div.innerHTML = `
+    <input type="hidden" name="unmanaged_keep[]" value="1">
+    <div style="display: flex; gap: 10px; width: 100%; flex-wrap: wrap; align-items: center;">
+      <input type="text" name="unmanaged_name[]" value="" placeholder="Switch Name (e.g. Desk Switch)" style="flex: 2; min-width: 150px;">
+      <select name="unmanaged_parent_ip[]" style="background: #0d1117; border: 1px solid rgba(48, 54, 61, 0.8); border-radius: 6px; padding: 8px 12px; color: #e1e4e8; font-size: 13px; flex: 2; min-width: 150px; outline: none; cursor: pointer;">
+        ${optionsHtml}
+      </select>
+      <input type="number" name="unmanaged_parent_port[]" value="" placeholder="Port (e.g. 2)" min="1" max="52" style="flex: 1; min-width: 80px;">
+      <button type="button" class="inline-remove-btn" onclick="removeUnmanaged(this)" style="margin-left: auto;">Delete</button>
+    </div>
+  `;
+  list.appendChild(div);
+}
+
+function removeUnmanaged(btn) {
+  const item = btn.closest('.unmanaged-item');
+  const hidden = item.querySelector('input[name="unmanaged_keep[]"]');
+  hidden.value = '0';
+  item.style.display = 'none';
 }
 
 // ==========================================
