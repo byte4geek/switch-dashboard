@@ -761,6 +761,12 @@ const COLUMN_DEFS = {
     label: 'Port',
     thStyle: 'width:55px',
     tdClass: 'port-num',
+    tdTitleFn: (p) => {
+      let parts = [];
+      if (p.vm_name) parts.push(p.vm_name);
+      if (p.interface) parts.push(p.interface);
+      return parts.length > 0 ? parts.join(' / ') : '';
+    },
     render: (p, sw) => p.port
   },
   status: {
@@ -1379,7 +1385,16 @@ function renderSwitch(sw) {
   const portIndicators = (sw.ports || []).map(p => {
     const isSfp = (p.port === '9' || (p.speed || '').toLowerCase().includes('10g') || p.port === 'SFP' || p.port === '9/SFP');
     const color = getPortColor(p);
-    const titleText = `Port ${p.port}: ${p.status.toUpperCase()} ${p.speed || ''} (${p.duplex || ''}) - Click to view graph`;
+    
+    let tooltipParts = [];
+    if (p.vm_name) {
+      tooltipParts.push(p.vm_name);
+    }
+    if (p.interface && p.interface !== p.port) {
+      tooltipParts.push(p.interface);
+    }
+    const details = tooltipParts.length > 0 ? ` (${tooltipParts.join(' / ')})` : '';
+    const titleText = `Port ${p.port}${details}: ${p.status.toUpperCase()} ${p.speed || ''} (${p.duplex || ''}) - Click to view graph`;
     const path = isSfp 
       ? 'M 4,5 h 3 v 3 h 10 v -3 h 3 v 14 h -16 z' // SFP (Fiber)
       : 'M 4,8 h 5 v -3 h 6 v 3 h 5 v 11 h -16 z'; // RJ45 (Copper)

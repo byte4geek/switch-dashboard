@@ -577,6 +577,35 @@
       </button>
     </div>
 
+    <!-- NEW CARD: Custom Client Device Types Editor -->
+    <div class="card" id="device-types-editor-card" style="margin-top: 20px;">
+      <h2>
+        <span>📱 Custom Client Device Types</span>
+        <span class="version-badge" style="background: rgba(168,85,247,0.15); color: #a855f7;">device_types.yaml</span>
+      </h2>
+      <div class="yaml-feedback" id="device-types-feedback"></div>
+      
+      <span class="note" style="display:block; margin-bottom: 12px;">
+        Edit custom client device types and their Material Design SVG path icons.
+        Format: Key mapping, with <code>label</code> and <code>path</code> (SVG path only).
+      </span>
+
+      <div class="editor-wrapper">
+        <textarea class="editor-textarea" id="device-types-textarea" spellcheck="false" placeholder="# Custom device types YAML..." oninput="onDeviceTypesChange()" style="height: 300px; font-family: monospace;"></textarea>
+        <div class="editor-status-bar">
+          <span id="device-types-char-count">0 characters</span>
+          <span id="device-types-syntax-status">Ready</span>
+        </div>
+      </div>
+      
+      <button type="button" class="yaml-save-btn" id="device-types-save-btn" onclick="saveDeviceTypes()" style="background: #a855f7; box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+          <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+        </svg>
+        Save Device Types
+      </button>
+    </div>
+
     <!-- NEW CARD: IEEE OUI Update -->
     <div class="card" id="oui-update-card" style="margin-top: 20px;">
       <h2>
@@ -1420,7 +1449,92 @@ window.addEventListener('DOMContentLoaded', () => {
   
   loadTemplateList();
   loadVendorList();
+  loadDeviceTypes();
 });
+
+// CUSTOM DEVICE TYPES CONFIG INTERACTIVE FUNCTIONS
+// ==========================================
+function loadDeviceTypes() {
+  const textarea = document.getElementById('device-types-textarea');
+  const saveBtn = document.getElementById('device-types-save-btn');
+  textarea.disabled = true;
+  saveBtn.disabled = true;
+  textarea.value = 'Loading custom device types...';
+  
+  fetch('/api/device_types/raw')
+    .then(res => {
+      if (!res.ok) {
+        return res.json().then(data => { throw new Error(data.error || 'Server error'); });
+      }
+      return res.json();
+    })
+    .then(data => {
+      textarea.value = data.content || '';
+      textarea.disabled = false;
+      saveBtn.disabled = false;
+      onDeviceTypesChange();
+    })
+    .catch(err => {
+      const feedback = document.getElementById('device-types-feedback');
+      feedback.className = 'yaml-feedback error';
+      feedback.textContent = 'Failed to load device types: ' + err.message;
+      textarea.value = '# Error loading device types configuration.';
+    });
+}
+
+function onDeviceTypesChange() {
+  const textarea = document.getElementById('device-types-textarea');
+  const charCount = document.getElementById('device-types-char-count');
+  charCount.textContent = textarea.value.length + ' characters';
+}
+
+function saveDeviceTypes() {
+  const textarea = document.getElementById('device-types-textarea');
+  const content = textarea.value;
+  const saveBtn = document.getElementById('device-types-save-btn');
+  const feedback = document.getElementById('device-types-feedback');
+  
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+  feedback.className = 'yaml-feedback';
+  feedback.textContent = '';
+  
+  fetch('/api/device_types/raw', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ content: content })
+  })
+  .then(res => {
+    if (!res.ok) {
+      return res.json().then(data => { throw new Error(data.error || 'Syntax or Save error'); });
+    }
+    return res.json();
+  })
+  .then(data => {
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+      </svg> Save Device Types`;
+    feedback.className = 'yaml-feedback success';
+    feedback.textContent = 'Configuration successfully saved!';
+    setTimeout(() => {
+      feedback.textContent = '';
+      feedback.className = 'yaml-feedback';
+    }, 4000);
+  })
+  .catch(err => {
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="flex-shrink:0;">
+        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+      </svg> Save Device Types`;
+    feedback.className = 'yaml-feedback error';
+    feedback.textContent = 'Save failed: ' + err.message;
+  });
+}
 </script>
 </body>
 </html>

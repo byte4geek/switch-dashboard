@@ -38,6 +38,8 @@ class HCSwitchScraper:
         self._opener = None
 
     def _open_request_with_retry(self, req, timeout=45, max_retries=5, retry_delay=3):
+        # Enforce spacing between sequential uIP HTTP requests
+        time.sleep(0.5)
         for attempt in range(1, max_retries + 1):
             try:
                 if self._opener:
@@ -49,10 +51,144 @@ class HCSwitchScraper:
             except Exception as e:
                 url_str = req if isinstance(req, str) else (req.full_url if hasattr(req, 'full_url') else str(req))
                 logger.warning(f"[_open_request_with_retry] Attempt {attempt}/{max_retries} failed for {url_str}: {e}")
+                
+                # Check if this is a POST request and we want to fall back to raw socket
+                if isinstance(req, urllib.request.Request) and req.data is not None:
+                    try:
+                        logger.warning(f"[_open_request_with_retry] urllib failed for POST to {url_str}. Attempting raw socket fallback...")
+                        return self._raw_socket_fallback(req, timeout=15)
+                    except Exception as ex:
+                        logger.error(f"[_open_request_with_retry] Raw socket fallback also failed: {ex}")
+                
                 if attempt < max_retries:
                     time.sleep(retry_delay)
                 else:
                     raise e
+
+    def _raw_socket_fallback(self, req, timeout=15):
+        import socket
+        import urllib.parse
+        
+        url_parsed = urllib.parse.urlparse(req.full_url)
+        path = url_parsed.path
+        if url_parsed.query:
+            path += '?' + url_parsed.query
+            
+        method = req.get_method()
+        
+        # Ensure cookies are added to headers if cj is present
+        if self._cj:
+            self._cj.add_cookie_header(req)
+            
+        headers_dict = {}
+        for name, val in req.header_items():
+            headers_dict[name.title()] = val
+        for name, val in req.unredirected_hdrs.items():
+            headers_dict[name.title()] = val
+            
+        if req.data and 'Content-Length' not in headers_dict:
+            headers_dict['Content-Length'] = str(len(req.data))
+            
+        if 'User-Agent' not in headers_dict:
+            headers_dict['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            
+        headers_dict['Connection'] = 'close'
+        
+        req_lines = [f'{method} {path} HTTP/1.1']
+        if 'Host' not in headers_dict:
+            headers_dict['Host'] = url_parsed.netloc
+            
+        for name, val in headers_dict.items():
+            req_lines.append(f'{name}: {val}')
+            
+        req_bytes = '\r\n'.join(req_lines).encode('utf-8') + b'\r\n\r\n'
+        if req.data:
+            req_bytes += req.data
+            
+        host_port = url_parsed.netloc.split(':')
+        host = host_port[0]
+        port = int(host_port[1]) if len(host_port) > 1 else 80
+        
+        logger.info(f"[_raw_socket_fallback] Sending raw socket request to {host}:{port} ({method} {path})...")
+        
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect((host, port))
+        s.sendall(req_bytes)
+        
+        response_parts = []
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            response_parts.append(chunk)
+        s.close()
+        
+        resp_bytes = b''.join(response_parts)
+        
+        # Split headers and body
+        parts = resp_bytes.split(b'\r\n\r\n', 1)
+        header_part = parts[0]
+        body_part = parts[1] if len(parts) > 1 else b''
+        
+        # Parse status line and redirect headers
+        header_lines = header_part.decode('latin-1').splitlines()
+        status_line = header_lines[0] if header_lines else ""
+        
+        logger.info(f"[_raw_socket_fallback] Raw socket request completed. Status: {status_line}")
+        
+        resp_headers = {}
+        for line in header_lines[1:]:
+            line = line.strip()
+            if not line:
+                continue
+            h_parts = line.split(':', 1)
+            if len(h_parts) == 2:
+                resp_headers[h_parts[0].strip().lower()] = h_parts[1].strip()
+                
+        # Handle Cookies if Set-Cookie is in response headers
+        if self._cj:
+            for line in header_lines[1:]:
+                if line.lower().startswith('set-cookie:'):
+                    cookie_content = line[11:].strip()
+                    c_parts = cookie_content.split(';')
+                    if c_parts:
+                        name_val = c_parts[0].split('=', 1)
+                        if len(name_val) == 2:
+                            c_name = name_val[0].strip()
+                            c_val = name_val[1].strip()
+                            new_cookie = Cookie(
+                                version=0, name=c_name, value=c_val,
+                                port=None, port_specified=False,
+                                domain=host, domain_specified=True,
+                                domain_initial_dot=False,
+                                path="/", path_specified=True,
+                                secure=False, expires=None, discard=True,
+                                comment=None, comment_url=None, rest={}
+                            )
+                            self._cj.set_cookie(new_cookie)
+                            logger.info(f"[_raw_socket_fallback] Extracted and stored cookie: {c_name}={c_val}")
+                            
+        # Redirect URL logic (if redirect found, e.g. Location header)
+        final_url = req.full_url
+        if 'location' in resp_headers:
+            loc = resp_headers['location']
+            if loc.startswith('http://') or loc.startswith('https://'):
+                final_url = loc
+            else:
+                final_url = f"http://{host}:{port}{loc}"
+                
+        class RawSocketResponse:
+            def __init__(self, body, url, headers):
+                self.body = body
+                self.url = url
+                self.headers = headers
+            def read(self):
+                return self.body
+            def geturl(self):
+                return self.url
+                
+        return RawSocketResponse(body_part, final_url, resp_headers)
 
     def _load_template(self):
         # Look for templates in DASHBOARD_DATA_DIR or local directory
@@ -1658,7 +1794,349 @@ class HCSwitchScraper:
                 for i in range(1, self.port_count + 1)]
 
 
+class OVSScraper:
+    def __init__(self, config):
+        self.name = config["name"]
+        self.ip = config["ip"]
+        self.username = config.get("username", "ovs-monitor")
+        self.password = config.get("password", "")
+        self.bridge = config.get("bridge", "vmbr0")
+        self.port_count = config.get("port_count", 24)
+        self.model = config.get("model", "openvswitch")
+        self._cached_data = None
+        self._cache_time = 0
+
+    def _get_data(self):
+        import time
+        if self._cached_data and (time.time() - self._cache_time < 5.0):
+            return self._cached_data
+        data = self._scrape_ovs()
+        self._cached_data = data
+        self._cache_time = time.time()
+        return data
+
+    def scrape(self):
+        return self._get_data()
+
+    def scrape_mac_table(self):
+        data = self._get_data()
+        return data.get("mac_table", [])
+
+    def scrape_dhcp_snooping(self):
+        return {"enabled": False, "ports": {}}
+
+    def scrape_igmp(self):
+        return {"enabled": False, "entries": []}
+
+    def scrape_jumbo_frame(self):
+        return {"enabled": False, "size": "Disabled"}
+
+    def scrape_transceiver(self):
+        return None
+
+    def download_backup(self):
+        return b""
+
+    def reboot_switch(self):
+        return "Not supported for virtual switches."
+
+    def _scrape_ovs(self):
+        import paramiko
+        import json
+        import time
+
+        remote_script = """
+import subprocess
+import json
+import re
+import os
+
+def run_cmd(cmd):
+    try:
+        res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        return res.stdout, res.stderr
+    except Exception as e:
+        return "", str(e)
+
+data = {}
+
+# 1. OVS VSCTL show
+vsctl_out, _ = run_cmd("sudo ovs-vsctl show")
+ovs_ver = re.search(r"ovs_version:\\s*\\\"([^\\\"]+)\\\"", vsctl_out)
+data["ovs_version"] = ovs_ver.group(1) if ovs_ver else "3.5.0"
+
+# 2. Find bridges
+bridges = re.findall(r"Bridge\\s+(\\S+)", vsctl_out)
+data["bridges"] = bridges
+bridge = "{bridge}"
+
+# 3. OVS OFCTL show <bridge>
+ofctl_out, _ = run_cmd("sudo ovs-ofctl show " + bridge)
+data["ofctl"] = ofctl_out
+
+# 4. OVS APPCTL fdb/show <bridge>
+fdb_out, _ = run_cmd("sudo ovs-appctl fdb/show " + bridge)
+data["fdb"] = fdb_out
+
+# 5. VMID to name mappings
+vm_names = {}
+pct_out, _ = run_cmd("sudo pct list")
+for line in pct_out.splitlines():
+    line = line.strip()
+    if not line or line.startswith("VMID"):
+        continue
+    parts = line.split()
+    if len(parts) >= 3:
+        vm_names[parts[0]] = "LXC " + parts[0] + " (" + parts[-1] + ")"
+
+qm_out, _ = run_cmd("sudo qm list")
+for line in qm_out.splitlines():
+    line = line.strip()
+    if not line or "VMID" in line:
+        continue
+    parts = line.split()
+    if len(parts) >= 3:
+        vm_names[parts[0]] = "VM " + parts[0] + " (" + parts[1] + ")"
+
+data["vm_names"] = vm_names
+
+# Get uptime
+uptime_str = "unknown"
+try:
+    with open("/proc/uptime") as f:
+        uptime_seconds = float(f.read().split()[0])
+    days = int(uptime_seconds // 86400)
+    hours = int((uptime_seconds % 86400) // 3600)
+    minutes = int((uptime_seconds % 3600) // 60)
+    if days > 0:
+        uptime_str = str(days) + "d " + str(hours) + "h " + str(minutes) + "m"
+    elif hours > 0:
+        uptime_str = str(hours) + "h " + str(minutes) + "m"
+    else:
+        uptime_str = str(minutes) + "m"
+except:
+    pass
+data["uptime"] = uptime_str
+
+# bridge mac
+bridge_mac = ""
+try:
+    with open("/sys/class/net/" + bridge + "/address") as f:
+        bridge_mac = f.read().strip().upper()
+except:
+    pass
+data["mac"] = bridge_mac
+
+# 6. Read interface stats
+interfaces = {}
+for dev in os.listdir("/sys/class/net/"):
+    stat_path = "/sys/class/net/" + dev + "/statistics"
+    if os.path.exists(stat_path):
+        stats = {}
+        for sfile in ["tx_bytes", "rx_bytes", "tx_packets", "rx_packets"]:
+            try:
+                with open(stat_path + "/" + sfile) as f:
+                    stats[sfile] = int(f.read().strip())
+            except:
+                stats[sfile] = 0
+                
+        speed = 0
+        try:
+            with open("/sys/class/net/" + dev + "/speed") as f:
+                speed = int(f.read().strip())
+        except:
+            pass
+            
+        operstate = "unknown"
+        try:
+            with open("/sys/class/net/" + dev + "/operstate") as f:
+                operstate = f.read().strip()
+        except:
+            pass
+            
+        interfaces[dev] = {
+            "speed": speed,
+            "operstate": operstate,
+            "stats": stats
+        }
+data["interfaces"] = interfaces
+
+print(json.dumps(data))
+""".replace("{bridge}", self.bridge)
+
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            client.connect(self.ip, username=self.username, password=self.password, timeout=15)
+            stdin, stdout, stderr = client.exec_command("python3")
+            stdin.write(remote_script)
+            stdin.close()
+
+            out = stdout.read().decode('utf-8')
+            err = stderr.read().decode('utf-8')
+            client.close()
+
+            if err.strip() and not out.strip():
+                logger.error(f"[OVSScraper] Remote python error on {self.ip}: {err}")
+                raise Exception(err)
+
+            res_data = json.loads(out.strip())
+            return self._parse_scraped_data(res_data)
+        except Exception as e:
+            logger.error(f"[OVSScraper] Failed to scrape OVS switch {self.name} ({self.ip}): {e}")
+            return self._fallback()
+
+    def _parse_scraped_data(self, data):
+        import re
+        import time
+
+        vm_names = data.get("vm_names", {})
+        ofctl = data.get("ofctl", "")
+        fdb = data.get("fdb", "")
+        interfaces = data.get("interfaces", {})
+
+        port_to_iface = {}
+        for line in ofctl.splitlines():
+            line = line.strip()
+            m = re.match(r"(\d+|LOCAL)\((\S+)\):", line)
+            if m:
+                port_num = m.group(1)
+                iface_name = m.group(2)
+                port_to_iface[port_num] = iface_name
+
+        ports = []
+        port_to_key = {}
+        vm_mac_map = {}
+
+        for port_num, iface in port_to_iface.items():
+            m = re.search(r"(?:veth|tap|fwln)(\d+)", iface)
+            is_vm = False
+            vm_name = None
+            friendly_name = iface
+
+            if m:
+                vmid = m.group(1)
+                is_vm = True
+                if vmid in vm_names:
+                    full_name = vm_names[vmid]
+                    short_m = re.search(r"\(([^)]+)\)", full_name)
+                    short_name = short_m.group(1) if short_m else vmid
+                    friendly_name = f"LXC {vmid} ({short_name})" if "LXC" in full_name else f"VM {vmid} ({short_name})"
+                    vm_name = short_name
+                else:
+                    friendly_name = f"VM/LXC {vmid}"
+                    vm_name = f"VM {vmid}"
+            else:
+                vm_name = None
+
+            port_to_key[port_num] = (port_num, friendly_name if is_vm else None)
+
+            istat = interfaces.get(iface, {})
+            speed_val = istat.get("speed", 0)
+            operstate = istat.get("operstate", "up")
+
+            if speed_val >= 10000:
+                speed_str = "10G"
+            elif speed_val >= 1000:
+                if speed_val % 1000 == 0:
+                    speed_str = f"{int(speed_val/1000)}G"
+                else:
+                    speed_str = f"{speed_val/1000:.1f}".rstrip("0").rstrip(".") + "G"
+            elif speed_val > 0:
+                speed_str = f"{speed_val}M"
+            else:
+                if iface.startswith("veth") or iface.startswith("tap") or iface.startswith("fwln"):
+                    speed_str = "10G"
+                else:
+                    speed_str = "1G"
+
+            status = "up" if operstate.lower() in ["up", "unknown"] else "down"
+            stats = istat.get("stats", {})
+
+            ports.append({
+                "port": port_num,
+                "status": status,
+                "link": "Link Up" if status == "up" else "Link Down",
+                "speed": speed_str,
+                "duplex": "Full" if status == "up" else "",
+                "flow_control": "",
+                "tx_packets": stats.get("tx_packets", 0),
+                "rx_packets": stats.get("rx_packets", 0),
+                "tx_bytes": stats.get("tx_bytes", 0),
+                "rx_bytes": stats.get("rx_bytes", 0),
+                "vm_name": vm_name,
+                "interface": iface
+            })
+
+        # Parse MAC table
+        mac_table = []
+        for line in fdb.splitlines():
+            line = line.strip()
+            if not line or "VLAN" in line:
+                continue
+            parts = line.split()
+            if len(parts) >= 3:
+                port_num = parts[0]
+                vlan = parts[1]
+                mac = parts[2].upper()
+
+                p_key, vm_label = port_to_key.get(port_num, (port_num, None))
+
+                mac_table.append({
+                    "mac": mac,
+                    "type": "dynamic" if port_num != "LOCAL" else "static",
+                    "port": p_key,
+                    "vlan": vlan
+                })
+
+                if vm_label:
+                    clean_mac = mac.replace(":", "").upper()
+                    vm_mac_map[clean_mac] = vm_label
+
+        return {
+            "name": self.name,
+            "ip": self.ip,
+            "model": "Open vSwitch",
+            "mac": data.get("mac", ""),
+            "uptime": data.get("uptime", ""),
+            "firmware": data.get("ovs_version", ""),
+            "ports": ports,
+            "mac_table": mac_table,
+            "vm_mac_map": vm_mac_map,
+            "dhcp_snooping": {"enabled": False, "ports": {}},
+            "igmp": {"enabled": False, "entries": []},
+            "jumbo_frame": {"enabled": False, "size": "Disabled"},
+            "timestamp": time.time(),
+        }
+
+    def _fallback(self):
+        import time
+        return {
+            "name": self.name,
+            "ip": self.ip,
+            "model": "Open vSwitch",
+            "mac": "",
+            "uptime": "",
+            "firmware": "",
+            "ports": [{"port": str(i), "status": "unknown", "speed": "",
+                       "link": "Unknown", "duplex": "", "flow_control": "",
+                       "tx_packets": 0, "rx_packets": 0,
+                       "tx_bytes": 0, "rx_bytes": 0}
+                      for i in range(1, self.port_count + 1)],
+            "mac_table": [],
+            "vm_mac_map": {},
+            "dhcp_snooping": {"enabled": False, "ports": {}},
+            "igmp": {"enabled": False, "entries": []},
+            "jumbo_frame": {"enabled": False, "size": "Disabled"},
+            "timestamp": time.time(),
+        }
+
+
 def scrape_switch(config):
-    scraper = HCSwitchScraper(config)
+    if config.get("model", "").lower() in ["openvswitch", "ovs"]:
+        scraper = OVSScraper(config)
+    else:
+        scraper = HCSwitchScraper(config)
     return scraper.scrape()
+
 

@@ -1,0 +1,115 @@
+# Device Types Configuration
+# Define custom client device types using Iconify identifiers (e.g., mdi:laptop).
+# Available icon sets include: mdi, simple-icons, fa6-solid, etc.
+# Format:
+# type_key:
+#   label: "Display Name"
+#   icon: "prefix:icon_name"
+
+dehumidifier:
+  label: Dehumidifier
+  path: "M 4.6 2 h 14.8 a 0.6 0.6 0 0 1 0.6 0.6 v 9.6 a 0.6 0.6 0 0 1 -0.6 0.6 H 4.6 a 0.6 0.6 0 0 1 -0.6 -0.6 V 2.6 a 0.6 0.6 0 0 1 0.6 -0.6 z M 5.8 3.2 a 0.2 0.2 0 0 0 -0.2 0.2 v 0.8 a 0.2 0.2 0 0 0 0.2 0.2 h 12.4 a 0.2 0.2 0 0 0 0.2 -0.2 v -0.8 a 0.2 0.2 0 0 0 -0.2 -0.2 z M 5.8 5.6 a 0.2 0.2 0 0 0 -0.2 0.2 v 0.8 a 0.2 0.2 0 0 0 0.2 0.2 h 12.4 a 0.2 0.2 0 0 0 0.2 -0.2 v -0.8 a 0.2 0.2 0 0 0 -0.2 -0.2 z M 5.8 8 a 0.2 0.2 0 0 0 -0.2 0.2 v 0.8 a 0.2 0.2 0 0 0 0.2 0.2 h 12.4 a 0.2 0.2 0 0 0 0.2 -0.2 v -0.8 a 0.2 0.2 0 0 0 -0.2 -0.2 z M 5.8 10.4 a 0.2 0.2 0 0 0 -0.2 0.2 v 0.8 a 0.2 0.2 0 0 0 0.2 0.2 h 12.4 a 0.2 0.2 0 0 0 0.2 -0.2 v -0.8 a 0.2 0.2 0 0 0 -0.2 -0.2 z M 4.6 13.4 h 14.8 a 0.6 0.6 0 0 1 0.6 0.6 v 6.4 a 0.6 0.6 0 0 1 -0.6 0.6 H 4.6 a 0.6 0.6 0 0 1 -0.6 -0.6 v -6.4 a 0.6 0.6 0 0 1 0.6 -0.6 z M 17.2 14.6 a 0.6 0.6 0 0 0 -0.6 0.6 v 4 a 0.6 0.6 0 0 0 0.6 0.6 a 0.6 0.6 0 0 0 0.6 -0.6 v -4 a 0.6 0.6 0 0 0 -0.6 -0.6 z M 13.4 17.2 A 3 3 0 1 0 7.4 17.2 A 3 3 0 1 0 13.4 17.2 Z M 10.4 15.2 C 10.4 15.2 12 16.8 12 18 A 1.6 1.6 0 0 1 8.8 18 C 8.8 16.8 10.4 15.2 10.4 15.2 Z M 8.3 18.7 L 8.9 19.3 L 12.5 15.7 L 11.9 15.1 Z M 6.6 21 h 1.6 a 0.2 0.2 0 0 1 0.2 0.2 v 0.8 a 0.2 0.2 0 0 1 -0.2 0.2 H 6.6 a 0.2 0.2 0 0 1 -0.2 -0.2 v -0.8 a 0.2 0.2 0 0 1 0.2 -0.2 z M 15.8 21 h 1.6 a 0.2 0.2 0 0 1 0.2 0.2 v 0.8 a 0.2 0.2 0 0 1 -0.2 0.2 H 15.8 a 0.2 0.2 0 0 1 -0.2 -0.2 v -0.8 a 0.2 0.2 0 0 1 0.2 -0.2 z"
+
+googlehomemini:
+  label: Google Home mini
+  path: "M12 2A10 10 0 1 1 12 22A10 10 0 1 1 12 2ZM12 4A8 8 0 1 0 12 20A8 8 0 1 0 12 4ZM7.2 10.8A1.2 1.2 0 1 1 7.2 13.2A1.2 1.2 0 1 1 7.2 10.8ZM10.4 10.8A1.2 1.2 0 1 1 10.4 13.2A1.2 1.2 0 1 1 10.4 10.8ZM13.6 10.8A1.2 1.2 0 1 1 13.6 13.2A1.2 1.2 0 1 1 13.6 10.8ZM16.8 10.8A1.2 1.2 0 1 1 16.8 13.2A1.2 1.2 0 1 1 16.8 10.8Z"
+
+irrigator:
+  label: Irrigator garden
+  icon: mdi:sprinkler
+
+raspberry:
+  label: Raspberry
+  icon: mdi:raspberry-pi
+
+battery:
+  label: "Battery"
+  icon: mdi:battery-high
+
+nvr:
+  label: "NVR cctv"
+  icon: mdi:harddisk
+
+rfreceiver:
+  label: "RF Receiver"
+  icon: mdi:radio-tower
+
+laptop:
+  label: "Laptop"
+  icon: "mdi:laptop"
+
+smartphone:
+  label: "Smartphone"
+  icon: "mdi:cellphone"
+
+server:
+  label: "Server"
+  icon: "mdi:server"
+
+pc_desktop:
+  label: "PC Desktop"
+  icon: "mdi:desktop-tower-monitor"
+
+sensore:
+  label: "Sensore"
+  icon: "mdi:leak"
+
+smart_switch:
+  label: "Smart Switch"
+  icon: "mdi:toggle-switch-outline"
+
+smart_plug:
+  label: "Smart Plug"
+  icon: "mdi:power-socket-eu"
+
+nvr:
+  label: "NVR"
+  icon: "mdi:dns-outline"
+
+audiovideo:
+  label: "AudioVideo"
+  icon: "mdi:speaker"
+
+tv:
+  label: "TV"
+  icon: "mdi:television"
+
+ipcam:
+  label: "IpCam"
+  icon: "mdi:video-outline"
+
+nas:
+  label: "NAS"
+  icon: "mdi:nas"
+
+vacuum_robot:
+  label: "Vacuum Robot"
+  icon: "mdi:robot-vacuum"
+
+air_conditioner:
+  label: "Air Conditioner"
+  icon: "mdi:air-conditioner"
+
+three_d_printer:
+  label: "3D Printer"
+  icon: "mdi:printer-3d-nozzle"
+
+dryer:
+  label: "Dryer"
+  icon: "mdi:tumble-dryer"
+
+multimediabox:
+  label: "Multimedia Box"
+  icon: mdi:multimedia
+
+ledstrip:
+  label: "Led Strip"
+  icon: mdi:led-strip-variant
+
+hub:
+  label: Hub
+  icon: mdi:hub-outline
+
+dvr:
+  label: DRV
+  icon: mdi:audio-video

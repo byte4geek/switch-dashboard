@@ -11,6 +11,7 @@ from datetime import datetime
 BASE = os.path.dirname(__file__)
 DATA_DIR = os.environ.get("DASHBOARD_DATA_DIR", BASE)
 CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+DEVICE_TYPES_YAML_PATH = os.path.join(DATA_DIR, "device_types.yaml")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 NOTES_PATH = os.path.join(DATA_DIR, "notes.json")
 LOG_FILE_PATH = os.path.join(DATA_DIR, "logs", "dashboard.log")
@@ -85,6 +86,18 @@ if DATA_DIR != BASE:
                 logger.info(f"Initialized default config.json in {dest_config}")
             except Exception as e:
                 logger.error(f"Failed to initialize default config.json: {e}")
+
+    # Copy device_types.yaml if not present in DATA_DIR
+    dest_device_types = os.path.join(DATA_DIR, "device_types.yaml")
+    if not os.path.exists(dest_device_types):
+        src_device_types = os.path.join(BASE, "device_types.yaml")
+        if os.path.exists(src_device_types):
+            import shutil
+            try:
+                shutil.copy2(src_device_types, dest_device_types)
+                logger.info(f"Initialized default device_types.yaml in {dest_device_types}")
+            except Exception as e:
+                logger.error(f"Failed to initialize default device_types.yaml: {e}")
 
 COUNTERS_PATH = os.path.join(DATA_DIR, "counters.json")
 HOURLY_PATH = os.path.join(DATA_DIR, "history_hourly.json")
@@ -393,7 +406,9 @@ def update_cache():
         now = time.time()
         results = {}
         speeds = {}
+        all_vm_mac_maps = {}
         should_save = False
+
 
         mac_refresh_multiplier = config.get("mac_refresh_multiplier", 5)
 
@@ -409,8 +424,11 @@ def update_cache():
                 continue
             ip = sw["ip"]
             
-            from scraper import HCSwitchScraper
-            scraper_obj = HCSwitchScraper(sw)
+            from scraper import HCSwitchScraper, OVSScraper
+            if sw.get("model", "").lower() in ["openvswitch", "ovs"]:
+                scraper_obj = OVSScraper(sw)
+            else:
+                scraper_obj = HCSwitchScraper(sw)
             
             # Scrape MAC table if due
             last_scrape = last_mac_scrape_times.get(ip, 0)
@@ -433,6 +451,12 @@ def update_cache():
 
             data["mac_table"] = mac_tables.get(ip, [])
             data["mac_timestamp"] = last_mac_scrape_times.get(ip, 0)
+            
+            # Collect OVS vm_mac_map if available
+            vm_mac_map = data.get("vm_mac_map", {})
+            for m_mac, m_name in vm_mac_map.items():
+                all_vm_mac_maps[m_mac.replace(":", "").upper()] = m_name
+
 
             # Accumulate cumulative counters
             for p in data.get("ports", []):
@@ -589,16 +613,19 @@ def update_cache():
                         "status": "online",
                         "last_seen": now
                     })
+                    if mac in all_vm_mac_maps and not db_clients[mac].get("host"):
+                        db_clients[mac]["host"] = all_vm_mac_maps[mac]
                 else:
                     db_clients[mac] = {
                         "mac": info["mac"],
-                        "host": "",
+                        "host": all_vm_mac_maps.get(mac, ""),
                         "ip": info["ip"],
                         "port": info["port"],
                         "vlan": info["vlan"],
                         "status": "online",
                         "last_seen": now
                     }
+
             
             # 2. Mark offline clients
             for mac, client_entry in db_clients.items():
@@ -733,7 +760,11 @@ def api_switches():
             else:
                 entry["host"] = ""
         for p in sw.get("ports", []):
-            p["note"] = notes.get(f"{sw['ip']}:{p['port']}", "")
+            custom_note = notes.get(f"{sw['ip']}:{p['port']}", "")
+            if custom_note:
+                p["note"] = custom_note
+            else:
+                p["note"] = p.get("vm_name") or ""
     return jsonify(data)
 
 
@@ -748,19 +779,23 @@ def refresh_mac(ip):
         return jsonify({"error": "Switch not found"}), 404
         
     try:
-        from scraper import HCSwitchScraper
-        scraper_obj = HCSwitchScraper(sw)
+        from scraper import HCSwitchScraper, OVSScraper
+        if sw.get("model", "").lower() in ["openvswitch", "ovs"]:
+            scraper_obj = OVSScraper(sw)
+        else:
+            scraper_obj = HCSwitchScraper(sw)
         mac_table = scraper_obj.scrape_mac_table()
-        
+
         vendors = load_mac_vendors()
         ieee_vendors = get_ieee_vendors()
         for entry in mac_table:
             entry["vendor"] = lookup_vendor(entry.get("mac"), vendors, ieee_vendors)
-            
+
         with cache_lock:
             if ip in cached_data:
                 cached_data[ip]["mac_table"] = mac_table
                 cached_data[ip]["mac_timestamp"] = time.time()
+
                 
         return jsonify({"status": "ok", "count": len(mac_table), "mac_table": mac_table})
     except Exception as e:
@@ -779,12 +814,17 @@ def get_transceiver(ip):
         return jsonify({"error": "Switch not found"}), 404
         
     try:
-        from scraper import HCSwitchScraper
-        scraper_obj = HCSwitchScraper(sw)
+        from scraper import HCSwitchScraper, OVSScraper
+        if sw.get("model", "").lower() in ["openvswitch", "ovs"]:
+            scraper_obj = OVSScraper(sw)
+        else:
+            scraper_obj = HCSwitchScraper(sw)
         transceiver_info = scraper_obj.scrape_transceiver()
+
         if not transceiver_info:
             return jsonify({"error": "No transceiver data available or SFP module not inserted"}), 404
         return jsonify(transceiver_info)
+
     except Exception as e:
         logger.error(f"Transceiver scrape failed for {ip}: {e}")
         return jsonify({"error": str(e)}), 500
@@ -1092,6 +1132,7 @@ def api_topology():
             "mac": formatted_mac,
             "host": host_name,
             "type": "client",
+            "device_type": client_entry.get("device_type", "laptop"),
             "vendor": vendor,
             "status": status,
             "last_seen_ip": ip,
@@ -1196,6 +1237,7 @@ def api_topology():
             "id": mac,
             "name": dev["name"],
             "type": "client",
+            "device_type": dev.get("device_type", "laptop"),
             "mac": dev["mac"],
             "vendor": dev["vendor"],
             "status": dev["status"],
@@ -1531,6 +1573,38 @@ def api_clients_update_host():
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/clients/update_type", methods=["POST"])
+def api_clients_update_type():
+    data = request.get_json(force=True, silent=True) or {}
+    mac = data.get("mac", "").replace(":", "").replace("-", "").replace(" ", "").upper()
+    device_type = data.get("type", "").strip()
+    if not mac:
+        return jsonify({"error": "Missing mac"}), 400
+        
+    load_config()
+    db_clients = config.get("clients", {})
+    
+    if mac in db_clients:
+        db_clients[mac]["device_type"] = device_type
+    else:
+        # Create a new entry if not exists
+        formatted_mac = ":".join(mac[i:i+2] for i in range(0, len(mac), 2)).upper()
+        db_clients[mac] = {
+            "mac": formatted_mac,
+            "host": "",
+            "device_type": device_type,
+            "ip": "",
+            "port": "",
+            "vlan": "",
+            "status": "offline",
+            "last_seen": 0
+        }
+        
+    config["clients"] = db_clients
+    save_config()
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/clients/delete", methods=["POST"])
 def api_clients_delete():
     data = request.get_json(force=True, silent=True) or {}
@@ -1623,6 +1697,66 @@ def api_clients_import_csv():
         logger.error(f"Failed to import client CSV: {e}")
         return jsonify({"error": str(e)}), 500
 
+
+
+@app.route("/api/device_types/raw", methods=["GET", "POST"])
+def api_device_types_raw():
+    if request.method == "POST":
+        data = request.get_json(force=True, silent=True) or {}
+        content = data.get("content", "")
+        if not content.strip():
+            return jsonify({"error": "Content cannot be empty"}), 400
+        try:
+            import yaml
+            parsed = yaml.safe_load(content)
+            if not isinstance(parsed, dict):
+                return jsonify({"error": "YAML must be a key-value dictionary mapping type keys to labels and icons/paths."}), 400
+            for k, v in parsed.items():
+                if not isinstance(v, dict) or "label" not in v:
+                    return jsonify({"error": f"Entry '{k}' must contain a 'label' key."}), 400
+                if "icon" not in v and "path" not in v:
+                    return jsonify({"error": f"Entry '{k}' must contain either 'icon' or 'path' key."}), 400
+                if not isinstance(v.get("label"), str):
+                    return jsonify({"error": f"Field 'label' for entry '{k}' must be a string."}), 400
+                if "icon" in v and not isinstance(v.get("icon"), str):
+                    return jsonify({"error": f"Field 'icon' for entry '{k}' must be a string."}), 400
+                if "path" in v and not isinstance(v.get("path"), str):
+                    return jsonify({"error": f"Field 'path' for entry '{k}' must be a string."}), 400
+        except Exception as ye:
+            return jsonify({"error": f"Invalid YAML Syntax: {ye}"}), 400
+
+        try:
+            with open(DEVICE_TYPES_YAML_PATH, "w", encoding="utf-8") as f:
+                f.write(content)
+            logger.info("Updated custom device types configuration.")
+            return jsonify({"status": "ok"})
+        except Exception as e:
+            logger.error(f"Failed to save custom device types: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    # GET method
+    content = ""
+    if os.path.exists(DEVICE_TYPES_YAML_PATH):
+        try:
+            with open(DEVICE_TYPES_YAML_PATH, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception as e:
+            logger.error(f"Failed to read custom device types file: {e}")
+            return jsonify({"error": str(e)}), 500
+    return jsonify({"content": content})
+
+
+@app.route("/api/device_types", methods=["GET"])
+def api_device_types_json():
+    try:
+        import yaml
+        if os.path.exists(DEVICE_TYPES_YAML_PATH):
+            with open(DEVICE_TYPES_YAML_PATH, "r", encoding="utf-8") as f:
+                parsed = yaml.safe_load(f) or {}
+                return jsonify(parsed)
+    except Exception as e:
+        logger.error(f"Failed to parse custom device types: {e}")
+    return jsonify({})
 
 
 @app.route("/api/vendors", methods=["GET", "POST"])

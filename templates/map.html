@@ -543,6 +543,65 @@
   const canvasContainer = document.getElementById('canvas-container');
   const toggleClients = document.getElementById('toggle-clients');
 
+  let deviceTypes = {}; // Loaded from server
+  
+  // Fetch custom device types configuration
+  async function fetchDeviceTypes() {
+    try {
+      const res = await fetch('/api/device_types');
+      if (!res.ok) return;
+      deviceTypes = await res.json();
+      
+      // Group icon names by prefix to make batch API calls
+      const prefixes = {}; // prefix -> { keys: [], iconNames: [] }
+      
+      for (const [key, val] of Object.entries(deviceTypes)) {
+        if (val.path) {
+          ICONS[key] = val.path;
+        } else if (val.icon) {
+          let parts = val.icon.split(':');
+          let prefix = 'mdi';
+          let iconName = val.icon;
+          if (parts.length === 2) {
+            prefix = parts[0];
+            iconName = parts[1];
+          }
+          if (!prefixes[prefix]) {
+            prefixes[prefix] = { keys: [], iconNames: [] };
+          }
+          prefixes[prefix].keys.push(key);
+          prefixes[prefix].iconNames.push(iconName);
+        }
+      }
+      
+      // Fetch icons from Iconify API for each prefix
+      for (const [prefix, data] of Object.entries(prefixes)) {
+        const uniqueIconNames = Array.from(new Set(data.iconNames));
+        const url = `https://api.iconify.design/${prefix}.json?icons=${uniqueIconNames.join(',')}`;
+        try {
+          const apiRes = await fetch(url);
+          if (apiRes.ok) {
+            const apiData = await apiRes.json();
+            if (apiData.icons) {
+              // Map retrieved icon bodies to our ICONS map
+              for (let i = 0; i < data.keys.length; i++) {
+                const key = data.keys[i];
+                const iconName = data.iconNames[i];
+                if (apiData.icons[iconName]) {
+                  ICONS[key] = apiData.icons[iconName].body;
+                }
+              }
+            }
+          }
+        } catch (apiErr) {
+          console.error(`Failed to fetch icons for prefix ${prefix}:`, apiErr);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load custom device types:', e);
+    }
+  }
+
   // SVG Icons markup
   const ICONS = {
     router: `<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>`,
@@ -550,7 +609,24 @@
     unmanaged_switch: `<path d="M19 13H5c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2zM9 19H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM19 3H5c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 9H7V7h2v2zm4 0h-2V7h2v2zm4 0h-2V7h2v2z"/>`,
     repeater: `<path d="M12 3C6.48 3 2 7.48 2 13c0 2.76 1.12 5.26 2.93 7.07l1.41-1.41C4.95 17.27 4 15.24 4 13c0-4.41 3.59-8 8-8s8 3.59 8 8c0 2.24-.95 4.27-2.34 5.66l1.41 1.41C20.88 18.26 22 15.76 22 13c0-5.52-4.48-10-10-10zm0 4c-3.31 0-6 2.69-6 6 0 1.66.67 3.16 1.76 4.24l1.42-1.42C8.44 15.1 8 14.1 8 13c0-2.21 1.79-4 4-4s4 1.79 4 4c0 1.1-.44 2.1-1.18 2.82l1.42 1.42C17.33 16.16 18 14.66 18 13c0-3.31-2.69-6-6-6zm0 4c-1.1 0-2 .9-2 2 0 .55.22 1.05.59 1.41l1.41-1.41V13c0-.55-.45-1-1-1z"/>`,
     other: `<path d="M12 3C6.48 3 2 7.48 2 13c0 2.76 1.12 5.26 2.93 7.07l1.41-1.41C4.95 17.27 4 15.24 4 13c0-4.41 3.59-8 8-8s8 3.59 8 8c0 2.24-.95 4.27-2.34 5.66l1.41 1.41C20.88 18.26 22 15.76 22 13c0-5.52-4.48-10-10-10zm0 4c-3.31 0-6 2.69-6 6 0 1.66.67 3.16 1.76 4.24l1.42-1.42C8.44 15.1 8 14.1 8 13c0-2.21 1.79-4 4-4s4 1.79 4 4c0 1.1-.44 2.1-1.18 2.82l1.42 1.42C17.33 16.16 18 14.66 18 13c0-3.31-2.69-6-6-6zm0 4c-1.1 0-2 .9-2 2 0 .55.22 1.05.59 1.41l1.41-1.41V13c0-.55-.45-1-1-1z"/>`,
-    client: `<path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>`
+    client: `<path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>`,
+    laptop: `<path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>`,
+    smartphone: `<path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/>`,
+    server: `<path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/>`,
+    pc_desktop: `<path d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7l-2 3v1h8v-1l-2-3h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H3V4h18v12z"/>`,
+    sensore: `<path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2-.9-2-2-2zm0-10C7.58 4 4 7.58 4 12s3.58 8 8 8 8-3.58 8-8-7.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/>`,
+    smart_switch: `<path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 15H5v-2h7v2zm4-5H5v-2h11v2zm3-5H5V6h14v2z"/>`,
+    smart_plug: `<path d="M16 9v4.66c0 2.2-1.56 4.14-3.73 4.34-2.48.23-4.57-1.7-4.57-4.15V9h8m2-2H6v2h2v4.67c0 1.96 1.18 3.72 3 4.2V22h2v-4.13c1.82-.48 3-2.24 3-4.2V7H18V7zm-7-4h2v3h-2V3zm4 0h2v3h-2V3z"/>`,
+    nvr: `<path d="M19 15v3H5v-3h14m1-2H4c-.55 0-1 .45-1 1v5c0 .55.45 1 1 1h16c.55 0 1-.45 1-1v-5c0-.55-.45-1-1-1zm-3 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm3 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zM19 5v3H5V5h14m1-2H4c-.55 0-1 .45-1 1v5c0 .55.45 1 1 1h16c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zm-3 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm3 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>`,
+    audiovideo: `<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-12.5c-2.48 0-4.5 2.02-4.5 4.5S9.52 14.5 12 14.5s4.5-2.02 4.5-4.5S14.48 7.5 12 7.5zm0 5.5c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>`,
+    tv: `<path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>`,
+    ipcam: `<path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4zM14 13h-3v3H9v-3H6v-2h3V8h2v3h3v2z"/>`,
+    nas: `<path d="M4 18h16V6H4v12zm9-10h5v2h-5V8zm0 4h5v2h-5v-2zm-7-4h5v8H6V8z"/>`,
+    vacuum_robot: `<path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.58 8 8-3.59 8-8 8zm1-13h-2v4H7v2h4v4h2v-4h4v-2h-4V7z"/>`,
+    air_conditioner: `<path d="M20 4H4c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 10H4V6h16v8zm-2 4H6v2h12v-2z"/>`,
+    dehumidifier: `<path d="M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 18c-2.91 0-5.17-2.61-6.17-4.66.7-.49 1.58-.84 2.57-.84 1.77 0 3.1 1.09 4.3 2.19.8-.73 1.83-1.35 3.03-1.35.86 0 1.63.31 2.25.77C17.06 17.51 14.86 20 12 20z"/>`,
+    three_d_printer: `<path d="M19 8h-1V3H6v5H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zM8 5h8v3H8V5zm10 12H6v-4h12v4zm2-4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>`,
+    dryer: `<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>`
   };
 
   // Fetch topology data
@@ -563,6 +639,24 @@
       rawLinks = data.links;
       
       processAndRender();
+
+      // If a node is currently selected, refresh its details card with the new data
+      if (selectedNode) {
+        const updatedNode = rawNodes.find(n => n.id === selectedNode.id);
+        if (updatedNode) {
+          selectedNode = updatedNode;
+          
+          // Only re-render the detail card if the user isn't currently interacting with it
+          const activeEl = document.activeElement;
+          const isInteracting = activeEl && (
+            activeEl.id === 'inspect-host-input' || 
+            activeEl.id === 'inspect-type-select'
+          );
+          if (!isInteracting) {
+            renderDetailCard(selectedNode);
+          }
+        }
+      }
     } catch (e) {
       console.error('Error fetching topology:', e);
     }
@@ -936,16 +1030,32 @@
       const iconGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       iconGroup.setAttribute('transform', `translate(${-nodeWidth/2 + 10}, ${-12})`);
       
-      const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      iconSvg.setAttribute('d', ICONS[node.type] ? ICONS[node.type].match(/d="([^"]+)"/)[1] : ICONS.other.match(/d="([^"]+)"/)[1]);
-      iconSvg.setAttribute('class', 'node-icon-svg');
-      iconSvg.setAttribute('transform', 'scale(1)');
-      
       const iconWrapper = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       iconWrapper.setAttribute('width', '24');
       iconWrapper.setAttribute('height', '24');
       iconWrapper.setAttribute('viewBox', '0 0 24 24');
-      iconWrapper.appendChild(iconSvg);
+      
+      let iconMarkup = ICONS.other;
+      if (node.type === 'client') {
+        const dType = node.device_type || 'laptop';
+        iconMarkup = ICONS[dType] || ICONS.laptop || ICONS.client;
+      } else {
+        iconMarkup = ICONS[node.type] || ICONS.other;
+      }
+      
+      // If the markup doesn't start with a tag (like <path), wrap it in one
+      if (!iconMarkup.trim().startsWith('<')) {
+        iconWrapper.innerHTML = `<path d="${iconMarkup}" class="node-icon-svg" fill="currentColor"/>`;
+      } else {
+        iconWrapper.innerHTML = iconMarkup;
+        // Add class and fill to child nodes
+        Array.from(iconWrapper.children).forEach(child => {
+          child.classList.add('node-icon-svg');
+          if (!child.getAttribute('fill')) {
+            child.setAttribute('fill', 'currentColor');
+          }
+        });
+      }
 
       iconGroup.appendChild(iconWrapper);
       g.appendChild(iconGroup);
@@ -1164,13 +1274,22 @@
     else if (node.type === 'switch') { avatarColor = '#3b82f6'; iconSvg = ICONS.switch; }
     else if (node.type === 'unmanaged_switch') { avatarColor = '#0284c7'; iconSvg = ICONS.unmanaged_switch; }
     else if (node.type === 'repeater') { avatarColor = '#f97316'; iconSvg = ICONS.repeater; }
+    else if (node.type === 'client') {
+      const dType = node.device_type || 'laptop';
+      iconSvg = ICONS[dType] || ICONS.laptop || ICONS.client;
+    }
 
     const formattedMac = formatMacAddress(node.mac) || 'N/A';
+    
+    let iconContent = iconSvg;
+    if (!iconContent.trim().startsWith('<')) {
+      iconContent = `<path d="${iconContent}"/>`;
+    }
     
     let html = `
       <div class="detail-avatar-container">
         <div class="detail-avatar" style="border-color: ${avatarColor}; color: ${avatarColor};">
-          <svg viewBox="0 0 24 24" style="fill: currentColor;">${iconSvg}</svg>
+          <svg viewBox="0 0 24 24" style="fill: currentColor;">${iconContent}</svg>
         </div>
         <div class="detail-title">
           <h3>${node.name}</h3>
@@ -1244,6 +1363,33 @@
       
       if (node.type === 'client') {
         const lastSeenStr = node.last_seen_time ? new Date(node.last_seen_time * 1000).toLocaleString() : 'Never';
+        
+        let dropdownHtml = '';
+        const typesToRender = Object.keys(deviceTypes).length > 0 ? deviceTypes : {
+          laptop: { label: "Laptop" },
+          smartphone: { label: "Smartphone" },
+          server: { label: "Server" },
+          pc_desktop: { label: "PC Desktop" },
+          sensore: { label: "Sensore" },
+          smart_switch: { label: "Smart Switch" },
+          smart_plug: { label: "Smart Plug" },
+          nvr: { label: "NVR" },
+          audiovideo: { label: "AudioVideo" },
+          tv: { label: "TV" },
+          ipcam: { label: "IpCam" },
+          nas: { label: "NAS" },
+          vacuum_robot: { label: "Vacuum Robot" },
+          air_conditioner: { label: "Air Conditioner" },
+          dehumidifier: { label: "Dehumidifier" },
+          three_d_printer: { label: "3D Printer" },
+          dryer: { label: "Dryer" }
+        };
+        
+        for (const [key, val] of Object.entries(typesToRender)) {
+          const selected = node.device_type === key ? 'selected' : '';
+          dropdownHtml += `<option value="${key}" ${selected}>${val.label || key}</option>`;
+        }
+
         html += `
           <div class="detail-item">
             <div class="label">Host Nickname</div>
@@ -1254,6 +1400,17 @@
                      style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px 10px; color: #e1e4e8; font-size: 12px; outline: none; transition: border-color 0.2s;"
                      onfocus="this.style.borderColor='#58a6ff'" 
                      onblur="this.style.borderColor='#30363d'">
+            </div>
+          </div>
+          <div class="detail-item">
+            <div class="label">Device Type</div>
+            <div class="value" style="margin-top: 4px;">
+              <select id="inspect-type-select" onchange="updateClientType('${node.id}', this.value)"
+                      style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 6px 10px; color: #e1e4e8; font-size: 12px; outline: none; cursor: pointer; transition: border-color 0.2s;"
+                      onfocus="this.style.borderColor='#58a6ff'" 
+                      onblur="this.style.borderColor='#30363d'">
+                ${dropdownHtml}
+              </select>
             </div>
           </div>
           <div class="detail-item">
@@ -1478,6 +1635,22 @@
     }
   }
 
+  async function updateClientType(mac, type) {
+    try {
+      await fetch('/api/clients/update_type', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ mac: mac, type: type })
+      });
+      if (selectedNode && selectedNode.id === mac) {
+        selectedNode.device_type = type;
+      }
+      fetchTopology();
+    } catch (e) {
+      console.error("Failed to update client type:", e);
+    }
+  }
+
   async function forgetClient(mac) {
     if (!confirm("Are you sure you want to forget and remove this client device?")) {
       return;
@@ -1506,7 +1679,8 @@
   // ==========================================
   // INITIALIZE AND AUTO-POLL
   // ==========================================
-  window.addEventListener('DOMContentLoaded', () => {
+  window.addEventListener('DOMContentLoaded', async () => {
+    await fetchDeviceTypes();
     fetchTopology();
     // Refresh topology telemetry every 10 seconds to fetch active speed counters
     setInterval(fetchTopology, 10000);

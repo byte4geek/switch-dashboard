@@ -107,6 +107,64 @@ The dashboard automatically parses the learned MAC forwarding tables to construc
 
 ---
 
+## 🎛️ Proxmox OVS Integration & Installation Guide
+
+The Switch Dashboard supports monitoring virtual networking via **Open vSwitch (OVS)** running on a Proxmox VE host. This allows you to view LXC containers and VM interfaces connected to your virtual bridges directly in your network map and tables.
+
+Follow the steps below to install OVS on your Proxmox host, configure the virtual bridge, set up a dedicated monitoring user with restricted sudo permissions, and integrate it into the dashboard.
+
+### 1. Install OVS on the Proxmox VE Host
+Log in to your Proxmox VE host via SSH as `root` (or a user with sudo privileges) and run:
+```bash
+sudo apt update && sudo apt install openvswitch-switch -y
+```
+
+### 2. Configure the OVS Bridge in the Proxmox Web GUI
+To migrate from a standard Linux bridge to an OVS bridge:
+1. Access the **Proxmox Web GUI** (`https://<your-proxmox-ip>:8006`).
+2. Go to **Datacenter** -> **[Your Node]** -> **System** -> **Network**.
+3. Select the default Linux bridge (usually `vmbr0`) and click **Remove**. *(Note: This staging action will not disconnect you immediately).*
+4. Click **Create** -> Select **OVS Bridge**.
+5. Configure the new OVS Bridge:
+   - **Name**: `vmbr0`
+   - **IPv4/CIDR**: `192.168.1.15/24` (use the IP address of your Proxmox host)
+   - **Gateway (IPv4)**: `192.168.1.1` (your network gateway)
+   - **Bridge Ports**: `enp3s0` (your physical network interface name)
+6. Click **Apply Configuration** to commit the staged changes. The network configuration will reload instantly, switching the backend to Open vSwitch without restarting the host.
+
+### 3. Create a Dedicated SSH Monitoring User on Proxmox
+The Switch Dashboard retrieves statistics securely over SSH. Instead of using the `root` account, create a dedicated system user:
+1. Add the user `ovs-monitor` on the Proxmox host:
+   ```bash
+   sudo adduser ovs-monitor
+   ```
+   Follow the prompts to configure a strong password.
+2. Grant the user restricted passwordless sudo privileges. Edit the sudoers configuration:
+   ```bash
+   sudo visudo
+   ```
+   Append the following line at the end of the file:
+   ```text
+   ovs-monitor ALL=(ALL) NOPASSWD: /usr/bin/ovs-vsctl, /usr/bin/ovs-ofctl, /usr/bin/ovs-appctl, /usr/sbin/pct, /usr/sbin/qm
+   ```
+   *(Ensure these paths match the locations of the commands on your Proxmox host. You can verify them with `which ovs-vsctl pct qm`)*
+
+### 4. Configure the OVS Integration in Switch Dashboard
+You can add the OVS switch from the dashboard's `/config` web interface or directly in `config.json` by adding a switch object with `"model": "openvswitch"` or `"model": "ovs"`:
+```json
+{
+  "name": "Proxmox OVS",
+  "ip": "192.168.1.15",
+  "username": "ovs-monitor",
+  "password": "your-password-here",
+  "model": "openvswitch",
+  "bridge": "vmbr0",
+  "port_count": 24
+}
+```
+
+---
+
 ## 🛠️ System Architecture
 
 ```mermaid
