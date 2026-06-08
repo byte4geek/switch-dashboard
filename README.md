@@ -239,7 +239,7 @@ A pre-configured `docker-compose.yml` is provided in the repository.
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/switch-dashboard.git
+   git clone https://github.com/byte4geek/switch-dashboard.git
    cd switch-dashboard
    ```
 
