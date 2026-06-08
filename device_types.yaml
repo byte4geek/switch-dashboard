@@ -5,6 +5,9 @@
 # type_key:
 #   label: "Display Name"
 #   icon: "prefix:icon_name"
+lamp:
+  label: Lamp
+  icon: mdi:lava-lamp
 
 dehumidifier:
   label: Dehumidifier

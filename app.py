@@ -719,12 +719,12 @@ def _format_bps(bps):
 
 @app.route("/")
 def dashboard():
-    load_config()
     return render_template("index.html",
                            title=config.get("title", "Switch Dashboard"),
                            refresh=config.get("refresh_interval", 30),
                            enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes']),
                            grid_columns=config.get("grid_columns", "auto"),
+                           ports_wrap_threshold=config.get("ports_wrap_threshold", 0),
                            column_widths=config.get("column_widths", {}),
                            column_order=config.get("column_order", []),
                            version=VERSION)
@@ -1474,6 +1474,7 @@ def config_page():
         new_title = request.form.get("title", config.get("title", ""))
         new_refresh = int(request.form.get("refresh_interval", 30))
         new_mac_multiplier = int(request.form.get("mac_refresh_multiplier", 5))
+        new_ports_wrap_threshold = int(request.form.get("ports_wrap_threshold", 0))
         new_columns = request.form.getlist("columns[]")
         if not new_columns:
             new_columns = ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes']
@@ -1483,6 +1484,7 @@ def config_page():
         config["title"] = new_title
         config["refresh_interval"] = new_refresh
         config["mac_refresh_multiplier"] = new_mac_multiplier
+        config["ports_wrap_threshold"] = new_ports_wrap_threshold
         config["enabled_columns"] = new_columns
         config["grid_columns"] = new_grid_columns
         config["switches"] = new_switches
@@ -1504,6 +1506,7 @@ def config_page():
                            unmanaged_switches=config.get("unmanaged_switches", []),
                            refresh=config.get("refresh_interval", 30),
                            mac_multiplier=config.get("mac_refresh_multiplier", 5),
+                           ports_wrap_threshold=config.get("ports_wrap_threshold", 0),
                            enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes']),
                            grid_columns=config.get("grid_columns", "auto"),
                            version=VERSION)
