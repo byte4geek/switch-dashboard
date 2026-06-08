@@ -82,6 +82,8 @@ This dashboarb support these device:
 
 The dashboard automatically parses the learned MAC forwarding tables to construct a complete, visual topology map of your network (accessible at `/map`). By combining managed switch configurations with custom infrastructure devices, you can group and segment devices:
 
+![Netwok_map](https://github.com/byte4geek/switch-dashboard/blob/main/images/network-map.png?raw=true)
+
 ### 1. Router / Gateway (Root)
 * **What it does**: Represents the main internet gateway or firewall. It serves as the root node of the layout.
 * **How to configure**: Navigate to `/config` and under **Infrastructure Devices**, click **+ Add Infrastructure Device**. Set the type to **Router/Gateway** and enter its MAC address. 
