@@ -201,7 +201,7 @@ Our automated script handles the entire installation seamlessly, creating a dedi
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/switch-dashboard.git
+git clone https://github.com/byte4geek/switch-dashboard.git
 cd switch-dashboard
 
 # Run the installer as root
