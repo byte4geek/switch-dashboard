@@ -369,6 +369,11 @@
           </select>
           <span class="note" style="display:block; margin-top:2px;">Select how many switches are displayed side-by-side on large screens.</span>
         </div>
+        <div class="global-row">
+          <label>Ports Row Wrap Threshold</label>
+          <input type="number" name="ports_wrap_threshold" value="{{ ports_wrap_threshold }}" min="0" max="100" style="max-width:120px">
+          <span class="note" style="display:block; margin-top:2px;">If a switch has more ports than this threshold, the port graphic bar will wrap into multiple rows (useful for OVS switches with high port counts). Set to 0 to disable wrapping.</span>
+        </div>
       </div>
 
       <div class="card">

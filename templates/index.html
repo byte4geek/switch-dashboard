@@ -63,6 +63,13 @@
     word-break: break-word;
     line-height: 1.4;
   }
+  .mac-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .mac-table th { position: relative; }
+  .mac-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   
   /* Resizer styling */
   .resizer {
@@ -638,6 +645,7 @@
 <script>
 const REFRESH_SECONDS = {{ refresh }};
 const enabledColumns = {{ enabled_columns|tojson }} || ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes'];
+const PORTS_WRAP_THRESHOLD = {{ ports_wrap_threshold|default(0)|tojson }};
 
 let currentGraphIp = null;
 let currentGraphPort = null;
@@ -721,7 +729,7 @@ function handleResizeStart(event, colId) {
   resizingTh.classList.add('resizing');
   
   // Temporarily disable draggable on all headers so browser doesn't trigger drag-and-drop
-  document.querySelectorAll('.port-table th').forEach(th => {
+  document.querySelectorAll('.port-table th, .mac-table th').forEach(th => {
     th.setAttribute('draggable', 'false');
   });
 }
@@ -731,11 +739,19 @@ function handleResizeMove(event) {
   const diff = event.clientX - resizingStartX;
   const newWidth = Math.max(30, resizingStartWidth + diff);
   
-  // Set the width on all corresponding th elements across all switch cards to keep layout aligned
-  const ths = document.querySelectorAll(`.port-table th[data-col-id="${resizingColId}"]`);
-  ths.forEach(th => {
-    th.style.width = newWidth + 'px';
-  });
+  if (resizingColId.startsWith('mac-')) {
+    // Resize all MAC tables across all switch cards to keep layout aligned
+    const ths = document.querySelectorAll(`.mac-table th[data-col-id="${resizingColId}"]`);
+    ths.forEach(th => {
+      th.style.width = newWidth + 'px';
+    });
+  } else {
+    // Set the width on all corresponding th elements across all switch cards to keep layout aligned
+    const ths = document.querySelectorAll(`.port-table th[data-col-id="${resizingColId}"]`);
+    ths.forEach(th => {
+      th.style.width = newWidth + 'px';
+    });
+  }
 }
 
 function handleResizeEnd(event) {
@@ -751,7 +767,7 @@ function handleResizeEnd(event) {
   document.removeEventListener('mouseup', handleResizeEnd);
   
   // Restore draggable on all headers
-  document.querySelectorAll('.port-table th').forEach(th => {
+  document.querySelectorAll('.port-table th, .mac-table th').forEach(th => {
     th.setAttribute('draggable', 'true');
   });
 }
@@ -1245,7 +1261,7 @@ function renderMacTable(ip) {
              placeholder="Enter nickname..." 
              onfocus="pausePolling()" 
              onblur="saveHost(this, '${r.mac}')" 
-             style="width: 100%; max-width: 150px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" 
+             style="width: 100%; max-width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" 
              onfocus="this.style.borderColor='#58a6ff'" 
              onblur="this.style.borderColor='#30363d'">
     `;
@@ -1359,6 +1375,17 @@ function formatTime(ts) {
 }
 
 function renderSwitch(sw) {
+  const renderMacTh = (colId, label) => {
+    const savedWidth = columnWidths[`mac-${colId}`];
+    const styleStr = `position: relative; padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;${savedWidth ? ` width: ${savedWidth}px;` : ''}`;
+    return `
+      <th style="${styleStr}" onclick="sortMac('${sw.ip}', '${colId}')" data-col-id="mac-${colId}">
+        ${label} <span class="sort-indicator-${sw.ip}-${colId}"></span>
+        <div class="resizer" onmousedown="handleResizeStart(event, 'mac-${colId}')" style="position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: col-resize; user-select: none; z-index: 10;"></div>
+      </th>
+    `;
+  };
+
   const getPortColor = (p) => {
     if (!p) return '#57606a';
     const status = (p.status || '').toLowerCase();
@@ -1382,7 +1409,10 @@ function renderSwitch(sw) {
     return '#57606a'; // Down/fallback (grey)
   };
 
-  const portIndicators = (sw.ports || []).map(p => {
+  const wrapThreshold = typeof PORTS_WRAP_THRESHOLD !== 'undefined' ? parseInt(PORTS_WRAP_THRESHOLD) : 0;
+  const rawPorts = sw.ports || [];
+  
+  const portHtmlList = rawPorts.map(p => {
     const isSfp = (p.port === '9' || (p.speed || '').toLowerCase().includes('10g') || p.port === 'SFP' || p.port === '9/SFP');
     const color = getPortColor(p);
     
@@ -1411,11 +1441,29 @@ function renderSwitch(sw) {
         </svg>
       </div>
     `;
-  }).join('');
+  });
 
-  const portBar = (sw.ports && sw.ports.length > 0) ? `
-    <div style="background: rgba(13, 17, 23, 0.75); border: 1px solid #30363d; border-radius: 20px; padding: 6px 18px; display: inline-flex; gap: 10px; align-items: center; justify-content: center; box-shadow: inset 0 2px 4px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.3); margin: 4px 0;">
-      ${portIndicators}
+  let rowsHtml = '';
+  if (wrapThreshold > 0 && portHtmlList.length > wrapThreshold) {
+    for (let i = 0; i < portHtmlList.length; i += wrapThreshold) {
+      const chunk = portHtmlList.slice(i, i + wrapThreshold);
+      rowsHtml += `
+        <div style="display: flex; gap: 10px; align-items: center; justify-content: center;">
+          ${chunk.join('')}
+        </div>
+      `;
+    }
+  } else {
+    rowsHtml = `
+      <div style="display: flex; gap: 10px; align-items: center; justify-content: center;">
+        ${portHtmlList.join('')}
+      </div>
+    `;
+  }
+
+  const portBar = (rawPorts.length > 0) ? `
+    <div style="background: rgba(13, 17, 23, 0.75); border: 1px solid #30363d; border-radius: 20px; padding: 10px 18px; display: inline-flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; box-shadow: inset 0 2px 4px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.3); margin: 4px 0;">
+      ${rowsHtml}
     </div>
   ` : '';
 
@@ -1503,15 +1551,15 @@ function renderSwitch(sw) {
           </button>
         </div>
         <div class="mac-scroll-container-${sw.ip}" onscroll="saveMacScroll('${sw.ip}', this)" onmouseup="saveMacHeight('${sw.ip}', this)" ontouchend="saveMacHeight('${sw.ip}', this)" style="height: ${macState.height || '450px'}; min-height: 150px; max-height: 1200px; resize: vertical; overflow-y: auto; border: 1px solid #30363d; border-radius: 8px; background: #0d1117; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
-          <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+          <table class="mac-table" style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; table-layout: fixed;">
             <thead>
               <tr style="background: #161b22; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid #30363d;">
-                <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'mac')">MAC Address <span class="sort-indicator-${sw.ip}-mac"></span></th>
-                <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'host')">Host <span class="sort-indicator-${sw.ip}-host"></span></th>
-                <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'vendor')">Vendor <span class="sort-indicator-${sw.ip}-vendor"></span></th>
-                <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'type')">Type <span class="sort-indicator-${sw.ip}-type"></span></th>
-                <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'port')">Port <span class="sort-indicator-${sw.ip}-port"></span></th>
-                <th style="padding: 8px 12px; cursor: pointer; color: #8b949e; user-select: none; font-weight: 600;" onclick="sortMac('${sw.ip}', 'vlan')">VLAN <span class="sort-indicator-${sw.ip}-vlan"></span></th>
+                ${renderMacTh('mac', 'MAC Address')}
+                ${renderMacTh('host', 'Host')}
+                ${renderMacTh('vendor', 'Vendor')}
+                ${renderMacTh('type', 'Type')}
+                ${renderMacTh('port', 'Port')}
+                ${renderMacTh('vlan', 'VLAN')}
               </tr>
               <tr style="background: #0d1117; position: sticky; top: 31px; z-index: 2; border-bottom: 1px solid #30363d;">
                 <th style="padding: 4px 6px;"><input type="text" class="mac-filter-mac-${sw.ip}" placeholder="Filter MAC..." value="${macState.filters ? macState.filters.mac : ''}" onfocus="focusMacSearch()" onblur="blurMacSearch()" oninput="filterMacTable('${sw.ip}')" style="width: 100%; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 4px 8px; color: #e1e4e8; font-size: 11px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"></th>
