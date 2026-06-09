@@ -11,7 +11,7 @@ This dashboarb support these device:
  - [HORACO HC-SWTGW215AS](https://s.click.aliexpress.com/e/_c3hKfeLJ)
  - [keepLink KP9000-9XH-X](https://s.click.aliexpress.com/e/_c4UKLfOv)
 
-This tool support ![RTLPlaygroung firmware](https://github.com/logicog/RTLPlayground) too.
+This tool support [RTLPlaygroung firmware](https://github.com/logicog/RTLPlayground) too.
 
 ---
 
