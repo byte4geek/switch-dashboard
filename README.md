@@ -173,12 +173,12 @@ You can add the OVS switch from the dashboard's `/config` web interface or direc
 
 ```mermaid
 graph TD
-    A[User Browser] -- HTML5 / JS / Chart.js --> B[Flask Server: Port 8080]
-    B -- Config / API Route --> C[Local Cache: config.json / counters.json]
-    B -- Background Poller / Thread --> D[scraper.py]
-    D -- HTTP POST Login / CGI Scrape --> E[Managed Switch: 192.168.1.100]
-    E -- /info.cgi, /port.cgi, /transceiver.cgi --> D
-    B -- Interactive Explorer --> F[API Reference: /api-docs]
+    A["User Browser"] -- "HTML5 / JS / Chart.js" --> B["Flask Server: Port 8080"]
+    B -- "Config / API Route" --> C["Local Cache: config.json / counters.json"]
+    B -- "Background Poller / Thread" --> D["scraper.py"]
+    D -- "HTTP POST Login / CGI Scrape" --> E["Managed Switch: 192.168.1.100"]
+    E -- "/info.cgi, /port.cgi, /transceiver.cgi" --> D
+    B -- "Interactive Explorer" --> F["API Reference: /api-docs"]
 ```
 
 * **Backend**: Flask (Python 3.9+), single-worker polling thread to prevent session thrashing.
