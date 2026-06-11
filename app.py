@@ -108,7 +108,7 @@ os.makedirs(DEVICE_TEMPLATES_DIR, exist_ok=True)
 VENDORS_TXT_PATH = os.path.join(DATA_DIR, "mac_vendors.txt")
 OUI36_TXT_PATH = os.path.join(DATA_DIR, "oui36.txt")
 OUI_TXT_PATH = os.path.join(DATA_DIR, "oui.txt")
-VERSION = "2026.6.2"
+VERSION = "2026.6.3"
 
 ieee_vendors_cache = {}
 
@@ -291,6 +291,30 @@ def save_config():
             logger.error(f"Error saving config: {e}")
 
 
+def is_ignored_mac(mac):
+    if not mac:
+        return False
+    mac_clean = mac.replace(":", "").replace("-", "").replace(" ", "").upper()
+    settings = config.get("settings", {})
+    ignored_patterns = settings.get("ignored_macs", [])
+    if isinstance(ignored_patterns, str):
+        ignored_patterns = [p.strip() for p in ignored_patterns.split(",") if p.strip()]
+    for pattern in ignored_patterns:
+        pattern_clean = pattern.strip().upper()
+        if not pattern_clean:
+            continue
+        if pattern_clean.endswith("*"):
+            prefix = pattern_clean[:-1].replace(":", "").replace("-", "")
+            if mac_clean.startswith(prefix):
+                return True
+        else:
+            full_pattern = pattern_clean.replace(":", "").replace("-", "")
+            if mac_clean == full_pattern:
+                return True
+    return False
+
+
+
 def load_notes():
     load_config()
     return config.get("notes", {})
@@ -391,6 +415,39 @@ def get_avg_speed(ip, port, duration):
     return int(tx_speed), int(rx_speed)
 
 
+def unify_speed(speed_val):
+    if not speed_val:
+        return ""
+    s = str(speed_val).strip()
+    s_lower = s.lower()
+    if s_lower in ["auto", "disabled", "disable", "down", "unknown", ""]:
+        return s
+    import re
+    m = re.match(r"^(\d+(?:\.\d+)?)\s*([mMgGtT]?)[bB]?[pP]?[sS]?$", s)
+    if m:
+        val_str, unit = m.groups()
+        val = float(val_str)
+        unit = unit.upper()
+        if unit == "M" or unit == "":
+            if val >= 1000:
+                val_g = val / 1000.0
+                if val_g.is_integer():
+                    return f"{int(val_g)}G"
+                else:
+                    return f"{val_g:.1f}".rstrip("0").rstrip(".") + "G"
+            else:
+                if val.is_integer():
+                    return f"{int(val)}M"
+                else:
+                    return f"{val:.1f}".rstrip("0").rstrip(".") + "M"
+        elif unit == "G":
+            if val.is_integer():
+                return f"{int(val)}G"
+            else:
+                return f"{val:.1f}".rstrip("0").rstrip(".") + "G"
+    return s
+
+
 def update_cache():
     global cached_data, cached_speeds, _stop_thread, history_live, history_hourly, history_daily
     from scraper import scrape_switch
@@ -424,11 +481,30 @@ def update_cache():
                 continue
             ip = sw["ip"]
             
-            from scraper import HCSwitchScraper, OVSScraper
-            if sw.get("model", "").lower() in ["openvswitch", "ovs"]:
+            model_lower = sw.get("model", "").lower()
+            if model_lower == "internet":
+                results[ip] = {
+                    "name": sw["name"],
+                    "ip": ip,
+                    "ports": [],
+                    "status": "online",
+                    "mac_table": [],
+                    "mac_timestamp": now,
+                    "mac": "",
+                    "model": "internet",
+                    "timestamp": now
+                }
+                speeds[ip] = {}
+                continue
+
+            from scraper import HCSwitchScraper, OVSScraper, FritzBoxScraper
+            if model_lower in ["openvswitch", "ovs"]:
                 scraper_obj = OVSScraper(sw)
+            elif model_lower == "fritzbox":
+                scraper_obj = FritzBoxScraper(sw)
             else:
                 scraper_obj = HCSwitchScraper(sw)
+            scraper_obj.max_retries = config.get("max_request_retries", 5)
             
             # Scrape MAC table if due
             last_scrape = last_mac_scrape_times.get(ip, 0)
@@ -446,6 +522,10 @@ def update_cache():
 
             try:
                 data = scraper_obj.scrape()
+                if data and "ports" in data:
+                    for p in data["ports"]:
+                        if "speed" in p:
+                            p["speed"] = unify_speed(p["speed"])
             except Exception as e:
                 data = {"name": sw["name"], "ip": ip, "ports": [], "error": str(e)}
 
@@ -462,7 +542,7 @@ def update_cache():
             for p in data.get("ports", []):
                 port = p["port"]
                 key = f"{ip}:{port}"
-                last = counters.get(key, {"tx": 0, "rx": 0, "cum_tx": 0, "cum_rx": 0})
+                last = counters.get(key, {"tx": 0, "rx": 0, "cum_tx": 0, "cum_rx": 0, "ts": None})
                 cur_tx = p.get("tx_bytes", 0)
                 cur_rx = p.get("rx_bytes", 0)
 
@@ -475,11 +555,53 @@ def update_cache():
                 else:
                     delta_rx = cur_rx
 
+                # Sanity check: prevent impossible speed spikes from counter rollovers/glitches
+                last_ts = last.get("ts")
+                if last_ts is not None:
+                    # Parse link speed to determine a realistic maximum bandwidth limit
+                    speed_str = p.get("speed", "")
+                    link_speed_bps = None
+                    if speed_str:
+                        s_lower = speed_str.lower()
+                        if "10g" in s_lower:
+                            link_speed_bps = 10_000_000_000
+                        elif "2.5g" in s_lower or "2500" in s_lower:
+                            link_speed_bps = 2_500_000_000
+                        elif "2g" in s_lower or "2000" in s_lower:
+                            link_speed_bps = 2_000_000_000
+                        elif "1g" in s_lower or "1000" in s_lower:
+                            link_speed_bps = 1_000_000_000
+                        elif "100m" in s_lower or "100" in s_lower:
+                            link_speed_bps = 100_000_000
+                        elif "10m" in s_lower or "10" in s_lower:
+                            link_speed_bps = 10_000_000
+
+                    if link_speed_bps is None:
+                        # Fallback: 20G for trunk/lag ports, 10G for physical interfaces
+                        if "trunk" in str(port).lower() or "lag" in str(port).lower():
+                            link_speed_bps = 20_000_000_000
+                        else:
+                            link_speed_bps = 10_000_000_000
+
+                    dt = now - last_ts
+                    if dt <= 0:
+                        dt = 15.0
+
+                    # Max bytes physically possible (with 1.5x buffer for bursts/overhead)
+                    max_bytes_limit = (link_speed_bps * dt * 1.5) / 8
+
+                    if delta_tx > max_bytes_limit:
+                        logger.warning(f"[SanityCheck] Impossible TX byte delta on {key} ({delta_tx} bytes in {dt:.1f}s, limit {max_bytes_limit:.0f} bytes). Discarding delta.")
+                        delta_tx = 0
+                    if delta_rx > max_bytes_limit:
+                        logger.warning(f"[SanityCheck] Impossible RX byte delta on {key} ({delta_rx} bytes in {dt:.1f}s, limit {max_bytes_limit:.0f} bytes). Discarding delta.")
+                        delta_rx = 0
+
                 cum_tx = last["cum_tx"] + delta_tx
                 cum_rx = last["cum_rx"] + delta_rx
 
                 counters[key] = {"tx": cur_tx, "rx": cur_rx,
-                                 "cum_tx": cum_tx, "cum_rx": cum_rx}
+                                 "cum_tx": cum_tx, "cum_rx": cum_rx, "ts": now}
                 p["cum_tx"] = cum_tx
                 p["cum_rx"] = cum_rx
 
@@ -583,20 +705,36 @@ def update_cache():
                         sw_port_learned_macs[sw_ip][port] = []
                     sw_port_learned_macs[sw_ip][port].append((mac, entry.get("vlan", "")))
 
+        # Build a map of switch IPs to their models
+        switch_models = {sw["ip"]: sw.get("model", "") for sw in switch_configs}
+
         # Find active clients
         for sw_ip, ports in sw_port_learned_macs.items():
             for port, mac_vlan_list in ports.items():
                 has_switch = any(mac in sw_macs for mac, vlan in mac_vlan_list)
                 if not has_switch:
                     for mac, vlan in mac_vlan_list:
-                        if mac not in sw_macs and mac not in infra_macs:
+                        if mac not in sw_macs and mac not in infra_macs and not is_ignored_mac(mac):
                             formatted_mac = ":".join(mac[i:i+2] for i in range(0, len(mac), 2)).upper()
-                            active_clients[mac] = {
-                                "mac": formatted_mac,
-                                "ip": sw_ip,
-                                "port": port,
-                                "vlan": str(vlan)
-                            }
+                            
+                            is_current_fritz = (switch_models.get(sw_ip, "").lower() == "fritzbox")
+                            if mac in active_clients:
+                                prev_ip = active_clients[mac]["ip"]
+                                is_prev_fritz = (switch_models.get(prev_ip, "").lower() == "fritzbox")
+                                if is_prev_fritz and not is_current_fritz:
+                                    active_clients[mac] = {
+                                        "mac": formatted_mac,
+                                        "ip": sw_ip,
+                                        "port": port,
+                                        "vlan": str(vlan)
+                                    }
+                            else:
+                                active_clients[mac] = {
+                                    "mac": formatted_mac,
+                                    "ip": sw_ip,
+                                    "port": port,
+                                    "vlan": str(vlan)
+                                }
 
         # Update client database in config
         try:
@@ -746,12 +884,18 @@ def api_switches():
     vendors = load_mac_vendors()
     ieee_vendors = get_ieee_vendors()
     load_config()
-    active_ips = {sw["ip"] for sw in switch_configs if sw.get("enabled", True)}
+    active_ips = []
+    for sw in switch_configs:
+        if sw.get("enabled", True) and sw.get("model", "").lower() != "internet":
+            ip = sw["ip"]
+            if ip not in active_ips:
+                active_ips.append(ip)
     with cache_lock:
         data = [cached_data[ip] for ip in active_ips if ip in cached_data]
     db_clients = config.get("clients", {})
     
     for sw in data:
+        sw["mac_table"] = [entry for entry in sw.get("mac_table", []) if not is_ignored_mac(entry.get("mac"))]
         for entry in sw.get("mac_table", []):
             entry["vendor"] = lookup_vendor(entry.get("mac"), vendors, ieee_vendors)
             norm_mac = entry.get("mac", "").replace(":", "").replace("-", "").replace(" ", "").upper()
@@ -778,13 +922,20 @@ def refresh_mac(ip):
     if not sw:
         return jsonify({"error": "Switch not found"}), 404
         
+    if sw.get("model", "").lower() == "internet":
+        return jsonify({"status": "ok", "count": 0, "mac_table": []})
+        
     try:
-        from scraper import HCSwitchScraper, OVSScraper
-        if sw.get("model", "").lower() in ["openvswitch", "ovs"]:
+        from scraper import HCSwitchScraper, OVSScraper, FritzBoxScraper
+        model_lower = sw.get("model", "").lower()
+        if model_lower in ["openvswitch", "ovs"]:
             scraper_obj = OVSScraper(sw)
+        elif model_lower == "fritzbox":
+            scraper_obj = FritzBoxScraper(sw)
         else:
             scraper_obj = HCSwitchScraper(sw)
         mac_table = scraper_obj.scrape_mac_table()
+        mac_table = [entry for entry in mac_table if not is_ignored_mac(entry.get("mac"))]
 
         vendors = load_mac_vendors()
         ieee_vendors = get_ieee_vendors()
@@ -813,10 +964,16 @@ def get_transceiver(ip):
     if not sw:
         return jsonify({"error": "Switch not found"}), 404
         
+    if sw.get("model", "").lower() == "internet":
+        return jsonify({"error": "No transceiver data available for virtual Internet node"}), 404
+        
     try:
-        from scraper import HCSwitchScraper, OVSScraper
-        if sw.get("model", "").lower() in ["openvswitch", "ovs"]:
+        from scraper import HCSwitchScraper, OVSScraper, FritzBoxScraper
+        model_lower = sw.get("model", "").lower()
+        if model_lower in ["openvswitch", "ovs"]:
             scraper_obj = OVSScraper(sw)
+        elif model_lower == "fritzbox":
+            scraper_obj = FritzBoxScraper(sw)
         else:
             scraper_obj = HCSwitchScraper(sw)
         transceiver_info = scraper_obj.scrape_transceiver()
@@ -905,9 +1062,19 @@ def api_topology():
     infra_devices = config.get("infrastructure_devices", [])
     infra_by_mac = {}
     router_mac = None
+    
+    # First, let's see if we have a monitored switch that is a router/fritzbox
+    for ip, sw in switches_by_ip.items():
+        if sw.get("model", "").lower() == "fritzbox" and sw.get("mac"):
+            router_mac = sw["mac"]
+            break
+
     for dev in infra_devices:
         norm_mac = normalize_mac(dev["mac"])
         if norm_mac:
+            # Skip if this infrastructure device is already a monitored switch/router node
+            if norm_mac in mac_to_switch_ip:
+                continue
             dev_type = dev.get("type", "other")
             infra_by_mac[norm_mac] = {
                 "mac": norm_mac,
@@ -935,6 +1102,8 @@ def api_topology():
             port = str(entry.get("port", ""))
             mac = normalize_mac(entry.get("mac", ""))
             if port and mac:
+                if is_ignored_mac(mac):
+                    continue
                 if port not in sw_port_macs[ip]:
                     sw_port_macs[ip][port] = []
                 if mac not in sw_port_macs[ip][port]:
@@ -992,10 +1161,75 @@ def api_topology():
             for dst_ip in direct_neighbors:
                 direct_switch_links.append((src_ip, port, dst_ip))
 
+    # Load static switch uplinks from config
+    static_uplinks = {} # child_ip -> { parent_ip, parent_port, uplink_port }
+    for sw in switch_configs:
+        if not sw.get("enabled", True):
+            continue
+        ip = sw["ip"]
+        p_ip = sw.get("parent_ip", "")
+        p_port = sw.get("parent_port", "")
+        up_port = sw.get("uplink_port", "")
+        if p_ip and p_port:
+            static_uplinks[ip] = {
+                "parent_ip": p_ip,
+                "parent_port": str(p_port),
+                "uplink_port": str(up_port) if up_port else ""
+            }
+
     # Bidirectional links
     processed_links = set()
     links = []
     
+    # Build static switch-to-switch links
+    for child_ip, info in static_uplinks.items():
+        p_ip = info["parent_ip"]
+        p_port = info["parent_port"]
+        up_port = info["uplink_port"]
+        
+        if child_ip not in switches_by_ip:
+            continue
+            
+        speed = "Unknown"
+        tx_bps = 0
+        rx_bps = 0
+        
+        if p_ip in switches_by_ip:
+            parent_ports_info = switches_by_ip[p_ip]["ports"]
+            for p_info in parent_ports_info:
+                if str(p_info.get("port")).lower() == p_port.lower() or str(p_info.get("port")).lower() == f"port {p_port}".lower():
+                    speed = p_info.get("speed", "Unknown")
+                    tx_bps = p_info.get("speed_tx_bps", 0)
+                    rx_bps = p_info.get("speed_rx_bps", 0)
+                    break
+        elif child_ip in switches_by_ip:
+            child_ports_info = switches_by_ip[child_ip]["ports"]
+            for p_info in child_ports_info:
+                if up_port and (str(p_info.get("port")).lower() == up_port.lower() or str(p_info.get("port")).lower() == f"port {up_port}".lower()):
+                    speed = p_info.get("speed", "Unknown")
+                    tx_bps = p_info.get("speed_tx_bps", 0)
+                    rx_bps = p_info.get("speed_rx_bps", 0)
+                    break
+                    
+        source_port_label = p_port if ("lan" in p_port.lower() or "wan" in p_port.lower() or "port" in p_port.lower()) else f"Port {p_port}"
+        target_port_label = up_port if ("port" in up_port.lower() or "wan" in up_port.lower() or "lan" in up_port.lower() or not up_port) else f"Port {up_port}"
+        if not target_port_label:
+            target_port_label = "unknown"
+            
+        links.append({
+            "source": p_ip,
+            "target": child_ip,
+            "source_port": source_port_label,
+            "target_port": target_port_label,
+            "speed": speed,
+            "tx_bps": tx_bps,
+            "rx_bps": rx_bps,
+            "type": "uplink"
+        })
+        
+        link_key = tuple(sorted([p_ip, child_ip]))
+        processed_links.add(link_key)
+
     switch_link_ports = {}
     for src_ip, port, dst_ip in direct_switch_links:
         switch_link_ports[(src_ip, dst_ip)] = port
@@ -1003,6 +1237,11 @@ def api_topology():
     for src_ip, port, dst_ip in direct_switch_links:
         link_key = tuple(sorted([src_ip, dst_ip]))
         if link_key in processed_links:
+            continue
+            
+        # Reject auto-discovered links where a child has a configured static parent,
+        # unless that parent is the configured parent.
+        if dst_ip in static_uplinks and static_uplinks[dst_ip]["parent_ip"] != src_ip:
             continue
             
         processed_links.add(link_key)
@@ -1086,10 +1325,20 @@ def api_topology():
                 if not is_switch_mac(mac) and not is_infra_mac(mac):
                     has_switch = any(is_switch_mac(m) for m in macs)
                     if not has_switch:
-                        active_macs_to_port[mac] = (ip, port)
-                        all_known_client_macs.add(mac)
+                        # Prioritize physical switches over fritzbox
+                        is_current_fritz = (switches_by_ip.get(ip, {}).get("model", "").lower() == "fritzbox")
+                        if mac in active_macs_to_port:
+                            prev_ip, prev_port = active_macs_to_port[mac]
+                            is_prev_fritz = (switches_by_ip.get(prev_ip, {}).get("model", "").lower() == "fritzbox")
+                            if is_prev_fritz and not is_current_fritz:
+                                active_macs_to_port[mac] = (ip, port)
+                        else:
+                            active_macs_to_port[mac] = (ip, port)
+                            all_known_client_macs.add(mac)
                         
     for mac in all_known_client_macs:
+        if is_ignored_mac(mac):
+            continue
         if is_switch_mac(mac) or is_infra_mac(mac):
             continue
         is_active = mac in active_macs_to_port
@@ -1173,8 +1422,82 @@ def api_topology():
     # Assemble nodes
     nodes = []
     
+    # Check if there is an explicit internet node configured
+    explicit_internet = None
+    for ip, sw in switches_by_ip.items():
+        if sw.get("model", "").lower() == "internet":
+            explicit_internet = sw
+            break
+
+    if explicit_internet:
+        nodes.append({
+            "id": "internet",
+            "name": explicit_internet["name"],
+            "type": "internet",
+            "status": "online"
+        })
+        # Check if a link to the internet node already exists in links (e.g. via static parent config)
+        has_link_to_internet = False
+        for link in links:
+            if link["source"] == "internet" or link["target"] == "internet":
+                has_link_to_internet = True
+                break
+        if not has_link_to_internet:
+            # Fallback auto-link: find fritzbox and link it to WAN
+            fritzbox_ip = None
+            fritzbox_wan_speed = "1G/300M"
+            for ip, sw in switches_by_ip.items():
+                if sw.get("model", "").lower() == "fritzbox":
+                    fritzbox_ip = ip
+                    for p_info in sw.get("ports", []):
+                        if str(p_info.get("port")).lower() == "wan":
+                            fritzbox_wan_speed = p_info.get("speed", "1G/300M")
+                            break
+                    break
+            if fritzbox_ip:
+                links.append({
+                    "source": "internet",
+                    "target": fritzbox_ip,
+                    "source_port": "",
+                    "target_port": "WAN",
+                    "speed": fritzbox_wan_speed,
+                    "type": "internet"
+                })
+    else:
+        # Add Internet (ONT) virtual node if Fritz!Box is configured
+        fritzbox_ip = None
+        fritzbox_online = False
+        fritzbox_wan_speed = "1G/300M"
+        for ip, sw in switches_by_ip.items():
+            if sw.get("model", "").lower() == "fritzbox":
+                fritzbox_ip = ip
+                fritzbox_online = (sw.get("status") == "online")
+                for p_info in sw.get("ports", []):
+                    if str(p_info.get("port")).lower() == "wan":
+                        fritzbox_wan_speed = p_info.get("speed", "1G/300M")
+                        break
+                break
+
+        if fritzbox_ip:
+            nodes.append({
+                "id": "internet",
+                "name": "Internet (ONT)",
+                "type": "internet",
+                "status": "online" if fritzbox_online else "offline"
+            })
+            links.append({
+                "source": "internet",
+                "target": fritzbox_ip,
+                "source_port": "",
+                "target_port": "WAN",
+                "speed": fritzbox_wan_speed,
+                "type": "internet"
+            })
+
     # Add Switches
     for ip, sw in switches_by_ip.items():
+        if sw.get("model", "").lower() == "internet":
+            continue
         nodes.append({
             "id": ip,
             "name": sw["name"],
@@ -1247,7 +1570,7 @@ def api_topology():
             "last_seen_time": dev["last_seen_time"]
         })
 
-    if router_mac and router_mac not in infra_connections and switch_configs:
+    if router_mac and router_mac not in infra_connections and router_mac not in mac_to_switch_ip and switch_configs:
         first_ip = switch_configs[0]["ip"]
         links.append({
             "source": first_ip,
@@ -1417,13 +1740,22 @@ def config_page():
         keep = request.form.getlist("keep[]")
         enabled_vals = request.form.getlist("switch_enabled[]")
 
+        parent_ips = request.form.getlist("parent_ip[]")
+        parent_ports = request.form.getlist("parent_port[]")
+        uplink_ports = request.form.getlist("uplink_port[]")
+
         for i in range(len(ips)):
             if i >= len(keep) or keep[i] != "1":
                 continue
             is_enabled = True
             if i < len(enabled_vals):
                 is_enabled = (enabled_vals[i] == "1")
-            new_switches.append({
+                
+            p_ip = parent_ips[i].strip() if i < len(parent_ips) else ""
+            p_port = parent_ports[i].strip() if i < len(parent_ports) else ""
+            up_port = uplink_ports[i].strip() if i < len(uplink_ports) else ""
+            
+            sw_dict = {
                 "name": names[i] if i < len(names) else f"Switch {i+1}",
                 "ip": ips[i].strip(),
                 "username": usernames[i].strip() if i < len(usernames) else "admin",
@@ -1431,7 +1763,15 @@ def config_page():
                 "model": models[i].strip() if i < len(models) else "",
                 "port_count": int(port_counts[i]) if i < len(port_counts) else 9,
                 "enabled": is_enabled
-            })
+            }
+            if p_ip:
+                sw_dict["parent_ip"] = p_ip
+            if p_port:
+                sw_dict["parent_port"] = p_port
+            if up_port:
+                sw_dict["uplink_port"] = up_port
+                
+            new_switches.append(sw_dict)
 
         # Parse infrastructure devices
         infra_names = request.form.getlist("infra_name[]")
@@ -1475,21 +1815,31 @@ def config_page():
         new_refresh = int(request.form.get("refresh_interval", 30))
         new_mac_multiplier = int(request.form.get("mac_refresh_multiplier", 5))
         new_ports_wrap_threshold = int(request.form.get("ports_wrap_threshold", 0))
+        new_max_retries = int(request.form.get("max_request_retries", 5))
         new_columns = request.form.getlist("columns[]")
         if not new_columns:
             new_columns = ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes']
         new_grid_columns = request.form.get("grid_columns", "auto")
+
+        ignored_macs_raw = request.form.get("ignored_macs", "")
+        ignored_macs_list = [p.strip() for p in ignored_macs_raw.split(",") if p.strip()]
 
         load_config()
         config["title"] = new_title
         config["refresh_interval"] = new_refresh
         config["mac_refresh_multiplier"] = new_mac_multiplier
         config["ports_wrap_threshold"] = new_ports_wrap_threshold
+        config["max_request_retries"] = new_max_retries
         config["enabled_columns"] = new_columns
         config["grid_columns"] = new_grid_columns
         config["switches"] = new_switches
         config["infrastructure_devices"] = new_infra
         config["unmanaged_switches"] = new_unmanaged
+        
+        if "settings" not in config:
+            config["settings"] = {}
+        config["settings"]["ignored_macs"] = ignored_macs_list
+
         save_config()
 
         global _stop_thread
@@ -1500,6 +1850,10 @@ def config_page():
 
         return redirect(url_for("dashboard"))
 
+    settings = config.get("settings", {})
+    ignored_macs_list = settings.get("ignored_macs", [])
+    ignored_macs_str = ", ".join(ignored_macs_list)
+
     return render_template("config.html", title=config.get("title", "Switch Dashboard"),
                            switches=switch_configs,
                            infrastructure_devices=config.get("infrastructure_devices", []),
@@ -1507,8 +1861,10 @@ def config_page():
                            refresh=config.get("refresh_interval", 30),
                            mac_multiplier=config.get("mac_refresh_multiplier", 5),
                            ports_wrap_threshold=config.get("ports_wrap_threshold", 0),
+                           max_request_retries=config.get("max_request_retries", 5),
                            enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes']),
                            grid_columns=config.get("grid_columns", "auto"),
+                           ignored_macs=ignored_macs_str,
                            version=VERSION)
 
 
@@ -1831,6 +2187,9 @@ def backup_switch_config(ip):
     if not sw:
         return jsonify({"error": "Switch not found"}), 404
 
+    if sw.get("model", "").lower() == "internet":
+        return jsonify({"error": "Virtual Internet node cannot be backed up"}), 400
+
     try:
         from scraper import HCSwitchScraper
         scraper_obj = HCSwitchScraper(sw)
@@ -1870,6 +2229,9 @@ def reboot_switch_api(ip):
             break
     if not sw:
         return jsonify({"error": "Switch not found"}), 404
+
+    if sw.get("model", "").lower() == "internet":
+        return jsonify({"error": "Virtual Internet node cannot be rebooted"}), 400
 
     try:
         from scraper import HCSwitchScraper

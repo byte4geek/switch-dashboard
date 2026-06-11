@@ -474,7 +474,21 @@ This project is licensed under the **MIT License**. Feel free to modify, distrib
 
 ## 📅 Release Notes & Changelog
 
-### 🚀 Release 2026.6.2 (Current)
+### 🚀 Release 2026.6.3 (Current)
+* **⠿ Draggable Nodes sequence**:
+  - Implemented HTML5 drag-and-drop node reordering in the configuration settings page (`/config`), with a custom grab indicator handle `⠿`.
+  - Dynamically recalculates and updates all internal DOM indices, hidden enable fields, checkbox toggles, and callbacks on drop to ensure form inputs stay synchronized.
+  - Form submission saves switches to `config.json` in the new DOM order, and the main page `/` renders switch panels in the exact sequence configured.
+* **🔌 Unified Port Speed Formats**:
+  - Unified the representation of port speeds across all switch types (Open vSwitch, Fritz!Box, and Managed Switches).
+  - Automatically translates raw bit speeds (like `2500M`, `1000M`) to unified speed labels (like `2.5G`, `1G`), aligning with standard virtual and router node speed conventions.
+* **⏱️ Configurable Request Retries & HTTP 404 Optimization**:
+  - Added a new `Max Request Retries` parameter in `/config` (General Settings) to customize switch query retries (set to 0 to disable retries).
+  - Optimized the internal scraper retry engine to fail fast and abort retries immediately when encountering `HTTP 404 Not Found` errors, preventing thread blocking, scraping lag, and missing throughput charts.
+
+---
+
+### 🚀 Release 2026.6.2
 * **🕸️ Interactive Network Topology Map**:
   - Implemented custom Bezier curve routing equations to position port badges precisely along cables during node drags.
   - Added layout reset confirmation dialogs in English to prevent accidental map layout clears.

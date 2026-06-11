@@ -579,7 +579,7 @@
 </div>
 <div id="app" class="loading">Loading dashboard</div>
 <div class="footer">
-  <div>Refreshes every {{ refresh }} seconds &middot; <a href="/config" style="color:#8b949e">Configure switches</a> &middot; <a href="/api-docs" style="color:#8b949e">API Reference</a> &middot; <span class="version-badge">v{{ version }}</span></div>
+  <div>Refreshes every {{ refresh }} seconds &middot; <a href="/config" style="color:#8b949e">Configure Nodes</a> &middot; <a href="/api-docs" style="color:#8b949e">API Reference</a> &middot; <span class="version-badge">v{{ version }}</span></div>
   <div style="margin-top: 6px; font-size: 11px; color: #8b949e;">Created by <a href="https://github.com/byte4geek/switch-dashboard" target="_blank" style="color: #58a6ff; text-decoration: none; font-weight: 500;">Byte4Geek</a> for the community</div>
 </div>
 
@@ -1676,10 +1676,10 @@ async function updateDashboard() {
     const data = await r.json();
     const app = document.getElementById('app');
     if (!data || data.length === 0) {
-      app.innerHTML = '<div style="text-align:center;padding:40px;color:#b1bac4">No switches configured. <a href="/config" style="color:#58a6ff">Configure now</a></div>';
+      app.innerHTML = '<div style="text-align:center;padding:40px;color:#b1bac4">No nodes configured. <a href="/config" style="color:#58a6ff">Configure now</a></div>';
       app.className = '';
       liveDot.style.background = '#f85149';
-      liveText.textContent = 'No switches';
+      liveText.textContent = 'No nodes';
       return;
     }
     

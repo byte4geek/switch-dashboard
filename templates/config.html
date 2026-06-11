@@ -322,11 +322,36 @@
   }
   input:checked + .slider { background-color: rgba(56, 139, 253, 0.15); border-color: #388bfd; }
   input:checked + .slider:before { transform: translateX(14px); background-color: #58a6ff; }
+
+  /* Drag and Drop styles */
+  .drag-handle {
+    cursor: grab;
+    padding: 0 8px;
+    font-size: 18px;
+    color: #8b949e;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+    transition: color 0.2s ease;
+  }
+  .drag-handle:hover {
+    color: #58a6ff;
+  }
+  .drag-handle:active {
+    cursor: grabbing;
+  }
+  .switch-group.dragging {
+    opacity: 0.4;
+    border: 1px dashed #58a6ff;
+    background: rgba(88, 166, 255, 0.05);
+  }
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>&#9881; Switch Settings</h1>
+  <h1>&#9881; Node Settings</h1>
   <a href="/">&larr; Back to Dashboard</a>
 </div>
 
@@ -359,7 +384,7 @@
           <span class="note" style="display:block; margin-top:2px;">e.g., if set to 5, the MAC table is fetched every 5 dashboard refreshes to reduce switch load.</span>
         </div>
         <div class="global-row">
-          <label>Switches Per Row</label>
+          <label>Nodes Per Row</label>
           <select name="grid_columns" style="background: #0d1117; border: 1px solid rgba(48, 54, 61, 0.8); border-radius: 6px; padding: 8px 12px; color: #e1e4e8; font-size: 13px; max-width: 180px; outline: none; cursor: pointer; transition: border-color 0.2s;">
             <option value="auto" {% if grid_columns == 'auto' or not grid_columns %}selected{% endif %}>Auto (Responsive)</option>
             <option value="1" {% if grid_columns == '1' %}selected{% endif %}>1</option>
@@ -367,19 +392,29 @@
             <option value="3" {% if grid_columns == '3' %}selected{% endif %}>3</option>
             <option value="4" {% if grid_columns == '4' %}selected{% endif %}>4</option>
           </select>
-          <span class="note" style="display:block; margin-top:2px;">Select how many switches are displayed side-by-side on large screens.</span>
+          <span class="note" style="display:block; margin-top:2px;">Select how many nodes are displayed side-by-side on large screens.</span>
         </div>
         <div class="global-row">
           <label>Ports Row Wrap Threshold</label>
           <input type="number" name="ports_wrap_threshold" value="{{ ports_wrap_threshold }}" min="0" max="100" style="max-width:120px">
-          <span class="note" style="display:block; margin-top:2px;">If a switch has more ports than this threshold, the port graphic bar will wrap into multiple rows (useful for OVS switches with high port counts). Set to 0 to disable wrapping.</span>
+          <span class="note" style="display:block; margin-top:2px;">If a node has more ports than this threshold, the port graphic bar will wrap into multiple rows (useful for OVS switches with high port counts). Set to 0 to disable wrapping.</span>
+        </div>
+        <div class="global-row">
+          <label>Max Request Retries</label>
+          <input type="number" name="max_request_retries" value="{{ max_request_retries }}" min="0" max="20" style="max-width:120px">
+          <span class="note" style="display:block; margin-top:2px;">Number of times to retry failed HTTP requests to switches. Set to 0 to disable retries (only 1 attempt is made; highly recommended to prevent lag if switches return 404 or have pages disabled).</span>
+        </div>
+        <div class="global-row">
+          <label>Ignored MACs (comma-separated wildcards, e.g. FA:CE:*)</label>
+          <input type="text" name="ignored_macs" value="{{ ignored_macs }}" placeholder="e.g. FA:CE:*, 00:11:22:33:*">
+          <span class="note" style="display:block; margin-top:2px;">Specify MAC address patterns to completely exclude from the dashboard (clients, tables, maps). Support wildcards (e.g. FA:CE:*).</span>
         </div>
       </div>
 
       <div class="card">
         <h2>Column Visibility Settings</h2>
         <div class="global-row" style="margin-bottom: 0;">
-          <span class="note" style="display:block; margin-bottom: 12px;">Select which columns are visible in the switch port tables on the dashboard.</span>
+          <span class="note" style="display:block; margin-bottom: 12px;">Select which columns are visible in the node port tables on the dashboard.</span>
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 8px;">
             {% for col_id, col_label in [
               ('port', 'Port'),
@@ -402,15 +437,16 @@
       </div>
 
       <div class="card">
-        <h2>Switches</h2>
+        <h2>Nodes</h2>
         <div id="switch-list">
           {% for sw in switches %}
           <div class="switch-group" data-index="{{ loop.index0 }}">
             <input type="hidden" name="keep[]" value="1">
             <div class="switch-header" onclick="toggleSwitchExpand(this)">
               <div class="switch-title-wrap">
+                <span class="drag-handle" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">⠿</span>
                 <svg class="switch-chevron" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
-                <h3>Switch {{ loop.index }} <span class="switch-subname" id="subname-{{ loop.index0 }}">{{ sw.name }} ({{ sw.ip }})</span></h3>
+                <h3>Node {{ loop.index }} <span class="switch-subname" id="subname-{{ loop.index0 }}">{{ sw.name }} ({{ sw.ip }})</span></h3>
               </div>
               <div class="switch-actions" onclick="event.stopPropagation()">
                 <button type="button" class="inline-reboot-btn" onclick="openRebootModal('{{ sw.ip }}', '{{ sw.name }}')">Reboot</button>
@@ -420,7 +456,7 @@
             <div class="switch-content">
               <div class="form-row">
                 <label>Name</label>
-                <input type="text" name="name[]" value="{{ sw.name }}" placeholder="Switch 1" oninput="updateSubname({{ loop.index0 }}, this.value, null)">
+                <input type="text" name="name[]" value="{{ sw.name }}" placeholder="Node 1" oninput="updateSubname({{ loop.index0 }}, this.value, null)">
               </div>
               <div class="form-row">
                 <label>IP Address</label>
@@ -437,11 +473,26 @@
               <div class="form-row">
                 <label>Model</label>
                 <input type="text" name="model[]" value="{{ sw.get('model', '') }}" placeholder="HC-SWTGW218AS">
-                <span class="note">Optional, for display and template matching</span>
+                <span class="note">Optional (e.g. HC-SWTGW218AS, fritzbox, openvswitch, or internet)</span>
               </div>
               <div class="form-row">
                 <label>Port Count</label>
                 <input type="number" name="port_count[]" value="{{ sw.get('port_count', 9) }}" min="1" max="52" style="max-width:80px">
+              </div>
+              <div class="form-row" style="border-top: 1px solid rgba(48, 54, 61, 0.4); padding-top: 12px; margin-top: 12px;">
+                <label style="color: #58a6ff;">Parent Device IP</label>
+                <input type="text" name="parent_ip[]" value="{{ sw.get('parent_ip', '') }}" placeholder="e.g. 192.168.1.1 (Fritz!Box)">
+                <span class="note">IP of the upstream parent node this node connects to.</span>
+              </div>
+              <div class="form-row">
+                <label style="color: #58a6ff;">Parent Port</label>
+                <input type="text" name="parent_port[]" value="{{ sw.get('parent_port', '') }}" placeholder="e.g. LAN 2 or 8">
+                <span class="note">The port on the parent device that connects to this node.</span>
+              </div>
+              <div class="form-row" style="margin-bottom: 18px;">
+                <label style="color: #58a6ff;">Local Uplink Port</label>
+                <input type="text" name="uplink_port[]" value="{{ sw.get('uplink_port', '') }}" placeholder="e.g. Port 1 or 1">
+                <span class="note">The port on this node itself that connects to the parent.</span>
               </div>
               <div class="form-row" style="display: flex; align-items: center; gap: 8px;">
                 <input type="hidden" name="switch_enabled[]" id="switch_enabled_hidden_{{ loop.index0 }}" value="{% if sw.get('enabled', True) %}1{% else %}0{% endif %}">
@@ -449,14 +500,14 @@
                   <input type="checkbox" {% if sw.get('enabled', True) %}checked{% endif %} onchange="document.getElementById('switch_enabled_hidden_{{ loop.index0 }}').value = this.checked ? '1' : '0'">
                   <span class="slider round"></span>
                 </label>
-                <span style="font-size: 13px; color: #e1e4e8;">Enabled (Query and display this switch)</span>
+                <span style="font-size: 13px; color: #e1e4e8;">Enabled (Query and display this node)</span>
               </div>
             </div>
           </div>
           {% endfor %}
         </div>
 
-        <button type="button" class="add-btn" onclick="addSwitch()">+ Add Switch</button>
+        <button type="button" class="add-btn" onclick="addSwitch()">+ Add Node</button>
       </div>
 
       <div class="card">
@@ -500,7 +551,7 @@
             <div style="display: flex; gap: 10px; width: 100%; flex-wrap: wrap; align-items: center;">
               <input type="text" name="unmanaged_name[]" value="{{ us.name }}" placeholder="Switch Name (e.g. Desk Switch)" style="flex: 2; min-width: 150px;">
               <select name="unmanaged_parent_ip[]" style="background: #0d1117; border: 1px solid rgba(48, 54, 61, 0.8); border-radius: 6px; padding: 8px 12px; color: #e1e4e8; font-size: 13px; flex: 2; min-width: 150px; outline: none; cursor: pointer;">
-                {% for sw in switches %}
+                {% for sw in switches if sw.get('model', '').lower() != 'internet' %}
                 <option value="{{ sw.ip }}" {% if us.parent_ip == sw.ip %}selected{% endif %}>{{ sw.name }} ({{ sw.ip }})</option>
                 {% endfor %}
               </select>
@@ -793,6 +844,36 @@ function updateSubname(index, nameVal, ipVal) {
   subnameSpan.textContent = `${name} (${ip})`;
 }
 
+// Drag and Drop Initialization
+function initDragAndDrop(card) {
+  const handle = card.querySelector('.drag-handle');
+  if (!handle) return;
+
+  handle.addEventListener('mousedown', () => {
+    card.setAttribute('draggable', 'true');
+  });
+
+  handle.addEventListener('mouseup', () => {
+    card.removeAttribute('draggable');
+  });
+  
+  handle.addEventListener('mouseleave', () => {
+    card.removeAttribute('draggable');
+  });
+
+  card.addEventListener('dragstart', (e) => {
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');
+  });
+
+  card.addEventListener('dragend', () => {
+    card.classList.remove('dragging');
+    card.removeAttribute('draggable');
+    renumber();
+  });
+}
+
 // Add Switch Collapsible template
 function addSwitch() {
   const list = document.getElementById('switch-list');
@@ -804,8 +885,9 @@ function addSwitch() {
     <input type="hidden" name="keep[]" value="1">
     <div class="switch-header active" onclick="toggleSwitchExpand(this)">
       <div class="switch-title-wrap">
+        <span class="drag-handle" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">⠿</span>
         <svg class="switch-chevron" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
-        <h3>Switch ${count + 1} <span class="switch-subname" id="subname-${count}">New Switch</span></h3>
+        <h3>Node ${count + 1} <span class="switch-subname" id="subname-${count}">New Node</span></h3>
       </div>
       <div class="switch-actions" onclick="event.stopPropagation()">
         <button type="button" class="inline-remove-btn" onclick="removeSwitch(this)">Delete</button>
@@ -814,7 +896,7 @@ function addSwitch() {
     <div class="switch-content active">
       <div class="form-row">
         <label>Name</label>
-        <input type="text" name="name[]" value="Switch ${count + 1}" placeholder="Switch ${count + 1}" oninput="updateSubname(${count}, this.value, null)">
+        <input type="text" name="name[]" value="Node ${count + 1}" placeholder="Node ${count + 1}" oninput="updateSubname(${count}, this.value, null)">
       </div>
       <div class="form-row">
         <label>IP Address</label>
@@ -831,22 +913,38 @@ function addSwitch() {
       <div class="form-row">
         <label>Model</label>
         <input type="text" name="model[]" value="" placeholder="HC-SWTGW218AS">
-        <span class="note">Optional, for template matching</span>
+        <span class="note">Optional (e.g. HC-SWTGW218AS, fritzbox, openvswitch, or internet)</span>
       </div>
       <div class="form-row">
         <label>Port Count</label>
         <input type="number" name="port_count[]" value="9" min="1" max="52" style="max-width:80px">
       </div>
+      <div class="form-row" style="border-top: 1px solid rgba(48, 54, 61, 0.4); padding-top: 12px; margin-top: 12px;">
+        <label style="color: #58a6ff;">Parent Device IP</label>
+        <input type="text" name="parent_ip[]" value="" placeholder="e.g. 192.168.1.1 (Fritz!Box)">
+        <span class="note">IP of the upstream parent node this node connects to.</span>
+      </div>
+      <div class="form-row">
+        <label style="color: #58a6ff;">Parent Port</label>
+        <input type="text" name="parent_port[]" value="" placeholder="e.g. LAN 2 or 8">
+        <span class="note">The port on the parent device that connects to this node.</span>
+      </div>
+      <div class="form-row" style="margin-bottom: 18px;">
+        <label style="color: #58a6ff;">Local Uplink Port</label>
+        <input type="text" name="uplink_port[]" value="" placeholder="e.g. Port 1 or 1">
+        <span class="note">The port on this node itself that connects to the parent.</span>
+      </div>
       <div class="form-row" style="display: flex; align-items: center; gap: 8px;">
         <input type="hidden" name="switch_enabled[]" id="switch_enabled_hidden_${count}" value="1">
         <label class="switch-toggle" style="margin: 0;">
-          <input type="checkbox" checked onchange="document.getElementById('switch_enabled_hidden_\${count}').value = this.checked ? '1' : '0'">
+          <input type="checkbox" checked onchange="document.getElementById('switch_enabled_hidden_${count}').value = this.checked ? '1' : '0'">
           <span class="slider round"></span>
         </label>
-        <span style="font-size: 13px; color: #e1e4e8;">Enabled (Query and display this switch)</span>
+        <span style="font-size: 13px; color: #e1e4e8;">Enabled (Query and display this node)</span>
       </div>
     </div>`;
   list.appendChild(div);
+  initDragAndDrop(div);
   renumber();
   updateSubname(count);
 }
@@ -863,11 +961,38 @@ function renumber() {
   const groups = document.querySelectorAll('.switch-group');
   let activeIndex = 1;
   groups.forEach((g, i) => {
+    g.setAttribute('data-index', i);
+
+    const subname = g.querySelector('.switch-subname');
+    if (subname) {
+      subname.id = `subname-${i}`;
+    }
+
     const h3 = g.querySelector('.switch-title-wrap h3');
-    if (h3 && g.style.display !== 'none') {
-      const subname = g.querySelector('.switch-subname');
-      h3.innerHTML = `Switch ${activeIndex} <span class="switch-subname" id="${subname.id}">${subname.textContent}</span>`;
-      activeIndex++;
+    if (h3) {
+      if (g.style.display !== 'none') {
+        const text = subname ? subname.textContent : '';
+        h3.innerHTML = `Node ${activeIndex} <span class="switch-subname" id="subname-${i}">${text}</span>`;
+        activeIndex++;
+      }
+    }
+
+    const nameInput = g.querySelector('input[name="name[]"]');
+    if (nameInput) {
+      nameInput.setAttribute('oninput', `updateSubname(${i}, this.value, null)`);
+    }
+    const ipInput = g.querySelector('input[name="ip[]"]');
+    if (ipInput) {
+      ipInput.setAttribute('oninput', `updateSubname(${i}, null, this.value)`);
+    }
+
+    const hiddenEnabled = g.querySelector('input[name="switch_enabled[]"]');
+    if (hiddenEnabled) {
+      hiddenEnabled.id = `switch_enabled_hidden_${i}`;
+    }
+    const checkbox = g.querySelector('.switch-toggle input[type="checkbox"]');
+    if (checkbox) {
+      checkbox.setAttribute('onchange', `document.getElementById('switch_enabled_hidden_${i}').value = this.checked ? '1' : '0'`);
     }
   });
 }
@@ -1455,6 +1580,35 @@ window.addEventListener('DOMContentLoaded', () => {
   loadTemplateList();
   loadVendorList();
   loadDeviceTypes();
+
+  // Initialize drag-and-drop on existing cards
+  const cards = document.querySelectorAll('.switch-group');
+  cards.forEach(card => {
+    initDragAndDrop(card);
+  });
+
+  // Initialize dragover listener on container
+  const list = document.getElementById('switch-list');
+  if (list) {
+    list.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const draggingCard = document.querySelector('.switch-group.dragging');
+      if (!draggingCard) return;
+
+      const siblings = [...list.querySelectorAll('.switch-group:not(.dragging)')];
+      const nextSibling = siblings.find(sibling => {
+        const box = sibling.getBoundingClientRect();
+        const offset = e.clientY - box.top - box.height / 2;
+        return offset < 0;
+      });
+
+      if (nextSibling) {
+        list.insertBefore(draggingCard, nextSibling);
+      } else {
+        list.appendChild(draggingCard);
+      }
+    });
+  }
 });
 
 // CUSTOM DEVICE TYPES CONFIG INTERACTIVE FUNCTIONS

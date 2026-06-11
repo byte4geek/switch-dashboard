@@ -78,6 +78,7 @@
   }
   
   /* Color coding by node type */
+  .node-internet .node-bg { stroke: #06b6d4; filter: drop-shadow(0 0 8px rgba(6, 182, 212, 0.4)); }
   .node-router .node-bg { stroke: #a855f7; filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.3)); }
   .node-switch .node-bg { stroke: #3b82f6; filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.3)); }
   .node-unmanaged_switch .node-bg { stroke: #0284c7; filter: drop-shadow(0 0 6px rgba(2, 132, 199, 0.3)); }
@@ -91,6 +92,7 @@
   .node:hover .node-bg {
     stroke-width: 2.5;
   }
+  .node-internet:hover .node-bg { filter: drop-shadow(0 0 12px rgba(6, 182, 212, 0.7)); }
   .node-router:hover .node-bg { filter: drop-shadow(0 0 12px rgba(168, 85, 247, 0.6)); }
   .node-switch:hover .node-bg { filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.6)); }
   .node-repeater:hover .node-bg { filter: drop-shadow(0 0 12px rgba(249, 115, 22, 0.6)); }
@@ -100,6 +102,7 @@
     fill: #b1bac4;
     transition: fill 0.3s;
   }
+  .node-internet .node-icon-svg { fill: #06b6d4; }
   .node-router .node-icon-svg { fill: #c084fc; }
   .node-switch .node-icon-svg { fill: #60a5fa; }
   .node-unmanaged_switch .node-icon-svg { fill: #38bdf8; }
@@ -604,6 +607,7 @@
 
   // SVG Icons markup
   const ICONS = {
+    internet: `<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>`,
     router: `<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>`,
     switch: `<path d="M19 13H5c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2zM9 19H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM19 3H5c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 9H7V7h2v2zm4 0h-2V7h2v2zm4 0h-2V7h2v2z"/>`,
     unmanaged_switch: `<path d="M19 13H5c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-4c0-1.1-.9-2-2-2zM9 19H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM19 3H5c-1.1 0-2 .9-2 2v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 9H7V7h2v2zm4 0h-2V7h2v2zm4 0h-2V7h2v2z"/>`,
@@ -681,17 +685,28 @@
       }
     });
 
-    // Find the Root (prefer Router, then switches)
+    // Find the Root (prefer Internet, then Router, then switches)
     let root = null;
-    const routers = filteredNodes.filter(n => n.type === 'router');
-    if (routers.length > 0) {
-      root = routers[0].id;
+    const internetNodes = filteredNodes.filter(n => n.type === 'internet');
+    if (internetNodes.length > 0) {
+      root = internetNodes[0].id;
     } else {
-      const switches = filteredNodes.filter(n => n.type === 'switch');
-      if (switches.length > 0) {
-        root = switches[0].id;
-      } else if (filteredNodes.length > 0) {
-        root = filteredNodes[0].id;
+      const routers = filteredNodes.filter(n => n.type === 'router');
+      if (routers.length > 0) {
+        root = routers[0].id;
+      } else {
+        const switches = filteredNodes.filter(n => n.type === 'switch');
+        if (switches.length > 0) {
+          // Prefer Fritz!Box switch node if present
+          const fritz = switches.find(n => (n.model && n.model.toLowerCase() === 'fritzbox') || n.name.toLowerCase().includes('fritz'));
+          if (fritz) {
+            root = fritz.id;
+          } else {
+            root = switches[0].id;
+          }
+        } else if (filteredNodes.length > 0) {
+          root = filteredNodes[0].id;
+        }
       }
     }
 
@@ -988,7 +1003,10 @@
     container.innerHTML = '';
 
     filteredNodes.forEach(node => {
-      const typeClass = `node-${node.type}`;
+      let typeClass = `node-${node.type}`;
+      if (node.type === 'switch' && node.model && node.model.toLowerCase() === 'fritzbox') {
+        typeClass = 'node-router';
+      }
       const statusClass = `node-${node.status}`;
       
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -1012,6 +1030,7 @@
       let sublabelVal = '';
       if (node.type === 'switch') sublabelVal = node.ip || '';
       else if (node.type === 'unmanaged_switch') sublabelVal = `Unmanaged (Port ${node.parent_port})`;
+      else if (node.type === 'internet') sublabelVal = 'WAN External';
       else sublabelVal = node.mac || '';
       const textLen = Math.max((node.name || '').length, sublabelVal.length);
       // Auto width: base of 150px for clients, 160px for others, expanding if text is long
@@ -1039,6 +1058,8 @@
       if (node.type === 'client') {
         const dType = node.device_type || 'laptop';
         iconMarkup = ICONS[dType] || ICONS.laptop || ICONS.client;
+      } else if (node.type === 'switch' && node.model && node.model.toLowerCase() === 'fritzbox') {
+        iconMarkup = ICONS.router;
       } else {
         iconMarkup = ICONS[node.type] || ICONS.other;
       }
@@ -1083,6 +1104,8 @@
         subLabelText.textContent = node.ip;
       } else if (node.type === 'unmanaged_switch') {
         subLabelText.textContent = `Unmanaged (Port ${node.parent_port})`;
+      } else if (node.type === 'internet') {
+        subLabelText.textContent = 'WAN External';
       } else {
         subLabelText.textContent = formatMacAddress(node.mac);
       }
@@ -1270,8 +1293,17 @@
     let avatarColor = '#10b981';
     let iconSvg = ICONS.client;
     
-    if (node.type === 'router') { avatarColor = '#a855f7'; iconSvg = ICONS.router; }
-    else if (node.type === 'switch') { avatarColor = '#3b82f6'; iconSvg = ICONS.switch; }
+    if (node.type === 'internet') { avatarColor = '#06b6d4'; iconSvg = ICONS.internet; }
+    else if (node.type === 'router') { avatarColor = '#a855f7'; iconSvg = ICONS.router; }
+    else if (node.type === 'switch') {
+      if (node.model && node.model.toLowerCase() === 'fritzbox') {
+        avatarColor = '#a855f7';
+        iconSvg = ICONS.router;
+      } else {
+        avatarColor = '#3b82f6';
+        iconSvg = ICONS.switch;
+      }
+    }
     else if (node.type === 'unmanaged_switch') { avatarColor = '#0284c7'; iconSvg = ICONS.unmanaged_switch; }
     else if (node.type === 'repeater') { avatarColor = '#f97316'; iconSvg = ICONS.repeater; }
     else if (node.type === 'client') {
@@ -1293,7 +1325,7 @@
         </div>
         <div class="detail-title">
           <h3>${node.name}</h3>
-          <p style="color: ${avatarColor};">${node.type === 'unmanaged_switch' ? 'UNMANAGED SWITCH' : node.type.toUpperCase()}</p>
+          <p style="color: ${avatarColor};">${node.type === 'unmanaged_switch' ? 'UNMANAGED SWITCH' : (node.type === 'internet' ? 'INTERNET WAN' : (node.model && node.model.toLowerCase() === 'fritzbox' ? 'ROUTER / GATEWAY' : node.type.toUpperCase()))}</p>
         </div>
       </div>
     `;
@@ -1331,6 +1363,19 @@
         <div class="detail-item">
           <div class="label">Parent Port</div>
           <div class="value">Port ${node.parent_port}</div>
+        </div>
+        <div class="detail-item">
+          <div class="label">Status</div>
+          <div class="value" style="color: ${node.status === 'online' ? '#3fb950' : '#f85149'}">
+            ${node.status.toUpperCase()}
+          </div>
+        </div>
+      `;
+    } else if (node.type === 'internet') {
+      html += `
+        <div class="detail-item">
+          <div class="label">Connection Type</div>
+          <div class="value">WAN External (ONT)</div>
         </div>
         <div class="detail-item">
           <div class="label">Status</div>
