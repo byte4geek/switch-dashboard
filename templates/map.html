@@ -36,12 +36,31 @@
   .header-left img { height: 32px; width: 32px; border-radius: 6px; }
   .header h1 { font-size: 18px; font-weight: 600; color: #f0f6fc; display: flex; align-items: center; gap: 8px; }
   .header .nav-links { display: flex; gap: 12px; align-items: center; }
-  .header a {
-    color: #8b949e; text-decoration: none; font-size: 13px; padding: 8px 16px;
-    border-radius: 8px; transition: all .2s; border: 1px solid transparent;
-    background: rgba(255, 255, 255, 0.03);
+  .header .nav-links a {
+    color: #b1bac4;
+    text-decoration: none;
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    transition: all .2s;
+    background: rgba(33, 38, 45, 0.5);
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
-  .header a:hover { color: #e1e4e8; background: rgba(255, 255, 255, 0.08); border-color: rgba(255,255,255,0.1); }
+  .header .nav-links a:hover {
+    color: #ffffff;
+    background: #1c2128;
+    border-color: #58a6ff;
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.2);
+    transform: translateY(-1px);
+  }
+  .header .nav-links a.active {
+    color: #58a6ff;
+    border-color: rgba(56, 139, 253, 0.5);
+    background: rgba(56, 139, 253, 0.1);
+  }
 
   .main-container {
     flex: 1;
@@ -413,18 +432,43 @@
   .legend-item { display: flex; align-items: center; gap: 4px; }
   .legend-color { width: 12px; height: 3px; border-radius: 1px; }
 
+  .header .status {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; color: #b1bac4;
+    margin-right: 12px;
+  }
+  .header .status .dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: #3fb950;
+    transition: background 0.3s;
+  }
+  .header .status .dot.paused {
+    background: #d29922;
+  }
+  .header .status .dot.error {
+    background: #f85149;
+  }
+
 </style>
 </head>
 <body>
 
 <div class="header">
   <div class="header-left">
-    <img src="/static/logo.png" alt="Horaco Logo">
-    <h1>🕸️ Network Map</h1>
+    <img src="/static/logo.png" alt="Horaco Logo" style="height: 38px; width: 38px; border-radius: 8px; object-fit: cover; border: 1px solid #30363d; box-shadow: 0 0 10px rgba(88, 166, 255, 0.15);">
+    <h1 style="font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 600; letter-spacing: -0.5px; background: linear-gradient(135deg, #ffffff 30%, #a5c2f4 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Network Map</h1>
   </div>
   <div class="nav-links">
-    <a href="/">&larr; Dashboard</a>
+    <span class="status">
+      <span class="dot" id="live-dot"></span>
+      <span id="live-text">Live</span>
+    </span>
+    <a href="/">📊 Dashboard</a>
+    <a href="/map" class="active">🕸️ Network Map</a>
+    <a href="/scanner">🌐 Scanner</a>
     <a href="/config">&#9881; Config</a>
+    <a href="/backups">💾 Backups</a>
+    <a href="/logs">📋 Logs</a>
   </div>
 </div>
 
@@ -661,8 +705,22 @@
           }
         }
       }
+      
+      countdownSeconds = 10;
+      const liveText = document.getElementById('live-text');
+      const liveDot = document.getElementById('live-dot');
+      if (liveText && liveDot) {
+        liveText.textContent = `Live (update in ${countdownSeconds}s)`;
+        liveDot.className = 'dot';
+      }
     } catch (e) {
       console.error('Error fetching topology:', e);
+      const liveText = document.getElementById('live-text');
+      const liveDot = document.getElementById('live-dot');
+      if (liveText && liveDot) {
+        liveText.textContent = 'Error';
+        liveDot.className = 'dot error';
+      }
     }
   }
 
@@ -1724,11 +1782,45 @@
   // ==========================================
   // INITIALIZE AND AUTO-POLL
   // ==========================================
+  let countdownSeconds = 10;
+  let countdownInterval = null;
+
+  function startCountdown() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+      const liveText = document.getElementById('live-text');
+      const liveDot = document.getElementById('live-dot');
+      if (!liveText || !liveDot) return;
+      
+      const activeEl = document.activeElement;
+      const isInteracting = activeEl && (
+        activeEl.id === 'inspect-host-input' || 
+        activeEl.id === 'inspect-type-select'
+      );
+      
+      if (isInteracting) {
+        liveText.textContent = 'Paused';
+        liveDot.className = 'dot paused';
+        return;
+      }
+      
+      countdownSeconds--;
+      if (countdownSeconds <= 0) {
+        liveText.textContent = 'Updating...';
+        liveDot.className = 'dot paused';
+        countdownSeconds = 10;
+        fetchTopology();
+      } else {
+        liveText.textContent = `Live (update in ${countdownSeconds}s)`;
+        liveDot.className = 'dot';
+      }
+    }, 1000);
+  }
+
   window.addEventListener('DOMContentLoaded', async () => {
     await fetchDeviceTypes();
     fetchTopology();
-    // Refresh topology telemetry every 10 seconds to fetch active speed counters
-    setInterval(fetchTopology, 10000);
+    startCountdown();
   });
 
 </script>

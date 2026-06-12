@@ -474,8 +474,28 @@ This project is licensed under the **MIT License**. Feel free to modify, distrib
 
 ## 📅 Release Notes & Changelog
 
-### 🚀 Release 2026.6.3 (Current)
-* **⠿ Draggable Nodes sequence**:
+### 🚀 Release 2026.6.4 (Current)
+* **🔀 Interactive Column Sorting (Subnet Scanner)**:
+  - Added interactive ascending/descending sorting for all columns in the subnet scanner table.
+  - Implemented custom numerical sorting for IP addresses, chronological sorting for date/time columns, and locale-aware alphanumeric sorting for textual columns.
+  - Displays dynamic sorting indicators (`▲`/`▼`) next to active sorted headers, with built-in drag-resize protection.
+* **🛡️ Proxy ARP / VPN IP Overwrite Protection & Deletion Reset**:
+  - Implemented numerical IP sorting and scan priority logic to prevent local virtual WireGuard VPN alias IPs (like `.200` or `.201`) from overwriting the primary IP mapping (like `.1`) of gateways with multiple active IP responses.
+  - Restructured deletion so that removing a client host sets `scanner_detected = False`, triggerring a fresh scan resolution to the primary IP.
+* **⚙️ Discovery Concurrency & Timeout Customization**:
+  - Re-engineered the background scanner utilizing `ThreadPoolExecutor` to scan multiple hosts concurrently.
+  - Added millisecond timeout configuration (`scanner_port_scan_timeout_ms`) for fast port testing.
+  - Added Host/Port Concurrency and Timeout parameters to the General settings card on `/config`.
+* **⏱️ Live Auto-Refresh Countdowns & Smart Pausing**:
+  - Integrated real-time 1-second countdown timers on the Dashboard, Network Scanner, and Network Map.
+  - Added smart pausing to freeze updates and display `Paused` when editing input notes, nicknames, or when sidebar map inspect controls are focused.
+* **🎨 Visual Styling & API Documentation Overhaul**:
+  - Standardized scrollbars and stylesheet themes in `templates/scanner_history.html`.
+  - Expanded `/api-docs` to completely document all available REST API endpoints in the backend.
+
+---
+
+### 🚀 Release 2026.6.3
   - Implemented HTML5 drag-and-drop node reordering in the configuration settings page (`/config`), with a custom grab indicator handle `⠿`.
   - Dynamically recalculates and updates all internal DOM indices, hidden enable fields, checkbox toggles, and callbacks on drop to ensure form inputs stay synchronized.
   - Form submission saves switches to `config.json` in the new DOM order, and the main page `/` renders switch panels in the exact sequence configured.

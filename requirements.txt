@@ -3,3 +3,5 @@ requests>=2.28
 beautifulsoup4>=4.11
 PyYAML>=6.0
 paramiko>=3.0
+scapy>=2.5.0
+

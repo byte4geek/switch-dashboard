@@ -54,25 +54,36 @@
       color: #f0f6fc;
       letter-spacing: -0.5px;
     }
-    .back-btn {
-      color: #c9d1d9;
+    .header .nav-links {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .header .nav-links a {
+      color: #b1bac4;
       text-decoration: none;
       font-size: 13px;
       font-weight: 500;
-      padding: 8px 16px;
+      padding: 8px 14px;
       border-radius: 8px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid #30363d;
+      background: rgba(33, 38, 45, 0.5);
+      border: 1px solid rgba(48, 54, 61, 0.8);
       transition: all 0.2s ease;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 6px;
     }
-    .back-btn:hover {
-      background: rgba(88, 166, 255, 0.1);
+    .header .nav-links a:hover {
+      color: #ffffff;
+      background: #1c2128;
       border-color: #58a6ff;
+      box-shadow: 0 0 12px rgba(88, 166, 255, 0.2);
+      transform: translateY(-1px);
+    }
+    .header .nav-links a.active {
       color: #58a6ff;
-      box-shadow: 0 0 12px rgba(88, 166, 255, 0.15);
+      border-color: rgba(56, 139, 253, 0.5);
+      background: rgba(56, 139, 253, 0.1);
     }
 
     /* Layout structure */
@@ -356,10 +367,14 @@
       <img src="/static/logo.png" alt="Horaco Logo" class="header-logo">
       <h1>{{ title }} &middot; API Docs <span class="version-badge" style="background: rgba(255, 255, 255, 0.08); padding: 2px 6px; border-radius: 4px; font-size: 10px; color: #c9d1d9; font-family: 'JetBrains Mono', monospace; font-weight: 600; vertical-align: middle; margin-left: 6px;">v{{ version }}</span></h1>
     </div>
-    <a href="/" class="back-btn">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align: middle;"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-      Dashboard
-    </a>
+    <div class="nav-links">
+      <a href="/">📊 Dashboard</a>
+      <a href="/map">🕸️ Network Map</a>
+      <a href="/scanner">🌐 Scanner</a>
+      <a href="/config">&#9881; Config</a>
+      <a href="/backups">💾 Backups</a>
+      <a href="/logs">📋 Logs</a>
+    </div>
   </div>
 
   <!-- Main Layout -->
@@ -457,6 +472,114 @@
           <a href="#update-oui" class="sidebar-link" onclick="setActiveLink(this)">
             <span class="badge badge-post">POST</span>
             <span>/api/vendors/update_oui</span>
+          </a>
+        </li>
+
+        <!-- Network Scanner APIs -->
+        <li class="sidebar-item-header" style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #8b949e; margin: 12px 0 6px 8px; font-weight: 600;">Scanner APIs</li>
+        <li class="sidebar-item">
+          <a href="#scanner-hosts" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/scanner/hosts</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#scanner-known" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/api/scanner/hosts/&lt;mac&gt;/known</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#scanner-update" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/api/scanner/hosts/&lt;mac&gt;/update</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#scanner-delete" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-delete">DELETE</span>
+            <span>/api/scanner/hosts/&lt;mac&gt;</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#scanner-history-list" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/scanner/history</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#scanner-history-delete" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-delete">DELETE</span>
+            <span>/api/scanner/history/&lt;ip&gt;</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#scanner-history-clear" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-delete">DELETE</span>
+            <span>/api/scanner/history/all</span>
+          </a>
+        </li>
+
+        <!-- Topology & Extra Monitor APIs -->
+        <li class="sidebar-item-header" style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #8b949e; margin: 12px 0 6px 8px; font-weight: 600;">Topology & Extras</li>
+        <li class="sidebar-item">
+          <a href="#topology" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/topology</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#switch-image" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/switches/&lt;ip&gt;/image</span>
+          </a>
+        </li>
+
+        <!-- Clients & Templates APIs -->
+        <li class="sidebar-item-header" style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #8b949e; margin: 12px 0 6px 8px; font-weight: 600;">Clients & Templates</li>
+        <li class="sidebar-item">
+          <a href="#clients-update" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/api/clients/update_host</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#clients-delete" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/api/clients/delete</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#templates-list" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/templates</span>
+          </a>
+        </li>
+
+        <!-- Logs APIs -->
+        <li class="sidebar-item-header" style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #8b949e; margin: 12px 0 6px 8px; font-weight: 600;">System Logs</li>
+        <li class="sidebar-item">
+          <a href="#logs-list" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/logs</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#logs-level" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/api/logs/level</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#logs-clear" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-post">POST</span>
+            <span>/api/logs/clear</span>
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#logs-download" class="sidebar-link" onclick="setActiveLink(this)">
+            <span class="badge badge-get">GET</span>
+            <span>/api/logs/download</span>
           </a>
         </li>
       </ul>
@@ -1046,6 +1169,603 @@
   "message": "IEEE OUI databases successfully updated.",
   "status": "ok"
 }</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/scanner/hosts -->
+      <div class="api-card" id="scanner-hosts">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/scanner/hosts</span>
+          <span class="api-title">List Scanned Network Hosts</span>
+        </div>
+        <p class="api-desc">Retrieves a list of all client devices detected by the background network discovery scanner, including IP address, MAC address, manufacturer vendor, switch port mapping, first/last seen timestamps, and known status.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>[
+  {
+    "ip_address": "192.168.1.15",
+    "mac_address": "11:22:33:44:55:66",
+    "vendor": "Samsung Electronics",
+    "hostname": "SmartTV",
+    "ports": "sw1:Port 5",
+    "note": "Living room TV",
+    "status": "ONLINE",
+    "known_host": 1,
+    "first_seen": "2026-06-11 10:00:00",
+    "last_seen_online": "2026-06-11 12:45:00",
+    "last_updated": "2026-06-11 12:45:00"
+  }
+]</code></pre>
+        </div>
+      </div>
+
+      <!-- POST /api/scanner/hosts/<ip_address>/known -->
+      <div class="api-card" id="scanner-known">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/scanner/hosts/&lt;mac&gt;/known</span>
+          <span class="api-title">Update Known Host Status</span>
+        </div>
+        <p class="api-desc">Toggles the "Known Device" flag for a scanned host identified by its MAC address (or IP address fallback).</p>
+        
+        <div class="param-title">Path Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">mac</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>Target client's MAC address (or IP address).</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="param-title">Request Payload (JSON)</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">known</td>
+              <td class="param-type">integer</td>
+              <td><span class="param-req">Required</span></td>
+              <td>Set to <code>1</code> for known, or <code>0</code> for unknown.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "success": true
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- POST /api/scanner/hosts/<ip_address>/update -->
+      <div class="api-card" id="scanner-update">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/scanner/hosts/&lt;mac&gt;/update</span>
+          <span class="api-title">Rename Host or Update Note</span>
+        </div>
+        <p class="api-desc">Modifies the custom hostname or descriptive note for a scanned client device in the configurations.</p>
+        
+        <div class="param-title">Path Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">mac</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>Target client's MAC address (or IP address).</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="param-title">Request Payload (JSON)</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">field</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>Target field to edit. Must be either <code>"hostname"</code> or <code>"note"</code>.</td>
+            </tr>
+            <tr>
+              <td class="param-name">value</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>The new text value. Note that hostname mappings are updated accordingly.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "success": true
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- DELETE /api/scanner/hosts/<ip_address> -->
+      <div class="api-card" id="scanner-delete">
+        <div class="api-card-header">
+          <span class="badge badge-delete">DELETE</span>
+          <span class="api-route">/api/scanner/hosts/&lt;mac&gt;</span>
+          <span class="api-title">Remove Scanned Host</span>
+        </div>
+        <p class="api-desc">Permanently removes a dynamically scanned host from the active dashboard database. If the host is mapped to a switch port, its scanner active state is disabled.</p>
+        
+        <div class="param-title">Path Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">mac</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>Target client's MAC address (or IP address).</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "success": true
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/scanner/history -->
+      <div class="api-card" id="scanner-history-list">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/scanner/history</span>
+          <span class="api-title">Get Connection Timelines</span>
+        </div>
+        <p class="api-desc">Retrieves all network status transitions (online/offline transitions) grouped by host, extracted from the SQLite connection history database.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "192.168.1.15": {
+    "hostname": "SmartTV",
+    "events": [
+      {
+        "status": 1,
+        "event_time": "2026-06-11T10:00:00Z"
+      },
+      {
+        "status": 0,
+        "event_time": "2026-06-11T12:00:00Z"
+      }
+    ]
+  }
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- DELETE /api/scanner/history/<ip_address> -->
+      <div class="api-card" id="scanner-history-delete">
+        <div class="api-card-header">
+          <span class="badge badge-delete">DELETE</span>
+          <span class="api-route">/api/scanner/history/&lt;ip&gt;</span>
+          <span class="api-title">Delete Host Timeline History</span>
+        </div>
+        <p class="api-desc">Permanently purges connection history logs for a specific host from the SQLite database.</p>
+        
+        <div class="param-title">Path Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">ip</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>The IP address (or MAC address) of the client.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "success": true
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- DELETE /api/scanner/history/all -->
+      <div class="api-card" id="scanner-history-clear">
+        <div class="api-card-header">
+          <span class="badge badge-delete">DELETE</span>
+          <span class="api-route">/api/scanner/history/all</span>
+          <span class="api-title">Purge All Scanner History</span>
+        </div>
+        <p class="api-desc">Wipes out the entire connection timeline transition log database for all hosts. This action is irreversible.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "success": true
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/topology -->
+      <div class="api-card" id="topology">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/topology</span>
+          <span class="api-title">Network Topology Map Graph</span>
+        </div>
+        <p class="api-desc">Generates node adjacency list and port connection links for managed switches and resolved client devices, feeding the interactive network map.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "nodes": [
+    {
+      "id": "192.168.1.1",
+      "label": "sw1",
+      "group": "switch"
+    },
+    {
+      "id": "112233445566",
+      "label": "SmartTV",
+      "group": "client"
+    }
+  ],
+  "links": [
+    {
+      "from": "192.168.1.1",
+      "to": "112233445566",
+      "label": "Port 5"
+    }
+  ]
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/switches/<ip>/image -->
+      <div class="api-card" id="switch-image">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/switches/&lt;ip&gt;/image</span>
+          <span class="api-title">Switch Hardware Layout Image</span>
+        </div>
+        <p class="api-desc">Dynamically retrieves the physical SVG/PNG image rendering depicting switch port links, speeds, and activity for the device at the given IP.</p>
+        
+        <div class="param-title">Path Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">ip</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>The IP address of the switch.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response Format</span>
+        </div>
+        <div class="code-container">
+          <pre><code>Image Binary Stream (image/png or image/svg+xml)</code></pre>
+        </div>
+      </div>
+
+      <!-- POST /api/clients/update_host -->
+      <div class="api-card" id="clients-update">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/clients/update_host</span>
+          <span class="api-title">Update Client Metadata</span>
+        </div>
+        <p class="api-desc">Updates host descriptors, custom categories, or static configuration settings for a client entry mapped to a switch port.</p>
+        
+        <div class="param-title">Request Payload (JSON)</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">mac</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>Client MAC address.</td>
+            </tr>
+            <tr>
+              <td class="param-name">host</td>
+              <td class="param-type">string</td>
+              <td><span class="param-opt">Optional</span></td>
+              <td>New hostname label.</td>
+            </tr>
+            <tr>
+              <td class="param-name">note</td>
+              <td class="param-type">string</td>
+              <td><span class="param-opt">Optional</span></td>
+              <td>Custom notes text.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "status": "ok"
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- POST /api/clients/delete -->
+      <div class="api-card" id="clients-delete">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/clients/delete</span>
+          <span class="api-title">Delete Client Entry</span>
+        </div>
+        <p class="api-desc">Deletes a client record binding (by MAC address) from the active configuration registry.</p>
+        
+        <div class="param-title">Request Payload (JSON)</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">mac</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>The target client MAC address.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "status": "ok"
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/templates -->
+      <div class="api-card" id="templates-list">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/templates</span>
+          <span class="api-title">List Config Templates</span>
+        </div>
+        <p class="api-desc">Returns a list of device-specific scraper settings templates stored in the templates directory.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>[
+  "horaco_8port.yaml",
+  "rui_default.yaml"
+]</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/logs -->
+      <div class="api-card" id="logs-list">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/logs</span>
+          <span class="api-title">Get System Logs</span>
+        </div>
+        <p class="api-desc">Reads the active backend system logs and returns the tail output of the execution thread.</p>
+        
+        <div class="param-title">Query Parameters</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">lines</td>
+              <td class="param-type">integer</td>
+              <td><span class="param-opt">Optional</span></td>
+              <td>Max lines to retrieve (default <code>100</code>).</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>[
+  "2026-06-11 14:02:11 - scraper - INFO - Starting background task",
+  "2026-06-11 14:02:30 - app - INFO - API call /api/switches"
+]</code></pre>
+        </div>
+      </div>
+
+      <!-- POST /api/logs/level -->
+      <div class="api-card" id="logs-level">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/logs/level</span>
+          <span class="api-title">Set Logging Level</span>
+        </div>
+        <p class="api-desc">Updates backend logger verbosity levels dynamically without restarting the application thread.</p>
+        
+        <div class="param-title">Request Payload (JSON)</div>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="param-name">level</td>
+              <td class="param-type">string</td>
+              <td><span class="param-req">Required</span></td>
+              <td>Active logger filter: <code>DEBUG</code>, <code>INFO</code>, <code>WARN</code>, <code>ERROR</code>, or <code>NONE</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "status": "ok",
+  "level": "DEBUG"
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- POST /api/logs/clear -->
+      <div class="api-card" id="logs-clear">
+        <div class="api-card-header">
+          <span class="badge badge-post">POST</span>
+          <span class="api-route">/api/logs/clear</span>
+          <span class="api-title">Truncate Logs</span>
+        </div>
+        <p class="api-desc">Wipes the contents of the central execution log file stored on backend disk storage.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response JSON</span>
+        </div>
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          <pre><code>{
+  "status": "ok"
+}</code></pre>
+        </div>
+      </div>
+
+      <!-- GET /api/logs/download -->
+      <div class="api-card" id="logs-download">
+        <div class="api-card-header">
+          <span class="badge badge-get">GET</span>
+          <span class="api-route">/api/logs/download</span>
+          <span class="api-title">Download Logs File</span>
+        </div>
+        <p class="api-desc">Downloads the complete text log file from the server storage.</p>
+        
+        <div class="code-tabs">
+          <span class="code-tab-btn active">Response Format</span>
+        </div>
+        <div class="code-container">
+          <pre><code>Plain Text File stream (attachment)</code></pre>
         </div>
       </div>
 

@@ -29,3 +29,7 @@ backup/
 logs/
 *.log
 
+# Databases, state, and credentials configs
+network_scanner.db
+last_post_scan.ts
+config.json

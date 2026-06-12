@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} - Host Connection History</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.materialdesignicons.com/7.1.96/css/materialdesignicons.min.css">
+<link rel="icon" href="/static/logo.png" type="image/png">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  /* Sleek Premium Dark-Mode Scrollbars & Resizer */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0d1117;
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 6px;
+    border: 2px solid #0d1117;
+    transition: background 0.2s ease;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #58a6ff;
+  }
+  ::-webkit-resizer {
+    background: #161b22;
+    border-left: 2px solid #30363d;
+    border-top: 2px solid #30363d;
+  }
+  .table-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .table-container::-webkit-scrollbar-track {
+    background: #0d1117;
+    border-radius: 6px;
+  }
+  .table-container::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 6px;
+    border: 2px solid #0d1117;
+    transition: background 0.2s ease;
+  }
+  .table-container::-webkit-scrollbar-thumb:hover {
+    background: #58a6ff;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0b0e14;
+    color: #e1e4e8;
+    padding: 24px;
+    min-height: 100vh;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(31, 111, 235, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(139, 148, 158, 0.03) 0px, transparent 50%);
+  }
+
+  /* Header Section */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 28px;
+    background: rgba(22, 27, 34, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 16px;
+    border: 1px solid rgba(48, 54, 61, 0.6);
+    margin-bottom: 28px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    animation: fadeInDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .header h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #ffffff 30%, #a5c2f4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .header .nav-links {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .font-sizes {
+    display: flex;
+    gap: 2px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .fs-btn {
+    background: none;
+    border: none;
+    color: #8b949e;
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all .15s;
+  }
+  .fs-btn:hover { color: #e1e4e8; background: #1c2128; }
+  .fs-btn.fs-active { color: #58a6ff; background: #1c2128; }
+
+  .header .nav-links a, .header .nav-links button {
+    color: #b1bac4;
+    text-decoration: none;
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    transition: all .2s;
+    background: rgba(33, 38, 45, 0.5);
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .header .nav-links a:hover, .header .nav-links button:hover {
+    color: #ffffff;
+    background: #1c2128;
+    border-color: #58a6ff;
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.2);
+    transform: translateY(-1px);
+  }
+  .header .nav-links a.active {
+    color: #58a6ff;
+    border-color: rgba(56, 139, 253, 0.5);
+    background: rgba(56, 139, 253, 0.1);
+  }
+  .header .status {
+    font-size: 13px;
+    color: #b1bac4;
+    display: flex;
+    align-items: center;
+    margin-right: 8px;
+  }
+  .header .status .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #3fb950;
+    margin-right: 6px;
+    box-shadow: 0 0 8px #3fb950;
+    transition: all 0.3s ease;
+  }
+  .header .status .dot.paused {
+    background: #d29922;
+    box-shadow: 0 0 8px #d29922;
+  }
+
+  /* Main Container */
+  .container {
+    max-width: 100%;
+    margin: 0 auto;
+    animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+  }
+
+  /* Card and Controls */
+  .card {
+    background: rgba(22, 27, 34, 0.65);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    margin-bottom: 24px;
+  }
+
+  .filter-panel {
+    background: rgba(22, 27, 34, 0.3);
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .filter-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .filter-input {
+    padding: 6px 10px;
+    font-size: 13px;
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    border-radius: 6px;
+    background: #0d1117;
+    color: #e1e4e8;
+    outline: none;
+    transition: all 0.15s ease-in-out;
+  }
+  .filter-input:focus {
+    border-color: #58a6ff;
+    box-shadow: 0 0 6px rgba(88,166,255,0.2);
+  }
+
+  .controls-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+  }
+
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Checkbox Slider */
+  .switch-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 22px;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #30363d;
+    transition: .3s;
+    border-radius: 22px;
+    border: 1px solid #484f58;
+  }
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #8b949e;
+    transition: .3s;
+    border-radius: 50%;
+  }
+  input:checked + .slider {
+    background-color: rgba(56, 139, 253, 0.15);
+    border-color: #58a6ff;
+  }
+  input:checked + .slider:before {
+    transform: translateX(22px);
+    background-color: #58a6ff;
+  }
+  .switch-label {
+    font-size: 13px;
+    color: #c9d1d9;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  /* Interval input */
+  .refresh-interval-input-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #c9d1d9;
+  }
+  .refresh-interval-input-container input {
+    width: 55px;
+    padding: 5px 8px;
+    background: #0d1117;
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    border-radius: 6px;
+    color: #e1e4e8;
+    text-align: center;
+    outline: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    border: 1px solid transparent;
+  }
+  .btn-secondary {
+    background: rgba(33, 38, 45, 0.6);
+    color: #c9d1d9;
+    border-color: rgba(48, 54, 61, 0.8);
+  }
+  .btn-secondary:hover {
+    background: #1c2128;
+    color: #ffffff;
+    border-color: #8b949e;
+  }
+  .btn-primary {
+    background: rgba(56, 139, 253, 0.15);
+    color: #58a6ff;
+    border-color: rgba(56, 139, 253, 0.3);
+  }
+  .btn-primary:hover {
+    background: #58a6ff;
+    color: #0d1117;
+    border-color: #58a6ff;
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.3);
+  }
+  .btn-danger {
+    background: rgba(248, 81, 73, 0.15);
+    color: #ff7b72;
+    border-color: rgba(248, 81, 73, 0.25);
+  }
+  .btn-danger:hover {
+    background: #f85149;
+    color: #ffffff;
+    border-color: #f85149;
+    box-shadow: 0 0 12px rgba(248, 81, 73, 0.3);
+  }
+
+  /* Table styles */
+  .table-container {
+    overflow-x: auto;
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    border-radius: 12px;
+    background: #0d1117;
+    box-shadow: inset 0 4px 20px rgba(0,0,0,0.4);
+    position: relative;
+    max-height: 800px;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  th, td {
+    padding: 12px 16px;
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-bottom: 1px solid #21262d;
+  }
+
+  th {
+    background: #161b22;
+    color: #8b949e;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-bottom: 1px solid #30363d;
+  }
+
+  tr:hover { background: #1c2128; }
+  tr:last-child td { border-bottom: none; }
+
+  /* Action columns */
+  .action-cell {
+    text-align: center;
+  }
+  .delete-icon {
+    cursor: pointer;
+    color: #f85149;
+    font-size: 16px;
+    transition: transform 0.15s, color 0.15s;
+  }
+  .delete-icon:hover {
+    transform: scale(1.2);
+    color: #ff7b72;
+  }
+
+  /* Timeline Segment UI */
+  .timeline-bar-cell {
+    padding: 8px 12px;
+    overflow: visible !important;
+  }
+  .timeline-bar-container {
+    width: 100%;
+    height: 24px;
+    background-color: #161b22;
+    border-radius: 6px;
+    display: flex;
+    border: 1px solid #30363d;
+    overflow: visible;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .timeline-segment:first-child {
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+  }
+  .timeline-segment:last-child {
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+  }
+  .timeline-segment {
+    height: 100%;
+    display: inline-block;
+    flex-grow: 1;
+    flex-shrink: 0;
+    position: relative;
+    cursor: pointer;
+  }
+  .timeline-segment.online {
+    background-color: #3fb950;
+    box-shadow: inset 0 0 8px rgba(63, 185, 80, 0.4);
+  }
+  .timeline-segment.offline {
+    background-color: #f85149;
+    box-shadow: inset 0 0 8px rgba(248, 81, 73, 0.4);
+  }
+  .timeline-segment:hover {
+    filter: brightness(1.2) saturate(1.2);
+  }
+
+  /* Tooltip styling */
+  .timeline-segment .tooltiptext {
+    visibility: hidden;
+    width: 170px;
+    background: rgba(22, 27, 34, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid #30363d;
+    color: #ffffff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 6px 10px;
+    position: absolute;
+    z-index: 100;
+    bottom: 135%;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    font-size: 11px;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+    white-space: normal;
+  }
+  .timeline-segment:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+    transform: translateX(-50%) translateY(-4px);
+  }
+
+  /* Dynamic font-size mappings */
+  [data-font-size="sm"] table td { font-size: 11px; padding: 8px 10px; }
+  [data-font-size="sm"] table th { font-size: 9.5px; }
+  [data-font-size="sm"] .timeline-bar-container { height: 18px; }
+  
+  [data-font-size="md"] table td { font-size: 13px; padding: 12px 16px; }
+  [data-font-size="md"] table th { font-size: 11px; }
+
+  [data-font-size="lg"] table td { font-size: 14.5px; padding: 14px 18px; }
+  [data-font-size="lg"] table th { font-size: 12.5px; }
+
+  [data-font-size="xl"] table td { font-size: 16px; padding: 16px 20px; }
+  [data-font-size="xl"] table th { font-size: 14px; }
+  [data-font-size="xl"] .timeline-bar-container { height: 30px; }
+
+  /* Toast Notification */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: rgba(22, 27, 34, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid #30363d;
+    border-left: 4px solid #58a6ff;
+    padding: 14px 22px;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13.5px;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  .toast.success { border-left-color: #3fb950; }
+  .toast.error { border-left-color: #f85149; }
+
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .footer {
+    text-align: center;
+    margin-top: 36px;
+    font-size: 12px;
+    color: #8b949e;
+    padding-bottom: 24px;
+  }
+  .version-badge {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: #c9d1d9;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body data-font-size="md">
+
+<div class="header">
+  <div class="header-left">
+    <img src="/static/logo.png" alt="Horaco Logo" style="height: 38px; width: 38px; border-radius: 8px; object-fit: cover; border: 1px solid #30363d; box-shadow: 0 0 10px rgba(88, 166, 255, 0.15);">
+    <h1>Host Connection Timeline</h1>
+  </div>
+  <div class="nav-links">
+    <span class="status">
+      <span class="dot" id="live-dot"></span>
+      <span id="live-text">Live Polling</span>
+    </span>
+    <span class="font-sizes" title="Font size">
+      <button class="fs-btn" data-size="sm" onclick="setFontSize('sm')">S</button>
+      <button class="fs-btn fs-active" data-size="md" onclick="setFontSize('md')">M</button>
+      <button class="fs-btn" data-size="lg" onclick="setFontSize('lg')">L</button>
+      <button class="fs-btn" data-size="xl" onclick="setFontSize('xl')">XL</button>
+    </span>
+    <a href="/">📊 Dashboard</a>
+    <a href="/map">🕸️ Network Map</a>
+    <a href="/scanner">🌐 Scanner</a>
+    <a href="/config">&#9881; Config</a>
+    <a href="/backups">💾 Backups</a>
+    <a href="/logs">📋 Logs</a>
+  </div>
+</div>
+
+<div class="container">
+  
+  <div class="card">
+    <div class="filter-panel">
+      <div class="filter-item">
+        <label for="filter-ip">IP Address</label>
+        <input type="text" id="filter-ip" class="filter-input" placeholder="Filter IP...">
+      </div>
+      <div class="filter-item">
+        <label for="filter-hostname">Hostname</label>
+        <input type="text" id="filter-hostname" class="filter-input" placeholder="Filter Hostname...">
+      </div>
+      <div class="filter-item">
+        <label for="filter-start-date">From</label>
+        <input type="datetime-local" id="filter-start-date" class="filter-input">
+      </div>
+      <div class="filter-item">
+        <label for="filter-end-date">To</label>
+        <input type="datetime-local" id="filter-end-date" class="filter-input">
+      </div>
+      <div style="flex-grow: 1;"></div>
+      <button class="btn btn-danger" id="clear-history-button" title="Delete all history events">
+        <span class="mdi mdi-delete-sweep"></span> Clear All History
+      </button>
+    </div>
+
+    <div class="controls-bar">
+      <div class="control-group">
+        <div class="switch-container">
+          <label class="switch">
+            <input type="checkbox" id="auto-refresh-checkbox" checked>
+            <span class="slider"></span>
+          </label>
+          <span class="switch-label" onclick="document.getElementById('auto-refresh-checkbox').click();">
+            Auto Refresh
+          </span>
+        </div>
+        <div class="refresh-interval-input-container">
+          <label for="refresh-interval-input">every</label>
+          <input type="number" id="refresh-interval-input" min="10" value="60">
+          <label for="refresh-interval-input">s</label>
+        </div>
+      </div>
+      <div class="control-group">
+        <a href="/scanner" class="btn btn-secondary">
+          <span class="mdi mdi-arrow-left"></span> Back to Scanner
+        </a>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table id="history-table">
+        <colgroup>
+          <col style="width: 55px;">
+          <col style="width: 140px;">
+          <col style="width: 180px;">
+          <col style="width: auto;">
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="action-cell-header">Del</th>
+            <th>IP Address</th>
+            <th>Hostname</th>
+            <th>Connection Status Timeline (Newest Segment on Right)</th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody">
+          <tr><td colspan="4" style="padding: 24px; text-align: center; color: #8b949e;">Loading history...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<div class="footer">
+  <div>
+    <a href="/" style="color:#8b949e; text-decoration: none;">Dashboard</a> &middot; 
+    <a href="/config" style="color:#8b949e; text-decoration: none;">Switch Config</a> &middot; 
+    <a href="/backups" style="color:#8b949e; text-decoration: none;">Backups Manager</a> &middot; 
+    <a href="/api-docs" style="color:#8b949e; text-decoration: none;">API Reference</a> &middot; 
+    <a href="/logs" style="color:#8b949e; text-decoration: none;">Logs</a> &middot;
+    <span class="version-badge">v{{ version }}</span>
+  </div>
+  <div style="margin-top: 6px; font-size: 11px; color: #8b949e;">Created by <a href="https://github.com/byte4geek/switch-dashboard" target="_blank" style="color: #58a6ff; text-decoration: none; font-weight: 500;">Byte4Geek</a> for the community</div>
+</div>
+
+<!-- Toast notification box -->
+<div class="toast" id="toast-box">
+  <span id="toast-icon">✓</span>
+  <span id="toast-message">Action completed successfully</span>
+</div>
+
+<script>
+// --- Global State ---
+let allHistoryData = {};
+let filteredHostsList = [];
+let refreshIntervalId = null;
+let isAutoRefreshEnabled = true;
+let currentRefreshIntervalMs = 60000;
+
+const REFRESH_COOKIE = 'scannerRefreshIntervalHistory';
+const MIN_REFRESH_INTERVAL_S = 10;
+
+// DOM Cache
+let tableBody, autoRefreshCheckbox, refreshIntervalInput;
+let ipFilter, hostnameFilter, startDateFilter, endDateFilter;
+let clearHistoryButton, liveDot, liveText;
+
+// --- Helper Functions ---
+function getThemeCookie(name) {
+  const nameEQ = name + "=";
+  const ca = document.cookie.split(';');
+  for(let i=0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0)==' ') c = c.substring(1,c.length);
+    if (c.indexOf(nameEQ) == 0) {
+      try { return decodeURIComponent(c.substring(nameEQ.length,c.length)); } catch (e) { return null; }
+    }
+  }
+  return null;
+}
+
+function setCookie(name, value, days) {
+  let expires = "";
+  if (days) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = "; expires=" + date.toUTCString();
+  }
+  const vts = typeof value === 'string' ? value : JSON.stringify(value);
+  document.cookie = name + "=" + encodeURIComponent(vts) + expires + "; path=/; SameSite=Lax;";
+}
+
+function getCookie(name) {
+  const value = getThemeCookie(name);
+  if (!value) return null;
+  try { return JSON.parse(value); } catch(e) { return value; }
+}
+
+function showToast(message, type = 'success', icon = '✓') {
+  const toast = document.getElementById("toast-box");
+  const toastIcon = document.getElementById("toast-icon");
+  const toastMsg = document.getElementById("toast-message");
+  if (!toast) return;
+  toast.className = `toast ${type}`;
+  toastIcon.textContent = icon;
+  toastMsg.textContent = message;
+  toast.classList.add("show");
+  setTimeout(() => { toast.classList.remove("show"); }, 4000);
+}
+
+function formatTooltipTime(isoString) {
+  if (!isoString) return 'N/A';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d)) return isoString;
+    return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'medium' });
+  } catch (e) {
+    return isoString;
+  }
+}
+
+function updateStatusDot(active) {
+  if (!liveDot || !liveText) return;
+  if (active) {
+    liveDot.className = "dot";
+    liveText.textContent = "Live Polling";
+  } else {
+    liveDot.className = "dot paused";
+    liveText.textContent = "Polling Paused";
+  }
+}
+
+// --- Dynamic Settings & Font Size ---
+function setFontSize(size) {
+  document.body.dataset.fontSize = size;
+  document.querySelectorAll('.fs-btn').forEach(b => b.classList.toggle('fs-active', b.dataset.size === size));
+  fetch('/api/settings', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({font_size: size})
+  }).catch(() => {});
+}
+
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/settings');
+    const s = await r.json();
+    if (s.font_size) {
+      setFontSize(s.font_size);
+    }
+  } catch(e) {}
+}
+
+// --- Filtering Logic ---
+function getHistoryFilters() {
+  let startUTC = null;
+  if (startDateFilter?.value) {
+    const localStart = new Date(startDateFilter.value);
+    if (!isNaN(localStart)) startUTC = new Date(localStart.getTime());
+  }
+
+  let endUTC = null;
+  if (endDateFilter?.value) {
+    const localEnd = new Date(endDateFilter.value);
+    if (!isNaN(localEnd)) {
+      localEnd.setSeconds(59, 999);
+      endUTC = new Date(localEnd.getTime());
+    }
+  }
+
+  return {
+    ip: ipFilter?.value.trim().toLowerCase() || '',
+    hostname: hostnameFilter?.value.trim().toLowerCase() || '',
+    start: startUTC,
+    end: endUTC
+  };
+}
+
+function filterAndRender() {
+  const filters = getHistoryFilters();
+  filteredHostsList = Object.keys(allHistoryData).filter(ip => {
+    const h = allHistoryData[ip];
+    const ipMatch = !filters.ip || ip.toLowerCase().includes(filters.ip);
+    const hostMatch = !filters.hostname || (h.hostname && h.hostname.toLowerCase().includes(filters.hostname));
+    return ipMatch && hostMatch;
+  });
+  renderHistoryTable(filters.start, filters.end);
+}
+
+// --- Rendering Table ---
+function renderHistoryTable(filterStartUTC, filterEndUTC) {
+  if (!tableBody) return;
+  tableBody.innerHTML = '';
+
+  // Sort IP Addresses numerically
+  const sortedIPs = filteredHostsList.sort((a, b) => {
+    try {
+      const numA = a.split('.').reduce((acc, octet)=>(acc<<8)+parseInt(octet,10),0);
+      const numB = b.split('.').reduce((acc, octet)=>(acc<<8)+parseInt(octet,10),0);
+      return numA - numB;
+    } catch (e) {
+      return a.localeCompare(b);
+    }
+  });
+
+  if (sortedIPs.length === 0) {
+    tableBody.innerHTML = '<tr><td colspan="4" style="padding: 24px; text-align: center; color:#8b949e;">No host history matches current filters.</td></tr>';
+    return;
+  }
+
+  sortedIPs.forEach(ip => {
+    const h = allHistoryData[ip];
+    const row = tableBody.insertRow();
+    
+    // Delete column
+    const delCell = row.insertCell(0);
+    delCell.className = 'action-cell';
+    delCell.innerHTML = `<span class="mdi mdi-delete delete-icon history-delete-icon" title="Clear history for ${ip}" data-ip="${ip}"></span>`;
+    
+    // IP
+    const ipCell = row.insertCell(1);
+    ipCell.textContent = ip;
+    ipCell.style.fontWeight = '600';
+    
+    // Hostname
+    const hostCell = row.insertCell(2);
+    hostCell.textContent = h.hostname || '-';
+
+    // Timeline Bar
+    const timelineCell = row.insertCell(3);
+    timelineCell.className = 'timeline-bar-cell';
+    
+    const barContainer = document.createElement('div');
+    barContainer.className = 'timeline-bar-container';
+
+    // Filter events chronologically inside selected date range
+    const events = (h.events || []).filter(e => {
+      if (!e.event_time) return false;
+      try {
+        const evDate = new Date(e.event_time);
+        if (isNaN(evDate)) return false;
+        const afterStart = !filterStartUTC || evDate >= filterStartUTC;
+        const beforeEnd = !filterEndUTC || evDate <= filterEndUTC;
+        return afterStart && beforeEnd;
+      } catch(err) {
+        return false;
+      }
+    }).sort((a, b) => new Date(a.event_time) - new Date(b.event_time));
+
+    if (events.length > 0) {
+      events.forEach(e => {
+        const seg = document.createElement('div');
+        seg.className = 'timeline-segment';
+        seg.classList.add(e.status === 1 ? 'online' : 'offline');
+        
+        const tooltipTextVal = `${e.status === 1 ? 'Online' : 'Offline'} at ${formatTooltipTime(e.event_time)}`;
+        seg.title = tooltipTextVal;
+
+        const tooltip = document.createElement('span');
+        tooltip.className = 'tooltiptext';
+        tooltip.textContent = tooltipTextVal;
+        
+        seg.appendChild(tooltip);
+        barContainer.appendChild(seg);
+      });
+    } else {
+      barContainer.textContent = "No status events in selected date range.";
+      barContainer.style.cssText = "text-align: center; color: #8b949e; font-size: 11.5px; padding: 3px; line-height: 16px; width: 100%; display: flex; justify-content: center; align-items: center; background: rgba(22, 27, 34, 0.4);";
+    }
+    
+    timelineCell.appendChild(barContainer);
+  });
+}
+
+// --- API Calls ---
+async function fetchHistory() {
+  try {
+    const res = await fetch('/api/scanner/history');
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    allHistoryData = await res.json();
+    filterAndRender();
+  } catch(err) {
+    console.error("Fetch history error:", err);
+    if (tableBody && Object.keys(allHistoryData).length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="4" style="color:#f85149;text-align:center;padding:16px;">Error loading data: ${err.message}</td></tr>`;
+    }
+  }
+}
+
+async function handleDeleteHistory(ip) {
+  if (!ip || !window.confirm(`Delete ALL connection history events for ${ip}? This action is permanent.`)) return;
+  try {
+    const res = await fetch(`/api/scanner/history/${ip}`, { method: 'DELETE' });
+    const result = await res.json();
+    if (!res.ok || !result.success) throw new Error(result.error || "Clear failed");
+    
+    showToast(`History for ${ip} cleared successfully`, 'success', '🗑️');
+    delete allHistoryData[ip];
+    filterAndRender();
+  } catch(err) {
+    showToast(`Clear failed: ${err.message}`, 'error', '⚠️');
+  }
+}
+
+async function handleClearAllHistory() {
+  if (!window.confirm("WARNING: This will permanently delete ALL network connection history events for ALL hosts in the database. Are you absolutely sure?")) return;
+  
+  clearHistoryButton.disabled = true;
+  clearHistoryButton.textContent = "Clearing...";
+  try {
+    const res = await fetch('/api/scanner/history/all', { method: 'DELETE' });
+    const result = await res.json();
+    if (!res.ok || !result.success) throw new Error(result.error || "Clear all failed");
+    
+    showToast("All connection history permanently cleared", 'success', '🗑️');
+    allHistoryData = {};
+    filteredHostsList = [];
+    renderHistoryTable(null, null);
+  } catch (err) {
+    showToast(`Clear all failed: ${err.message}`, 'error', '⚠️');
+  } finally {
+    clearHistoryButton.disabled = false;
+    clearHistoryButton.innerHTML = '<span class="mdi mdi-delete-sweep"></span> Clear All History';
+  }
+}
+
+// --- Auto Refresh Timing ---
+function stopAutoRefresh() {
+  if (refreshIntervalId) {
+    clearInterval(refreshIntervalId);
+    refreshIntervalId = null;
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  if (isAutoRefreshEnabled) {
+    fetchHistory();
+    refreshIntervalId = setInterval(fetchHistory, currentRefreshIntervalMs);
+  }
+}
+
+function handleRefreshToggleChange() {
+  isAutoRefreshEnabled = autoRefreshCheckbox.checked;
+  updateStatusDot(isAutoRefreshEnabled);
+  if (isAutoRefreshEnabled) {
+    startAutoRefresh();
+    showToast("Auto-refresh active", 'success', '▶️');
+  } else {
+    stopAutoRefresh();
+    showToast("Auto-refresh paused", 'success', '⏸️');
+  }
+}
+
+function handleRefreshIntervalChange() {
+  let val = parseInt(refreshIntervalInput.value, 10);
+  if (isNaN(val) || val < MIN_REFRESH_INTERVAL_S) {
+    val = MIN_REFRESH_INTERVAL_S;
+    refreshIntervalInput.value = val;
+  }
+  currentRefreshIntervalMs = val * 1000;
+  setCookie(REFRESH_COOKIE, val, 365);
+  if (isAutoRefreshEnabled) startAutoRefresh();
+}
+
+function loadInitialRefreshState() {
+  const saved = getCookie(REFRESH_COOKIE);
+  let val = 60; // Default 60s
+  if (saved) {
+    const parsed = parseInt(saved, 10);
+    if (!isNaN(parsed) && parsed >= MIN_REFRESH_INTERVAL_S) val = parsed;
+  }
+  currentRefreshIntervalMs = val * 1000;
+  if (refreshIntervalInput) refreshIntervalInput.value = val;
+  isAutoRefreshEnabled = autoRefreshCheckbox ? autoRefreshCheckbox.checked : true;
+  updateStatusDot(isAutoRefreshEnabled);
+}
+
+// --- Initialization ---
+document.addEventListener('DOMContentLoaded', () => {
+  tableBody = document.getElementById('history-tbody');
+  autoRefreshCheckbox = document.getElementById('auto-refresh-checkbox');
+  refreshIntervalInput = document.getElementById('refresh-interval-input');
+  ipFilter = document.getElementById('filter-ip');
+  hostnameFilter = document.getElementById('filter-hostname');
+  startDateFilter = document.getElementById('filter-start-date');
+  endDateFilter = document.getElementById('filter-end-date');
+  clearHistoryButton = document.getElementById('clear-history-button');
+  liveDot = document.getElementById('live-dot');
+  liveText = document.getElementById('live-text');
+
+  if (!tableBody || !autoRefreshCheckbox || !refreshIntervalInput || !clearHistoryButton) {
+    console.error("Critical elements missing");
+    return;
+  }
+
+  // Init UI
+  loadSettings();
+  loadInitialRefreshState();
+
+  // Listeners
+  ipFilter.addEventListener('input', filterAndRender);
+  hostnameFilter.addEventListener('input', filterAndRender);
+  startDateFilter.addEventListener('change', filterAndRender);
+  endDateFilter.addEventListener('change', filterAndRender);
+  
+  autoRefreshCheckbox.addEventListener('change', handleRefreshToggleChange);
+  refreshIntervalInput.addEventListener('change', handleRefreshIntervalChange);
+  clearHistoryButton.addEventListener('click', handleClearAllHistory);
+
+  tableBody.addEventListener('click', (e) => {
+    if (e.target.classList.contains('history-delete-icon')) {
+      handleDeleteHistory(e.target.dataset.ip);
+    }
+  });
+
+  // Fetch initial data
+  fetchHistory().then(() => {
+    if (isAutoRefreshEnabled) startAutoRefresh();
+  });
+});
+</script>
+</body>
+</html>

@@ -50,26 +50,36 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
-  .header a {
-    color: #8b949e;
+  .header .nav-links {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .header .nav-links a {
+    color: #b1bac4;
     text-decoration: none;
     font-size: 13px;
     font-weight: 500;
-    padding: 8px 16px;
+    padding: 8px 14px;
     border-radius: 8px;
     background: rgba(33, 38, 45, 0.5);
     border: 1px solid rgba(48, 54, 61, 0.8);
-    transition: all .25s ease;
+    transition: all .2s;
     display: inline-flex;
     align-items: center;
     gap: 6px;
   }
-  .header a:hover {
+  .header .nav-links a:hover {
     color: #ffffff;
     background: #1c2128;
     border-color: #58a6ff;
     box-shadow: 0 0 12px rgba(88, 166, 255, 0.2);
     transform: translateY(-1px);
+  }
+  .header .nav-links a.active {
+    color: #58a6ff;
+    border-color: rgba(56, 139, 253, 0.5);
+    background: rgba(56, 139, 253, 0.1);
   }
 
   /* Main Container */
@@ -367,10 +377,17 @@
 
 <div class="header">
   <div class="header-left">
-    <span style="font-size: 24px; line-height: 1;">📋</span>
+    <img src="/static/logo.png" alt="Horaco Logo" style="height: 38px; width: 38px; border-radius: 8px; object-fit: cover; border: 1px solid #30363d; box-shadow: 0 0 10px rgba(88, 166, 255, 0.15);">
     <h1>Switch Dashboard Logs</h1>
   </div>
-  <a href="/">&larr; Back to Dashboard</a>
+  <div class="nav-links">
+    <a href="/">📊 Dashboard</a>
+    <a href="/map">🕸️ Network Map</a>
+    <a href="/scanner">🌐 Scanner</a>
+    <a href="/config">&#9881; Config</a>
+    <a href="/backups">💾 Backups</a>
+    <a href="/logs" class="active">📋 Logs</a>
+  </div>
 </div>
 
 <div class="container">

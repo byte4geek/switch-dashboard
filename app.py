@@ -6,7 +6,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from collections import deque
 from flask import Flask, render_template, jsonify, request, redirect, url_for, Response, send_from_directory
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 BASE = os.path.dirname(__file__)
 DATA_DIR = os.environ.get("DASHBOARD_DATA_DIR", BASE)
@@ -16,6 +16,7 @@ SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 NOTES_PATH = os.path.join(DATA_DIR, "notes.json")
 LOG_FILE_PATH = os.path.join(DATA_DIR, "logs", "dashboard.log")
 
+import scanner_db
 
 def setup_logging(level_name=None):
     if not level_name:
@@ -108,7 +109,8 @@ os.makedirs(DEVICE_TEMPLATES_DIR, exist_ok=True)
 VENDORS_TXT_PATH = os.path.join(DATA_DIR, "mac_vendors.txt")
 OUI36_TXT_PATH = os.path.join(DATA_DIR, "oui36.txt")
 OUI_TXT_PATH = os.path.join(DATA_DIR, "oui.txt")
-VERSION = "2026.6.3"
+VERSION = "2026.6.4"
+
 
 ieee_vendors_cache = {}
 
@@ -258,7 +260,7 @@ switch_configs = []
 cached_data = {}
 cached_speeds = {}
 cache_lock = threading.Lock()
-config_lock = threading.Lock()
+config_lock = threading.RLock()
 counters_lock = threading.Lock()
 history_lock = threading.Lock()
 _cache_thread = None
@@ -795,6 +797,240 @@ def start_cache_thread():
     _cache_thread.start()
 
 
+_scanner_thread = None
+_stop_scanner_thread = False
+
+
+def update_scanner_state_in_config(current_scan_results, ports_to_scan, perform_port_scan, port_scan_enabled, port_scan_timeout, port_scan_threads, host_threads=4):
+    import network_scanner
+    import concurrent.futures
+    global config
+    now_str = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    
+    # 1. Do all port scans OUTSIDE the lock
+    port_scan_results = {}
+    online_ips = list(current_scan_results.keys())
+    if port_scan_enabled and perform_port_scan and ports_to_scan:
+        logger.info(f"Starting parallel port scan for {len(online_ips)} hosts using {host_threads} host threads and {port_scan_threads} port threads per host...")
+        
+        def scan_single_host(ip):
+            logger.info(f"Starting port scan for {ip} ({len(ports_to_scan)} ports)...")
+            res = network_scanner.scan_ports_threaded(ip, ports_to_scan, port_scan_timeout, port_scan_threads)
+            return ip, res
+            
+        with concurrent.futures.ThreadPoolExecutor(max_workers=host_threads) as executor:
+            futures = [executor.submit(scan_single_host, ip) for ip in online_ips]
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    ip, ports_result_str = future.result()
+                    port_scan_results[ip] = ports_result_str
+                    if ports_result_str is not None:
+                        logger.info(f"Port scan {ip} -> '{ports_result_str or 'None Open'}'")
+                except Exception as e:
+                    logger.error(f"Error scanning host in thread pool: {e}")
+
+                
+    # 2. Get list of potentially offline IPs briefly under the lock
+    potentially_offline_macs_and_ips = []
+    with config_lock:
+        db_clients = config.get("clients", {})
+        for mac_clean, c in db_clients.items():
+            if c.get("scanner_detected") and c.get("scanner_status", "OFFLINE") == "ONLINE":
+                # Check actual scanner_ip first, fallback to ip
+                ip = c.get("scanner_ip") or c.get("ip")
+                if ip and ip not in online_ips:
+                    potentially_offline_macs_and_ips.append((mac_clean, ip))
+                    
+    # 3. Ping potentially offline hosts OUTSIDE the lock
+    ping_results = {}
+    if potentially_offline_macs_and_ips:
+        logger.info(f"{len(potentially_offline_macs_and_ips)} hosts not in ARP. Pinging...")
+        for mac_clean, ip in potentially_offline_macs_and_ips:
+            logger.debug(f"Pinging {ip}...")
+            is_online = network_scanner.is_host_reachable_by_ping(ip)
+            ping_results[mac_clean] = (ip, is_online)
+            
+    # 4. Briefly acquire the lock to commit updates and save config
+    history_inserts = []
+    with config_lock:
+        # Re-fetch database maps inside the lock to ensure freshness
+        db_clients = config.setdefault("clients", {})
+
+        # Sort online hosts numerically so that lower/primary IPs are processed first
+        def ip_sort_key(ip_str):
+            try:
+                return [int(x) for x in ip_str.split('.')]
+            except Exception:
+                return [999, 999, 999, 999]
+        sorted_online_ips = sorted(online_ips, key=ip_sort_key)
+
+        # Update online hosts
+        for ip in sorted_online_ips:
+            data = current_scan_results[ip]
+            mac = data['mac']
+            mac_clean = mac.replace(":", "").replace("-", "").replace(" ", "").upper()
+            vendor = network_scanner.get_vendor(mac)
+
+            existing = db_clients.get(mac_clean)
+
+            ports_result_str = port_scan_results.get(ip)
+
+            if existing:
+                last_status = existing.get("scanner_status", "OFFLINE")
+                status_changed = (last_status == "OFFLINE")
+
+                # If a port scan was performed, update ports; otherwise preserve existing
+                current_ports = ports_result_str if ports_result_str is not None else existing.get("ports", "")
+
+                # Avoid overwriting a valid active scanner_ip with an alias IP (like VPN clients)
+                # If the host was deleted (scanner_detected is False), we treat it as a fresh scan and reset the IP.
+                existing_ip = existing.get("scanner_ip")
+                was_detected = existing.get("scanner_detected", False)
+                if was_detected and existing_ip and existing_ip in online_ips:
+                    target_ip = existing_ip
+                else:
+                    target_ip = ip
+
+                existing.update({
+                    "mac": mac,
+                    "scanner_ip": target_ip, # Store the actual scanned IP separately!
+                    "vendor": vendor,
+                    "scanner_status": "ONLINE",
+                    "ports": current_ports,
+                    "scanner_detected": True,
+                    "last_seen_online": now_str,
+                    "last_updated": now_str
+                })
+                if "first_seen" not in existing:
+                    existing["first_seen"] = now_str
+
+                if status_changed:
+                    history_inserts.append((target_ip, 1, now_str))
+            else:
+                db_clients[mac_clean] = {
+                    "mac": mac,
+                    "host": "",
+                    "note": "",
+                    "scanner_ip": ip, # Store the actual scanned IP separately!
+                    "ip": "", # Initialize parent switch IP as empty
+                    "vendor": vendor,
+                    "ports": ports_result_str or "",
+                    "scanner_status": "ONLINE",
+                    "status": "offline",
+                    "known_host": 0,
+                    "first_seen": now_str,
+                    "last_seen_online": now_str,
+                    "last_updated": now_str,
+                    "scanner_detected": True
+                }
+                history_inserts.append((ip, 1, now_str))
+                    
+        # Update offline hosts
+        for mac_clean, (ip, is_online) in ping_results.items():
+            c = db_clients.get(mac_clean)
+            if not c:
+                continue
+            
+            if is_online:
+                logger.info(f"Ping success for {ip}. Kept as ONLINE.")
+                c["scanner_status"] = "ONLINE"
+                c["last_updated"] = now_str
+            else:
+                logger.info(f"Ping failed for {ip}. Marking OFFLINE.")
+                c["scanner_status"] = "OFFLINE"
+                c["last_updated"] = now_str
+                history_inserts.append((ip, 0, now_str))
+                
+        config["clients"] = db_clients
+        config.pop("scanner_history", None)
+        
+    save_config()
+
+    if history_inserts:
+        try:
+            scanner_db.insert_host_history_batch(history_inserts)
+            logger.info(f"Saved {len(history_inserts)} host history records to SQLite.")
+        except Exception as e:
+            logger.error(f"Error saving host history batch to SQLite: {e}")
+
+
+def run_scanner_loop():
+    global _stop_scanner_thread
+    import network_scanner
+    
+    while not _stop_scanner_thread:
+        load_config()
+        
+        scanner_enabled = config.get("scanner_enabled", False)
+        
+        if scanner_enabled:
+            network_range = config.get("scanner_network_range", "192.168.1.0/24")
+            port_scan_enabled = config.get("scanner_port_scan_enabled", True)
+            port_scan_range_str = config.get("scanner_port_scan_range", "22,80,443,8080")
+            scan_interval = config.get("scanner_interval", 60)
+            port_scan_interval = config.get("scanner_port_scan_interval", 300)
+            purge_history_hours = config.get("scanner_purge_history_hours", 72)
+            
+            scanner_db.purge_old_history(purge_history_hours)
+            
+            do_port_scan_this_run = False
+            now_ts = time.time()
+            
+            state_file = os.path.join(DATA_DIR, "last_port_scan.ts")
+            last_scan_ts = 0.0
+            if os.path.exists(state_file):
+                try:
+                    with open(state_file, "r") as f:
+                        last_scan_ts = float(f.read().strip())
+                except Exception:
+                    pass
+                    
+            if now_ts - last_scan_ts >= port_scan_interval:
+                do_port_scan_this_run = True
+                try:
+                    with open(state_file, "w") as f:
+                        f.write(str(now_ts))
+                except Exception as e:
+                    logger.error(f"Failed to update port scan state file: {e}")
+                    
+            ports_to_scan = network_scanner.parse_port_range(port_scan_range_str)
+            
+            logger.info(f"Running subnet scanner for range {network_range}...")
+            current_scan = network_scanner.scan_network(network_range)
+            
+            if current_scan is not None:
+                port_scan_threads = config.get("scanner_port_scan_threads", 20)
+                host_threads = config.get("scanner_host_scan_threads", 4)
+                port_scan_timeout_ms = config.get("scanner_port_scan_timeout_ms", 500)
+                port_scan_timeout = port_scan_timeout_ms / 1000.0
+                
+                update_scanner_state_in_config(
+                    current_scan, 
+                    ports_to_scan, 
+                    do_port_scan_this_run, 
+                    port_scan_enabled, 
+                    port_scan_timeout, 
+                    port_scan_threads,
+                    host_threads
+                )
+
+            else:
+                logger.error("ARP Subnet Scan returned None. Check root permissions / Scapy installation.")
+        
+        interval = config.get("scanner_interval", 60)
+        sleep_cycles = max(1, int(interval / 2))
+        for _ in range(sleep_cycles):
+            if _stop_scanner_thread:
+                break
+            time.sleep(2)
+
+def start_scanner_thread():
+    global _scanner_thread, _stop_scanner_thread
+    _stop_scanner_thread = False
+    _scanner_thread = threading.Thread(target=run_scanner_loop, daemon=True)
+    _scanner_thread.start()
+
+
 def migrate_old_files():
     migrated = False
     global config
@@ -836,10 +1072,12 @@ def migrate_old_files():
             save_config()
 
 
+scanner_db.init_db()
 migrate_old_files()
 load_config()
 load_history()
 start_cache_thread()
+start_scanner_thread()
 
 if not os.path.exists(OUI_TXT_PATH) or not os.path.exists(OUI36_TXT_PATH):
     threading.Thread(target=download_oui_files, daemon=True).start()
@@ -1836,6 +2074,18 @@ def config_page():
         config["infrastructure_devices"] = new_infra
         config["unmanaged_switches"] = new_unmanaged
         
+        config["scanner_enabled"] = request.form.get("scanner_enabled") == "true"
+        config["scanner_network_range"] = request.form.get("scanner_network_range", "192.168.1.0/24").strip()
+        config["scanner_port_scan_enabled"] = request.form.get("scanner_port_scan_enabled") == "true"
+        config["scanner_port_scan_range"] = request.form.get("scanner_port_scan_range", "22,80,443,8080").strip()
+        config["scanner_interval"] = int(request.form.get("scanner_interval", 60))
+        config["scanner_port_scan_interval"] = int(request.form.get("scanner_port_scan_interval", 300))
+        config["scanner_purge_history_hours"] = int(request.form.get("scanner_purge_history_hours", 72))
+        config["scanner_port_scan_threads"] = int(request.form.get("scanner_port_scan_threads", 20))
+        config["scanner_host_scan_threads"] = int(request.form.get("scanner_host_scan_threads", 4))
+        config["scanner_port_scan_timeout_ms"] = int(request.form.get("scanner_port_scan_timeout_ms", 500))
+
+        
         if "settings" not in config:
             config["settings"] = {}
         config["settings"]["ignored_macs"] = ignored_macs_list
@@ -1844,9 +2094,14 @@ def config_page():
 
         global _stop_thread
         _stop_thread = True
+        
+        global _stop_scanner_thread
+        _stop_scanner_thread = True
+        
         time.sleep(0.5)
         load_config()
         start_cache_thread()
+        start_scanner_thread()
 
         return redirect(url_for("dashboard"))
 
@@ -1865,6 +2120,16 @@ def config_page():
                            enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes']),
                            grid_columns=config.get("grid_columns", "auto"),
                            ignored_macs=ignored_macs_str,
+                           scanner_enabled=config.get("scanner_enabled", False),
+                           scanner_network_range=config.get("scanner_network_range", "192.168.1.0/24"),
+                           scanner_port_scan_enabled=config.get("scanner_port_scan_enabled", True),
+                           scanner_port_scan_range=config.get("scanner_port_scan_range", "22,80,443,8080"),
+                           scanner_interval=config.get("scanner_interval", 60),
+                           scanner_port_scan_interval=config.get("scanner_port_scan_interval", 300),
+                           scanner_purge_history_hours=config.get("scanner_purge_history_hours", 72),
+                           scanner_port_scan_threads=config.get("scanner_port_scan_threads", 20),
+                           scanner_host_scan_threads=config.get("scanner_host_scan_threads", 4),
+                           scanner_port_scan_timeout_ms=config.get("scanner_port_scan_timeout_ms", 500),
                            version=VERSION)
 
 
@@ -1875,10 +2140,24 @@ def api_settings():
         data = request.get_json(force=True, silent=True) or {}
         if "settings" not in config:
             config["settings"] = {}
-        config["settings"].update(data)
+        for k, v in data.items():
+            if k.startswith("scanner_"):
+                config[k] = v
+            else:
+                config["settings"][k] = v
         save_config()
         return jsonify({"status": "ok"})
-    return jsonify(config.get("settings", {"font_size": "md"}))
+    
+    # GET method
+    res = dict(config.get("settings", {}))
+    for k in ["scanner_enabled", "scanner_network_range", "scanner_port_scan_enabled", 
+              "scanner_port_scan_range", "scanner_interval", "scanner_port_scan_interval", 
+              "scanner_purge_history_hours", "scanner_port_scan_threads", 
+              "scanner_host_scan_threads", "scanner_port_scan_timeout_ms"]:
+        if k in config:
+            res[k] = config[k]
+
+    return jsonify(res)
 
 
 @app.route("/api/config/settings", methods=["GET", "POST"])
@@ -2423,6 +2702,230 @@ def backups_page():
 def static_files(path):
     from flask import send_from_directory
     return send_from_directory("static", path)
+
+
+@app.route("/scanner")
+def scanner_dashboard():
+    load_config()
+    settings = config.get("settings", {})
+    col_widths = config.get("scanner_column_widths", settings.get("scanner_column_widths", {
+        "del": 45,
+        "ip_address": 120,
+        "mac_address": 140,
+        "vendor": 140,
+        "hostname": 140,
+        "known_host": 75,
+        "status": 100,
+        "ports": 120,
+        "note": 180,
+        "first_seen": 145,
+        "last_seen_online": 145,
+        "last_updated": 145
+    }))
+    col_order = config.get("scanner_column_order", settings.get("scanner_column_order", [
+        "del", "ip_address", "mac_address", "vendor", "hostname",
+        "known_host", "status", "ports", "note", "first_seen",
+        "last_seen_online", "last_updated"
+    ]))
+    col_visibility = config.get("scanner_column_visibility", settings.get("scanner_column_visibility", {
+        "del": True,
+        "ip_address": True,
+        "mac_address": True,
+        "vendor": True,
+        "hostname": True,
+        "known_host": True,
+        "status": True,
+        "ports": True,
+        "note": True,
+        "first_seen": True,
+        "last_seen_online": True,
+        "last_updated": True
+    }))
+    return render_template("scanner.html", 
+                           title=config.get("title", "Network Switch Dashboard"),
+                           version=VERSION,
+                           column_widths=col_widths,
+                           column_order=col_order,
+                           column_visibility=col_visibility)
+
+
+@app.route("/scanner/history")
+def scanner_history():
+    load_config()
+    return render_template("scanner_history.html", 
+                           title=config.get("title", "Network Switch Dashboard"),
+                           version=VERSION)
+
+
+def find_client_by_ip(ip_address):
+    db_clients = config.get("clients", {})
+    # 1. Check if the passed ip_address is actually a MAC address
+    mac_clean = ip_address.replace(":", "").replace("-", "").replace(" ", "").upper()
+    if len(mac_clean) == 12 and all(ch in "0123456789ABCDEF" for ch in mac_clean):
+        if mac_clean in db_clients:
+            return mac_clean, db_clients[mac_clean]
+
+    # 2. Check for exact match on scanner_ip
+    for mac_clean, c in db_clients.items():
+        if c.get("scanner_ip") == ip_address:
+            return mac_clean, c
+
+    # 3. Fallback to matching c.get("ip")
+    for mac_clean, c in db_clients.items():
+        if c.get("ip") == ip_address:
+            return mac_clean, c
+
+    return None, None
+
+
+@app.route("/api/scanner/hosts")
+def api_scanner_hosts():
+    load_config()
+    db_clients = config.get("clients", {})
+    hosts_list = []
+    for mac_clean, c in db_clients.items():
+        if not c.get("scanner_detected"):
+            continue
+        hosts_list.append({
+            "ip_address": c.get("scanner_ip", ""),
+            "mac_address": c.get("mac", ""),
+            "vendor": c.get("vendor", ""),
+            "hostname": c.get("host", ""),
+            "ports": c.get("ports", ""),
+            "note": c.get("note", ""),
+            "status": c.get("scanner_status", "ONLINE" if c.get("status") == "online" else "OFFLINE"),
+            "known_host": int(c.get("known_host", 0)),
+            "first_seen": c.get("first_seen", ""),
+            "last_seen_online": c.get("last_seen_online", ""),
+            "last_updated": c.get("last_updated", "")
+        })
+    return jsonify(hosts_list)
+
+
+@app.route("/api/scanner/hosts/<ip_address>/known", methods=["POST"])
+def api_scanner_known(ip_address):
+    load_config()
+    data = request.get_json(force=True, silent=True) or {}
+    new_state = int(data.get("known", 0))
+    
+    with config_lock:
+        mac_clean, client = find_client_by_ip(ip_address)
+        if client:
+            client["known_host"] = new_state
+            config["clients"][mac_clean] = client
+            save_config()
+            return jsonify({"success": True})
+    return jsonify({"error": "Host not found"}), 404
+
+
+@app.route("/api/scanner/hosts/<ip_address>/update", methods=["POST"])
+def api_scanner_update_host(ip_address):
+    load_config()
+    data = request.get_json(force=True, silent=True) or {}
+    field = data.get("field")
+    value = data.get("value", "")
+    if field not in ["hostname", "note"]:
+        return jsonify({"error": "Field not updatable"}), 400
+        
+    with config_lock:
+        mac_clean, client = find_client_by_ip(ip_address)
+        if client:
+            if field == "hostname":
+                client["host"] = value
+            elif field == "note":
+                client["note"] = value
+            client["last_updated"] = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+            config["clients"][mac_clean] = client
+            save_config()
+            return jsonify({"success": True})
+    return jsonify({"error": "Host not found"}), 404
+
+
+@app.route("/api/scanner/hosts/<ip_address>", methods=["DELETE"])
+def api_scanner_delete_host(ip_address):
+    load_config()
+    with config_lock:
+        mac_clean, client = find_client_by_ip(ip_address)
+        if client:
+            if "port" in client:
+                client["scanner_detected"] = False
+                config["clients"][mac_clean] = client
+            else:
+                config["clients"].pop(mac_clean, None)
+            save_config()
+            return jsonify({"success": True})
+    return jsonify({"error": "Host not found"}), 404
+
+
+@app.route("/api/scanner/history")
+def api_scanner_history():
+    load_config()
+    db_clients = config.get("clients", {})
+    
+    # Load history from SQLite database
+    db_history = scanner_db.get_history_data()
+
+    grouped_history = {}
+    for mac_clean, c in db_clients.items():
+        if not c.get("scanner_detected"):
+            continue
+        ip = c.get("scanner_ip") or c.get("ip", "")
+        if not ip:
+            continue
+            
+        db_entry = db_history.get(ip, {"events": []})
+        events = db_entry.get("events", [])
+        
+        formatted_events = []
+        for e in events:
+            ts = e.get("event_time", "")
+            if ts:
+                try:
+                    if 'T' not in ts:
+                        dt = datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')
+                        ts_str = dt.isoformat() + 'Z'
+                    else:
+                        ts_str = ts
+                except Exception:
+                    ts_str = ts
+            else:
+                ts_str = ""
+            formatted_events.append({
+                "status": int(e.get("status", 0)),
+                "event_time": ts_str
+            })
+        grouped_history[ip] = {
+            "hostname": c.get("host", ""),
+            "events": formatted_events
+        }
+    return jsonify(grouped_history)
+
+
+@app.route("/api/scanner/history/<ip_address>", methods=["DELETE"])
+def api_scanner_delete_host_history(ip_address):
+    load_config()
+    # If it is a MAC address, look up its IP
+    mac_clean = ip_address.replace(":", "").replace("-", "").replace(" ", "").upper()
+    if len(mac_clean) == 12 and all(ch in "0123456789ABCDEF" for ch in mac_clean):
+        with config_lock:
+            client = config.get("clients", {}).get(mac_clean)
+            if client:
+                target_ip = client.get("scanner_ip") or client.get("ip", "")
+            else:
+                target_ip = ""
+    else:
+        target_ip = ip_address
+
+    if target_ip:
+        scanner_db.delete_host_history(target_ip)
+    return jsonify({"success": True})
+
+
+@app.route("/api/scanner/history/all", methods=["DELETE"])
+def api_scanner_clear_all_history():
+    load_config()
+    scanner_db.delete_all_history()
+    return jsonify({"success": True})
 
 
 if __name__ == "__main__":

@@ -1,0 +1,1756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} - Subnet Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.materialdesignicons.com/7.1.96/css/materialdesignicons.min.css">
+<link rel="icon" href="/static/logo.png" type="image/png">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  /* Sleek Premium Dark-Mode Scrollbars & Resizer */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0d1117;
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 6px;
+    border: 2px solid #0d1117;
+    transition: background 0.2s ease;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #58a6ff;
+  }
+  ::-webkit-resizer {
+    background: #161b22;
+    border-left: 2px solid #30363d;
+    border-top: 2px solid #30363d;
+  }
+  .table-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .table-container::-webkit-scrollbar-track {
+    background: #0d1117;
+    border-radius: 6px;
+  }
+  .table-container::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 6px;
+    border: 2px solid #0d1117;
+    transition: background 0.2s ease;
+  }
+  .table-container::-webkit-scrollbar-thumb:hover {
+    background: #58a6ff;
+  }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0b0e14;
+    color: #e1e4e8;
+    padding: 24px;
+    min-height: 100vh;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(31, 111, 235, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(139, 148, 158, 0.03) 0px, transparent 50%);
+  }
+
+  /* Header Section */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 28px;
+    background: rgba(22, 27, 34, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 16px;
+    border: 1px solid rgba(48, 54, 61, 0.6);
+    margin-bottom: 28px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    animation: fadeInDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .header h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #ffffff 30%, #a5c2f4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .header .nav-links {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .font-sizes {
+    display: flex;
+    gap: 2px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .fs-btn {
+    background: none;
+    border: none;
+    color: #8b949e;
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all .15s;
+  }
+  .fs-btn:hover { color: #e1e4e8; background: #1c2128; }
+  .fs-btn.fs-active { color: #58a6ff; background: #1c2128; }
+
+  .header .nav-links a, .header .nav-links button {
+    color: #b1bac4;
+    text-decoration: none;
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    transition: all .2s;
+    background: rgba(33, 38, 45, 0.5);
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .header .nav-links a:hover, .header .nav-links button:hover {
+    color: #ffffff;
+    background: #1c2128;
+    border-color: #58a6ff;
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.2);
+    transform: translateY(-1px);
+  }
+  .header .nav-links a.active {
+    color: #58a6ff;
+    border-color: rgba(56, 139, 253, 0.5);
+    background: rgba(56, 139, 253, 0.1);
+  }
+  .header .status {
+    font-size: 13px;
+    color: #b1bac4;
+    display: flex;
+    align-items: center;
+    margin-right: 8px;
+  }
+  .header .status .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #3fb950;
+    margin-right: 6px;
+    box-shadow: 0 0 8px #3fb950;
+    transition: all 0.3s ease;
+  }
+  .header .status .dot.paused {
+    background: #d29922;
+    box-shadow: 0 0 8px #d29922;
+  }
+
+  /* Main Container */
+  .container {
+    max-width: 100%;
+    margin: 0 auto;
+    animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+  }
+
+  /* Grid details info */
+  .scanner-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .info-tile {
+    background: rgba(22, 27, 34, 0.5);
+    border: 1px solid rgba(48, 54, 61, 0.4);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .info-tile .tile-label {
+    font-size: 11px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  .info-tile .tile-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #e1e4e8;
+  }
+  .info-tile .tile-value.online { color: #3fb950; }
+  .info-tile .tile-value.offline { color: #f85149; }
+
+  /* Card and Controls */
+  .card {
+    background: rgba(22, 27, 34, 0.65);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    margin-bottom: 24px;
+  }
+
+  .controls-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(48, 54, 61, 0.6);
+  }
+
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #8b949e;
+  }
+
+  /* Checkbox Slider */
+  .switch-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 22px;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #30363d;
+    transition: .3s;
+    border-radius: 22px;
+    border: 1px solid #484f58;
+  }
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #8b949e;
+    transition: .3s;
+    border-radius: 50%;
+  }
+  input:checked + .slider {
+    background-color: rgba(56, 139, 253, 0.15);
+    border-color: #58a6ff;
+  }
+  input:checked + .slider:before {
+    transform: translateX(22px);
+    background-color: #58a6ff;
+  }
+  .switch-label {
+    font-size: 13px;
+    color: #c9d1d9;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  /* Interval input */
+  .refresh-interval-input-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #c9d1d9;
+  }
+  .refresh-interval-input-container input {
+    width: 55px;
+    padding: 5px 8px;
+    background: #0d1117;
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    border-radius: 6px;
+    color: #e1e4e8;
+    text-align: center;
+    outline: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    border: 1px solid transparent;
+  }
+  .btn-secondary {
+    background: rgba(33, 38, 45, 0.6);
+    color: #c9d1d9;
+    border-color: rgba(48, 54, 61, 0.8);
+  }
+  .btn-secondary:hover {
+    background: #1c2128;
+    color: #ffffff;
+    border-color: #8b949e;
+  }
+  .btn-primary {
+    background: rgba(56, 139, 253, 0.15);
+    color: #58a6ff;
+    border-color: rgba(56, 139, 253, 0.3);
+  }
+  .btn-primary:hover {
+    background: #58a6ff;
+    color: #0d1117;
+    border-color: #58a6ff;
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.3);
+  }
+  .btn-danger {
+    background: rgba(248, 81, 73, 0.15);
+    color: #ff7b72;
+    border-color: rgba(248, 81, 73, 0.25);
+  }
+  .btn-danger:hover {
+    background: #f85149;
+    color: #ffffff;
+    border-color: #f85149;
+  }
+
+  /* Show/Hide Columns Fieldset */
+  .column-toggle-fieldset {
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    border-radius: 12px;
+    padding: 14px 20px;
+    margin-bottom: 20px;
+    background: rgba(22, 27, 34, 0.3);
+  }
+  .column-toggle-fieldset legend {
+    font-size: 12px;
+    font-weight: 600;
+    color: #8b949e;
+    padding: 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .column-toggle-list {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .col-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: #c9d1d9;
+    cursor: pointer;
+    user-select: none;
+  }
+  .col-toggle-label input {
+    cursor: pointer;
+  }
+
+  /* Table styles */
+  .table-container {
+    overflow-x: auto;
+    overflow-y: auto;
+    border: 1px solid rgba(48, 54, 61, 0.5);
+    border-radius: 12px;
+    background: #0d1117;
+    box-shadow: inset 0 4px 20px rgba(0,0,0,0.4);
+    position: relative;
+    max-height: calc(100vh - 350px);
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  th, td {
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-bottom: 1px solid #21262d;
+  }
+
+  #hosts-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  th {
+    background: #161b22;
+    color: #8b949e;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-weight: 600;
+    border-bottom: 1px solid #30363d;
+  }
+
+  #filter-row th {
+    background: #0d1117;
+    border-bottom: 1px solid #30363d;
+    padding: 6px 8px;
+  }
+
+  tr:hover { background: #1c2128; }
+  tr:last-child td { border-bottom: none; }
+
+  /* Input fields */
+  .filter-input {
+    width: 100%;
+    padding: 5px 8px;
+    font-size: 11px;
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    border-radius: 6px;
+    background: #161b22;
+    color: #e1e4e8;
+    outline: none;
+    transition: all 0.15s ease-in-out;
+  }
+  .filter-input:focus {
+    border-color: #58a6ff;
+    box-shadow: 0 0 6px rgba(88,166,255,0.2);
+  }
+
+  /* Inline edit inputs */
+  .editable-cell {
+    cursor: pointer;
+    position: relative;
+    transition: background-color 0.15s;
+  }
+  .editable-cell:hover {
+    background-color: rgba(56, 139, 253, 0.08);
+  }
+  .inline-edit-input {
+    width: 100%;
+    padding: 5px 8px;
+    background: #1c2128;
+    border: 1px solid #58a6ff;
+    border-radius: 6px;
+    color: #e1e4e8;
+    font-family: inherit;
+    font-size: inherit;
+    outline: none;
+  }
+  .hostname-placeholder {
+    color: #8b949e;
+    opacity: 0.55;
+    font-style: italic;
+    font-size: 11.5px;
+  }
+
+  /* Status Badges */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .status-badge.online { background: rgba(63, 185, 80, 0.15); color: #3fb950; }
+  .status-badge.offline { background: rgba(248, 81, 73, 0.15); color: #f85149; }
+  .status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .status-dot.online { background: #3fb950; box-shadow: 0 0 6px #3fb950; }
+  .status-dot.offline { background: #f85149; }
+
+  /* Sortable headers */
+  .resizable-th[draggable="true"]:not(.action-cell-header) {
+    cursor: pointer;
+  }
+  .sort-indicator {
+    margin-left: 6px;
+    font-size: 10px;
+    display: inline-block;
+    color: #58a6ff;
+  }
+
+  /* Drag and Drop styling */
+  #hosts-table th[draggable="true"] {
+    position: relative;
+    transition: background 0.15s ease;
+  }
+  #hosts-table th[draggable="true"]:hover {
+    background: #21262d !important;
+    cursor: move;
+  }
+  #hosts-table th.drag-over {
+    border-left: 2px solid #58a6ff !important;
+    background: #1f242c !important;
+  }
+
+  /* Ports Column formatting */
+  .ports-cell {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: #58a6ff;
+  }
+
+  /* Action columns */
+  .action-cell {
+    text-align: center;
+  }
+  .delete-icon {
+    cursor: pointer;
+    color: #f85149;
+    font-size: 16px;
+    transition: transform 0.15s, color 0.15s;
+  }
+  .delete-icon:hover {
+    transform: scale(1.2);
+    color: #ff7b72;
+  }
+
+  /* Resizer handles */
+  .resizer {
+    position: absolute;
+    top: 0; right: 0; width: 6px; height: 100%;
+    cursor: col-resize;
+    user-select: none;
+    z-index: 10;
+  }
+  .resizer:hover, th.resizing .resizer {
+    background: rgba(88, 166, 255, 0.4) !important;
+  }
+
+  /* Dynamic font-size mappings */
+  [data-font-size="sm"] table td { font-size: 11px; padding: 6px 8px; }
+  [data-font-size="sm"] table th { font-size: 9.5px; }
+  [data-font-size="sm"] .filter-input { font-size: 10px; padding: 4px 6px; }
+  
+  [data-font-size="md"] table td { font-size: 13px; padding: 10px 12px; }
+  [data-font-size="md"] table th { font-size: 11px; }
+
+  [data-font-size="lg"] table td { font-size: 14.5px; padding: 12px 14px; }
+  [data-font-size="lg"] table th { font-size: 12.5px; }
+  [data-font-size="lg"] .filter-input { font-size: 12.5px; }
+
+  [data-font-size="xl"] table td { font-size: 16px; padding: 14px 18px; }
+  [data-font-size="xl"] table th { font-size: 14px; }
+  [data-font-size="xl"] .filter-input { font-size: 14px; }
+
+  /* Toast Notification */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: rgba(22, 27, 34, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid #30363d;
+    border-left: 4px solid #58a6ff;
+    padding: 14px 22px;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13.5px;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  .toast.success { border-left-color: #3fb950; }
+  .toast.error { border-left-color: #f85149; }
+
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .footer {
+    text-align: center;
+    margin-top: 36px;
+    font-size: 12px;
+    color: #8b949e;
+    padding-bottom: 24px;
+  }
+  .version-badge {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: #c9d1d9;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body data-font-size="md">
+
+<div class="header">
+  <div class="header-left">
+    <img src="/static/logo.png" alt="Horaco Logo" style="height: 38px; width: 38px; border-radius: 8px; object-fit: cover; border: 1px solid #30363d; box-shadow: 0 0 10px rgba(88, 166, 255, 0.15);">
+    <h1>Subnet Discovery & Scanner</h1>
+  </div>
+  <div class="nav-links">
+    <span class="status">
+      <span class="dot" id="live-dot"></span>
+      <span id="live-text">Live Polling</span>
+    </span>
+    <span class="font-sizes" title="Font size">
+      <button class="fs-btn" data-size="sm" onclick="setFontSize('sm')">S</button>
+      <button class="fs-btn fs-active" data-size="md" onclick="setFontSize('md')">M</button>
+      <button class="fs-btn" data-size="lg" onclick="setFontSize('lg')">L</button>
+      <button class="fs-btn" data-size="xl" onclick="setFontSize('xl')">XL</button>
+    </span>
+    <a href="/">📊 Dashboard</a>
+    <a href="/map">🕸️ Network Map</a>
+    <a href="/scanner" class="active">🌐 Scanner</a>
+    <a href="/config">&#9881; Config</a>
+    <a href="/backups">💾 Backups</a>
+    <a href="/logs">📋 Logs</a>
+  </div>
+</div>
+
+<div class="container">
+  
+  <div class="scanner-info-grid">
+    <div class="info-tile">
+      <span class="tile-label">Subnet Range</span>
+      <span class="tile-value" id="info-subnet-range">-</span>
+    </div>
+    <div class="info-tile">
+      <span class="tile-label">Discovery Thread</span>
+      <span class="tile-value" id="info-thread-status">-</span>
+    </div>
+    <div class="info-tile">
+      <span class="tile-label">Total Hosts Discovered</span>
+      <span class="tile-value" id="info-total-hosts">0</span>
+    </div>
+    <div class="info-tile">
+      <span class="tile-label">Online / Offline</span>
+      <span class="tile-value"><span class="online" id="info-online-count">0</span> <span style="color:#484f58">/</span> <span class="offline" id="info-offline-count">0</span></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="controls-bar">
+      <div class="control-group">
+        <div class="switch-container">
+          <label class="switch">
+            <input type="checkbox" id="auto-refresh-checkbox" checked>
+            <span class="slider"></span>
+          </label>
+          <span class="switch-label" id="refresh-label" onclick="document.getElementById('auto-refresh-checkbox').click();">
+            Auto Refresh
+          </span>
+        </div>
+        <div class="refresh-interval-input-container">
+          <label for="refresh-interval-input">every</label>
+          <input type="number" id="refresh-interval-input" min="5" value="10">
+          <label for="refresh-interval-input">s</label>
+        </div>
+      </div>
+      <div class="control-group">
+        <a href="/scanner/history" class="btn btn-secondary">
+          <span class="mdi mdi-history"></span> View Host History
+        </a>
+      </div>
+    </div>
+
+    <fieldset class="column-toggle-fieldset">
+      <legend>Show/Hide Columns</legend>
+      <ul class="column-toggle-list" id="column-toggle-list">
+        <!-- populated dynamically -->
+      </ul>
+    </fieldset>
+
+    <div class="table-container">
+      <table id="hosts-table">
+        <colgroup></colgroup>
+        <thead></thead>
+        <tbody id="hosts-tbody">
+          <tr><td colspan="12" style="padding: 24px; text-align: center; color: #8b949e;">Loading scanner hosts data...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<div class="footer">
+  <div>
+    <a href="/" style="color:#8b949e; text-decoration: none;">Dashboard</a> &middot; 
+    <a href="/config" style="color:#8b949e; text-decoration: none;">Switch Config</a> &middot; 
+    <a href="/backups" style="color:#8b949e; text-decoration: none;">Backups Manager</a> &middot; 
+    <a href="/api-docs" style="color:#8b949e; text-decoration: none;">API Reference</a> &middot; 
+    <a href="/logs" style="color:#8b949e; text-decoration: none;">Logs</a> &middot;
+    <span class="version-badge">v{{ version }}</span>
+  </div>
+  <div style="margin-top: 6px; font-size: 11px; color: #8b949e;">Created by <a href="https://github.com/byte4geek/switch-dashboard" target="_blank" style="color: #58a6ff; text-decoration: none; font-weight: 500;">Byte4Geek</a> for the community</div>
+</div>
+
+<!-- Toast notification box -->
+<div class="toast" id="toast-box">
+  <span id="toast-icon">✓</span>
+  <span id="toast-message">Action completed successfully</span>
+</div>
+
+<script>
+// Server-side configurations injected via Jinja
+const serverColumnWidths = {{ column_widths|tojson }};
+const serverColumnOrder = {{ column_order|tojson }};
+const serverColumnVisibility = {{ column_visibility|tojson }};
+
+// --- Global State ---
+let allHostsData = [];
+let refreshIntervalId = null;
+let isAutoRefreshEnabled = true;
+let currentRefreshIntervalMs = 10000;
+let pollingPaused = false;
+let countdownSeconds = 10;
+let sortColumn = "ip_address";
+let sortDirection = "asc";
+
+let columnWidths = serverColumnWidths || {};
+let columnOrder = serverColumnOrder || [
+  "del", "ip_address", "mac_address", "vendor", "hostname",
+  "known_host", "status", "ports", "note", "first_seen",
+  "last_seen_online", "last_updated"
+];
+let columnVisibilityState = serverColumnVisibility || {
+  del: true, ip_address: true, mac_address: true, vendor: true, hostname: true,
+  known_host: true, status: true, ports: true, note: true, first_seen: true,
+  last_seen_online: true, last_updated: true
+};
+
+const REFRESH_INTERVAL_COOKIE = 'scannerRefreshInterval';
+const MIN_REFRESH_INTERVAL_S = 5;
+
+// Resizing state
+let resizingColId = null;
+let resizingStartX = 0;
+let resizingStartWidth = 0;
+let resizingTh = null;
+let resizingCol = null;
+
+// Drag and drop state
+let draggedColumnId = null;
+
+// DOM Cache
+let table, colgroup, tableBody, firstHeaderRow, filterHeaderRow;
+let autoRefreshCheckbox, refreshIntervalInput, columnToggleList, liveDot, liveText;
+
+const filters = {};
+
+// COLUMN_DEFS definition
+const COLUMN_DEFS = {
+  del: {
+    label: 'Actions',
+    render: (cell, h) => {
+      cell.className = 'action-cell';
+      cell.innerHTML = `<span class="mdi mdi-delete delete-icon" title="Delete host ${h.ip_address || h.mac_address}" data-ip="${h.mac_address}"></span>`;
+    }
+  },
+  ip_address: {
+    label: 'IP Address',
+    filterPlaceholder: 'Filter...',
+    render: (cell, h) => {
+      cell.textContent = h.ip_address || '-';
+      cell.style.fontWeight = '600';
+    }
+  },
+  mac_address: {
+    label: 'MAC Address',
+    filterPlaceholder: 'Filter...',
+    render: (cell, h) => {
+      cell.textContent = h.mac_address || '-';
+      cell.style.fontFamily = "'JetBrains Mono', monospace";
+    }
+  },
+  vendor: {
+    label: 'Vendor',
+    filterPlaceholder: 'Filter...',
+    render: (cell, h) => {
+      cell.textContent = h.vendor || 'Unknown';
+    }
+  },
+  hostname: {
+    label: 'Hostname',
+    filterPlaceholder: 'Filter...',
+    render: (cell, h) => {
+      const name = h.hostname || '';
+      cell.className = 'editable-cell';
+      cell.dataset.ip = h.mac_address;
+      cell.dataset.field = 'hostname';
+      if (name) {
+        cell.textContent = name;
+        cell.classList.remove('hostname-placeholder');
+      } else {
+        cell.textContent = '-';
+        cell.classList.add('hostname-placeholder');
+      }
+    }
+  },
+  known_host: {
+    label: 'Known',
+    filterPlaceholder: '1/0 or yes/no',
+    render: (cell, h) => {
+      cell.style.textAlign = 'center';
+      const isKnown = h.known_host == 1;
+      cell.innerHTML = `
+        <label class="switch">
+          <input type="checkbox" class="known-switch-checkbox" data-ip="${h.mac_address}" ${isKnown ? 'checked' : ''}>
+          <span class="slider"></span>
+        </label>
+      `;
+    }
+  },
+  status: {
+    label: 'Status',
+    filterPlaceholder: 'Filter...',
+    render: (cell, h) => {
+      const cls = h.status === 'ONLINE' ? 'online' : 'offline';
+      cell.innerHTML = `<span class="status-badge ${cls}"><span class="status-dot ${cls}"></span>${h.status}</span>`;
+    }
+  },
+  ports: {
+    label: 'Ports',
+    filterPlaceholder: 'Filter...',
+    render: (cell, h) => {
+      cell.className = 'ports-cell';
+      cell.textContent = h.ports || '-';
+    }
+  },
+  note: {
+    label: 'Note',
+    filterPlaceholder: 'Filter...',
+    render: (cell, h) => {
+      const note = h.note || '';
+      cell.className = 'editable-cell';
+      cell.dataset.ip = h.mac_address;
+      cell.dataset.field = 'note';
+      if (note) {
+        cell.textContent = note;
+        cell.classList.remove('hostname-placeholder');
+      } else {
+        cell.textContent = '-';
+        cell.classList.add('hostname-placeholder');
+      }
+    }
+  },
+  first_seen: {
+    label: 'First Seen',
+    filterPlaceholder: 'Filter...',
+    render: (cell, h) => {
+      cell.textContent = formatTimestamp(h.first_seen);
+      cell.style.fontSize = '11.5px';
+      cell.style.color = '#8b949e';
+    }
+  },
+  last_seen_online: {
+    label: 'Last Seen Online',
+    filterPlaceholder: 'Filter...',
+    render: (cell, h) => {
+      cell.textContent = formatTimestamp(h.last_seen_online);
+      cell.style.fontSize = '11.5px';
+      cell.style.color = '#8b949e';
+    }
+  },
+  last_updated: {
+    label: 'Last Updated',
+    filterPlaceholder: 'Filter...',
+    render: (cell, h) => {
+      cell.textContent = formatTimestamp(h.last_updated);
+      cell.style.fontSize = '11.5px';
+      cell.style.color = '#8b949e';
+    }
+  }
+};
+
+// --- Helper Functions ---
+function getThemeCookie(name) {
+  const nameEQ = name + "=";
+  const ca = document.cookie.split(';');
+  for(let i=0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0)==' ') c = c.substring(1,c.length);
+    if (c.indexOf(nameEQ) == 0) {
+      try { return decodeURIComponent(c.substring(nameEQ.length,c.length)); } catch (e) { return null; }
+    }
+  }
+  return null;
+}
+
+function setCookie(name, value, days) {
+  let expires = "";
+  if (days) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    expires = "; expires=" + date.toUTCString();
+  }
+  const vts = typeof value === 'string' ? value : JSON.stringify(value);
+  document.cookie = name + "=" + encodeURIComponent(vts) + expires + "; path=/; SameSite=Lax;";
+}
+
+function getCookie(name) {
+  const value = getThemeCookie(name);
+  if (!value) return null;
+  try { return JSON.parse(value); } catch(e) { return value; }
+}
+
+function showToast(message, type = 'success', icon = '✓') {
+  const toast = document.getElementById("toast-box");
+  const toastIcon = document.getElementById("toast-icon");
+  const toastMsg = document.getElementById("toast-message");
+  if (!toast) return;
+  toast.className = `toast ${type}`;
+  toastIcon.textContent = icon;
+  toastMsg.textContent = message;
+  toast.classList.add("show");
+  setTimeout(() => { toast.classList.remove("show"); }, 4000);
+}
+
+function formatTimestamp(tsString) {
+  if (!tsString) return 'N/A';
+  try {
+    const tParts = tsString.replace(' ', 'T');
+    const dateObj = new Date(tParts.includes('Z') || tParts.includes('+') ? tParts : tParts + 'Z');
+    if (isNaN(dateObj)) return tsString;
+    return dateObj.toLocaleString(undefined, {
+      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    });
+  } catch (e) {
+    return tsString;
+  }
+}
+
+function updateStatusDot(active) {
+  if (!liveDot || !liveText) return;
+  if (active) {
+    liveDot.className = "dot";
+    if (pollingPaused) {
+      liveText.textContent = "Paused";
+    } else {
+      liveText.textContent = `Live Polling (update in ${countdownSeconds}s)`;
+    }
+  } else {
+    liveDot.className = "dot paused";
+    if (pollingPaused) {
+      liveText.textContent = "Paused";
+    } else {
+      liveText.textContent = "Polling Paused";
+    }
+  }
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll('#hosts-table th').forEach(th => {
+    const colId = th.dataset.colId;
+    if (!colId || colId === 'del') return;
+    
+    let indicator = th.querySelector('.sort-indicator');
+    if (!indicator) {
+      indicator = document.createElement('span');
+      indicator.className = 'sort-indicator';
+      th.appendChild(indicator);
+    }
+    
+    if (colId === sortColumn) {
+      indicator.textContent = sortDirection === 'asc' ? ' ▲' : ' ▼';
+      indicator.style.opacity = '1';
+      th.classList.add('sorted');
+    } else {
+      indicator.textContent = '';
+      indicator.style.opacity = '0';
+      th.classList.remove('sorted');
+    }
+  });
+}
+
+// --- Dynamic Settings & Font Size ---
+function setFontSize(size) {
+  document.body.dataset.fontSize = size;
+  document.querySelectorAll('.fs-btn').forEach(b => b.classList.toggle('fs-active', b.dataset.size === size));
+  fetch('/api/settings', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({font_size: size})
+  }).catch(() => {});
+}
+
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/settings');
+    const s = await r.json();
+    if (s.font_size) {
+      setFontSize(s.font_size);
+    }
+  } catch(e) {}
+}
+
+async function fetchScannerConfigAndStatus() {
+  try {
+    const r = await fetch('/api/settings');
+    const settings = await r.json();
+    
+    // Update Subnet info tile
+    const subnetVal = document.getElementById('info-subnet-range');
+    if (subnetVal) subnetVal.textContent = settings.scanner_network_range || '-';
+    
+    // Update thread status tile
+    const threadStatusVal = document.getElementById('info-thread-status');
+    if (threadStatusVal) {
+      if (settings.scanner_enabled) {
+        threadStatusVal.innerHTML = '<span style="color:#3fb950;font-weight:600;">RUNNING</span>';
+      } else {
+        threadStatusVal.innerHTML = '<span style="color:#8b949e;font-weight:600;">DISABLED</span>';
+      }
+    }
+  } catch(e) {}
+}
+
+// --- Data Fetch and Rendering ---
+async function fetchHosts() {
+  if (pollingPaused) return;
+  try {
+    const response = await fetch('/api/scanner/hosts');
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    if (Array.isArray(data)) {
+      allHostsData = data;
+      applyFiltersAndRender();
+      
+      // Update Summary Tiles
+      document.getElementById('info-total-hosts').textContent = allHostsData.length;
+      const online = allHostsData.filter(h => h.status === 'ONLINE').length;
+      const offline = allHostsData.length - online;
+      document.getElementById('info-online-count').textContent = online;
+      document.getElementById('info-offline-count').textContent = offline;
+    }
+  } catch (error) {
+    console.error("Fetch hosts error:", error);
+    if (tableBody && allHostsData.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="${columnOrder.length}" style="color:#f85149;text-align:center;padding:16px;">Error loading data: ${error.message}</td></tr>`;
+    }
+  }
+}
+
+function getFilterValues() {
+  const filterVals = {};
+  document.querySelectorAll('#filter-row .filter-input').forEach(input => {
+    filterVals[input.id.replace('filter-', '')] = input.value.trim().toLowerCase();
+  });
+  return filterVals;
+}
+
+function filterHostData(hosts, filters) {
+  if (!Array.isArray(hosts)) return [];
+  const noFiltersActive = Object.values(filters).every(val => val === '');
+  if (noFiltersActive) return hosts;
+  
+  return hosts.filter(host => {
+    for (const key in filters) {
+      const filterValue = filters[key];
+      if (filterValue !== '') {
+        if (key === 'known_host') {
+          const knownVal = host[key];
+          let matches = false;
+          if ((filterValue === 'yes' || filterValue === '1' || filterValue.startsWith('y')) && knownVal == 1) matches = true;
+          else if ((filterValue === 'no' || filterValue === '0' || filterValue.startsWith('n')) && knownVal == 0) matches = true;
+          if (!matches) return false;
+        } else {
+          const hostValue = String(host[key] || '').toLowerCase();
+          if (!hostValue.includes(filterValue)) return false;
+        }
+      }
+    }
+    return true;
+  });
+}
+
+function applyFiltersAndRender() {
+  try {
+    const filters = getFilterValues();
+    const filtered = filterHostData(allHostsData, filters);
+    renderTable(filtered);
+  } catch(e) {
+    console.error("Filter/Render error:", e);
+  }
+}
+
+function renderTable(hosts) {
+  if (!tableBody) return;
+  tableBody.innerHTML = '';
+  const visibleColumnCount = columnOrder.filter(colId => columnVisibilityState[colId] !== false).length;
+  
+  if (hosts.length === 0) {
+    tableBody.innerHTML = `<tr><td colspan="${visibleColumnCount || 12}" style="padding: 24px; text-align: center; color: #8b949e;">No matching hosts found.</td></tr>`;
+    return;
+  }
+  
+  // Sort hosts dynamically based on sortColumn and sortDirection
+  if (sortColumn && sortColumn !== 'del') {
+    hosts.sort((a, b) => {
+      let valA = a[sortColumn];
+      let valB = b[sortColumn];
+
+      // Default undefined/null to empty string for comparison
+      if (valA === undefined || valA === null) valA = '';
+      if (valB === undefined || valB === null) valB = '';
+
+      let comp = 0;
+      if (sortColumn === 'ip_address') {
+        try {
+          const numA = String(valA).split('.').reduce((acc, octet)=>(acc<<8)+parseInt(octet,10),0);
+          const numB = String(valB).split('.').reduce((acc, octet)=>(acc<<8)+parseInt(octet,10),0);
+          comp = numA - numB;
+        } catch (e) {
+          comp = String(valA).localeCompare(String(valB));
+        }
+      } else if (sortColumn === 'known_host') {
+        comp = Number(valA) - Number(valB);
+      } else if (sortColumn === 'first_seen' || sortColumn === 'last_seen_online' || sortColumn === 'last_updated') {
+        const dateA = valA ? new Date(valA.replace(' ', 'T')) : new Date(0);
+        const dateB = valB ? new Date(valB.replace(' ', 'T')) : new Date(0);
+        comp = dateA - dateB;
+      } else {
+        comp = String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' });
+      }
+
+      return sortDirection === 'asc' ? comp : -comp;
+    });
+  }
+
+  hosts.forEach(host => {
+    const row = tableBody.insertRow();
+    
+    columnOrder.forEach(colId => {
+      const cell = row.insertCell();
+      cell.dataset.colId = colId;
+      cell.style.display = (columnVisibilityState[colId] === false) ? 'none' : '';
+      COLUMN_DEFS[colId].render(cell, host);
+    });
+  });
+}
+
+// --- Action Handlers ---
+async function handleKnownSwitchChange(event) {
+  const cb = event.target;
+  const mac = cb.dataset.ip;
+  const state = cb.checked ? 1 : 0;
+  cb.disabled = true;
+  try {
+    const res = await fetch(`/api/scanner/hosts/${mac}/known`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ known: state })
+    });
+    const result = await res.json();
+    if (!res.ok || !result.success) throw new Error(result.error || "Save failed");
+    
+    // Update local data
+    const idx = allHostsData.findIndex(h => h.mac_address === mac);
+    if (idx > -1) allHostsData[idx].known_host = state;
+    const hostLabel = (idx > -1) ? (allHostsData[idx].hostname || allHostsData[idx].ip_address || mac) : mac;
+    showToast(`Known status for ${hostLabel} saved`, 'success', '✓');
+  } catch (err) {
+    cb.checked = !cb.checked;
+    showToast(`Failed to update status: ${err.message}`, 'error', '⚠️');
+  } finally {
+    cb.disabled = false;
+  }
+}
+
+async function handleDeleteHost(target) {
+  const mac = target.dataset.ip;
+  const idx = allHostsData.findIndex(h => h.mac_address === mac);
+  const hostLabel = (idx > -1) ? (allHostsData[idx].hostname || allHostsData[idx].ip_address || mac) : mac;
+  if (!mac || !window.confirm(`Are you sure you want to permanently delete host ${hostLabel}?`)) return;
+  
+  target.style.opacity = '0.5';
+  target.style.pointerEvents = 'none';
+  try {
+    const res = await fetch(`/api/scanner/hosts/${mac}`, { method: 'DELETE' });
+    const result = await res.json();
+    if (!res.ok || !result.success) throw new Error(result.error || "Delete failed");
+    
+    showToast(`Host ${hostLabel} deleted successfully`, 'success', '🗑️');
+    allHostsData = allHostsData.filter(h => h.mac_address !== mac);
+    applyFiltersAndRender();
+  } catch(err) {
+    target.style.opacity = '1';
+    target.style.pointerEvents = 'auto';
+    showToast(`Delete failed: ${err.message}`, 'error', '⚠️');
+  }
+}
+
+// --- Inline Cell Editing ---
+function makeCellEditable(cell) {
+  if (document.querySelector('.inline-edit-input')) return;
+  
+  pollingPaused = true;
+  updateStatusDot(false);
+  
+  const originalVal = (cell.classList.contains('hostname-placeholder')) ? '' : cell.textContent;
+  const mac = cell.dataset.ip;
+  const field = cell.dataset.field;
+  
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'inline-edit-input';
+  input.value = originalVal;
+  
+  cell.innerHTML = '';
+  cell.appendChild(input);
+  input.focus();
+  input.select();
+  
+  const finishEdit = async (save) => {
+    input.removeEventListener('blur', onBlur);
+    input.removeEventListener('keydown', onKeyDown);
+    
+    const newVal = input.value.trim();
+    if (save && newVal !== originalVal) {
+      cell.textContent = "Saving...";
+      try {
+        const res = await fetch(`/api/scanner/hosts/${mac}/update`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ field: field, value: newVal })
+        });
+        const result = await res.json();
+        if (!res.ok || !result.success) throw new Error(result.error || "Save failed");
+        
+        showToast(`${field} updated successfully`, 'success', '✓');
+        const idx = allHostsData.findIndex(h => h.mac_address === mac);
+        if (idx > -1) allHostsData[idx][field] = newVal;
+        
+        if (newVal) {
+          cell.textContent = newVal;
+          cell.classList.remove('hostname-placeholder');
+        } else {
+          cell.textContent = '-';
+          cell.classList.add('hostname-placeholder');
+        }
+      } catch (err) {
+        showToast(`Update failed: ${err.message}`, 'error', '⚠️');
+        revert(originalVal);
+      }
+    } else {
+      revert(originalVal);
+    }
+    
+    pollingPaused = false;
+    updateStatusDot(isAutoRefreshEnabled);
+  };
+  
+  const revert = (val) => {
+    if (val) {
+      cell.textContent = val;
+      cell.classList.remove('hostname-placeholder');
+    } else {
+      cell.textContent = '-';
+      cell.classList.add('hostname-placeholder');
+    }
+  };
+  
+  function onBlur() { finishEdit(true); }
+  function onKeyDown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finishEdit(true);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      finishEdit(false);
+    }
+  }
+  
+  input.addEventListener('blur', onBlur);
+  input.addEventListener('keydown', onKeyDown);
+}
+
+// --- Auto Refresh Logic ---
+function stopAutoRefresh() {
+  if (refreshIntervalId) {
+    clearInterval(refreshIntervalId);
+    refreshIntervalId = null;
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  const intervalSec = currentRefreshIntervalMs / 1000;
+  countdownSeconds = intervalSec;
+  
+  if (isAutoRefreshEnabled) {
+    fetchHosts();
+    updateStatusDot(true);
+    
+    refreshIntervalId = setInterval(() => {
+      if (pollingPaused) {
+        updateStatusDot(true);
+        return;
+      }
+      countdownSeconds--;
+      if (countdownSeconds <= 0) {
+        if (liveText) liveText.textContent = 'Updating...';
+        countdownSeconds = intervalSec;
+        fetchHosts();
+      } else {
+        updateStatusDot(true);
+      }
+    }, 1000);
+  } else {
+    updateStatusDot(false);
+  }
+}
+
+function handleRefreshToggleChange() {
+  isAutoRefreshEnabled = autoRefreshCheckbox.checked;
+  updateStatusDot(isAutoRefreshEnabled);
+  if (isAutoRefreshEnabled) {
+    startAutoRefresh();
+    showToast("Auto-refresh active", 'success', '▶️');
+  } else {
+    stopAutoRefresh();
+    showToast("Auto-refresh paused", 'success', '⏸️');
+  }
+}
+
+function handleRefreshIntervalChange() {
+  let val = parseInt(refreshIntervalInput.value, 10);
+  if (isNaN(val) || val < MIN_REFRESH_INTERVAL_S) {
+    val = MIN_REFRESH_INTERVAL_S;
+    refreshIntervalInput.value = val;
+  }
+  currentRefreshIntervalMs = val * 1000;
+  setCookie(REFRESH_INTERVAL_COOKIE, val, 365);
+  if (isAutoRefreshEnabled) startAutoRefresh();
+}
+
+function loadInitialRefreshState() {
+  const saved = getCookie(REFRESH_INTERVAL_COOKIE);
+  let val = 10;
+  if (saved) {
+    const parsed = parseInt(saved, 10);
+    if (!isNaN(parsed) && parsed >= MIN_REFRESH_INTERVAL_S) val = parsed;
+  }
+  currentRefreshIntervalMs = val * 1000;
+  if (refreshIntervalInput) refreshIntervalInput.value = val;
+  isAutoRefreshEnabled = autoRefreshCheckbox ? autoRefreshCheckbox.checked : true;
+  updateStatusDot(isAutoRefreshEnabled);
+}
+
+// --- Column Reordering & Resizing ---
+function initTableHeaders() {
+  const table = document.getElementById('hosts-table');
+  if (!table) return;
+  
+  const currentFilters = {};
+  document.querySelectorAll('#filter-row .filter-input').forEach(input => {
+    const key = input.id.replace('filter-', '');
+    currentFilters[key] = input.value;
+  });
+
+  let colgroupEl = table.querySelector('colgroup');
+  if (!colgroupEl) {
+    colgroupEl = document.createElement('colgroup');
+    table.insertBefore(colgroupEl, table.firstChild);
+  }
+  colgroupEl.innerHTML = '';
+  columnOrder.forEach(colId => {
+    const col = document.createElement('col');
+    col.dataset.colId = colId;
+    const savedWidth = columnWidths[colId];
+    if (savedWidth) {
+      col.style.width = savedWidth + 'px';
+    } else {
+      const defaults = {
+        del: 45, ip_address: 120, mac_address: 140, vendor: 140, hostname: 140,
+        known_host: 75, status: 100, ports: 120, note: 180, first_seen: 145,
+        last_seen_online: 145, last_updated: 145
+      };
+      col.style.width = (defaults[colId] || 120) + 'px';
+    }
+    colgroupEl.appendChild(col);
+  });
+
+  let theadEl = table.querySelector('thead');
+  if (!theadEl) {
+    theadEl = document.createElement('thead');
+    table.insertBefore(theadEl, table.querySelector('tbody'));
+  }
+  theadEl.innerHTML = '';
+
+  const tr1 = document.createElement('tr');
+  columnOrder.forEach(colId => {
+    const th = document.createElement('th');
+    th.dataset.colId = colId;
+    th.className = 'resizable-th';
+    if (colId === 'del') {
+      th.classList.add('action-cell-header');
+    }
+    th.setAttribute('draggable', 'true');
+    th.addEventListener('dragstart', (e) => handleDragStart(e, colId));
+    th.addEventListener('dragover', (e) => handleDragOver(e));
+    th.addEventListener('dragenter', (e) => handleDragEnter(e, colId));
+    th.addEventListener('dragleave', (e) => handleDragLeave(e));
+    th.addEventListener('dragend', (e) => handleDragEnd(e));
+    th.addEventListener('drop', (e) => handleDrop(e, colId));
+
+    th.innerHTML = `<span class="column-title-text">${COLUMN_DEFS[colId].label}</span>`;
+    
+    // Click to sort
+    if (colId !== 'del') {
+      th.addEventListener('click', (e) => {
+        if (e.target.classList.contains('resizer')) return;
+        if (sortColumn === colId) {
+          sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortColumn = colId;
+          sortDirection = 'asc';
+        }
+        updateSortIndicators();
+        applyFiltersAndRender();
+      });
+    }
+    
+    const resizer = document.createElement('span');
+    resizer.className = 'resizer';
+    resizer.addEventListener('mousedown', (e) => handleResizeStart(e, colId));
+    th.appendChild(resizer);
+
+    tr1.appendChild(th);
+  });
+  theadEl.appendChild(tr1);
+
+  const tr2 = document.createElement('tr');
+  tr2.id = 'filter-row';
+  columnOrder.forEach(colId => {
+    const th = document.createElement('th');
+    th.dataset.colId = colId;
+    if (colId !== 'del') {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = `filter-${colId}`;
+      input.className = 'filter-input';
+      input.placeholder = COLUMN_DEFS[colId].filterPlaceholder || 'Filter...';
+      if (currentFilters[colId]) {
+        input.value = currentFilters[colId];
+      }
+      input.addEventListener('input', () => {
+        applyFiltersAndRender();
+      });
+      th.appendChild(input);
+    }
+    tr2.appendChild(th);
+  });
+  theadEl.appendChild(tr2);
+
+  // Update global element caches for rebuilt DOM
+  firstHeaderRow = tr1;
+  filterHeaderRow = tr2;
+  colgroup = colgroupEl;
+  
+  updateSortIndicators();
+}
+
+function handleDragStart(event, colId) {
+  draggedColumnId = colId;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', colId);
+}
+
+function handleDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+}
+
+function handleDragEnter(event, colId) {
+  event.preventDefault();
+  const th = event.target.closest('th');
+  if (th && draggedColumnId !== colId) {
+    th.classList.add('drag-over');
+  }
+}
+
+function handleDragLeave(event) {
+  const th = event.target.closest('th');
+  if (th) {
+    th.classList.remove('drag-over');
+  }
+}
+
+function handleDragEnd(event) {
+  document.querySelectorAll('#hosts-table th').forEach(th => {
+    th.classList.remove('drag-over');
+  });
+}
+
+function handleDrop(event, targetColId) {
+  event.preventDefault();
+  const th = event.target.closest('th');
+  if (th) {
+    th.classList.remove('drag-over');
+  }
+  if (draggedColumnId && draggedColumnId !== targetColId) {
+    const fromIndex = columnOrder.indexOf(draggedColumnId);
+    const toIndex = columnOrder.indexOf(targetColId);
+    if (fromIndex !== -1 && toIndex !== -1) {
+      columnOrder.splice(fromIndex, 1);
+      columnOrder.splice(toIndex, 0, draggedColumnId);
+      saveColumnSettings();
+      
+      initTableHeaders();
+      applyVisibilityState();
+      renderTable(filterHostData(allHostsData, getFilterValues()));
+      generateVisibilityToggles();
+    }
+  }
+}
+
+function handleResizeStart(event, colId) {
+  event.stopPropagation();
+  event.preventDefault();
+  resizingColId = colId;
+  resizingTh = event.target.closest('th');
+  resizingStartX = event.clientX;
+  
+  const tableEl = document.getElementById('hosts-table');
+  const colgroupEl = tableEl ? tableEl.querySelector('colgroup') : null;
+  const colIdx = columnOrder.indexOf(colId);
+  resizingCol = colgroupEl ? colgroupEl.children[colIdx] : null;
+  if (resizingCol) {
+    resizingStartWidth = parseInt(window.getComputedStyle(resizingCol).width, 10);
+  } else {
+    resizingStartWidth = resizingTh.offsetWidth;
+  }
+  
+  document.addEventListener('mousemove', handleResizeMove);
+  document.addEventListener('mouseup', handleResizeEnd);
+  resizingTh.classList.add('resizing');
+  
+  document.querySelectorAll('#hosts-table th').forEach(th => {
+    th.setAttribute('draggable', 'false');
+  });
+}
+
+function handleResizeMove(event) {
+  if (!resizingColId) return;
+  const diff = event.clientX - resizingStartX;
+  const newWidth = Math.max(30, resizingStartWidth + diff);
+  
+  if (resizingCol) {
+    resizingCol.style.width = newWidth + 'px';
+  } else if (resizingTh) {
+    resizingTh.style.width = newWidth + 'px';
+  }
+}
+
+function handleResizeEnd(event) {
+  if (resizingColId) {
+    if (resizingTh) {
+      resizingTh.classList.remove('resizing');
+    }
+    let finalWidth = 120;
+    if (resizingCol) {
+      finalWidth = parseInt(resizingCol.style.width || window.getComputedStyle(resizingCol).width, 10);
+    } else if (resizingTh) {
+      finalWidth = resizingTh.offsetWidth;
+    }
+    saveColumnWidth(resizingColId, finalWidth);
+  }
+  
+  resizingColId = null;
+  resizingTh = null;
+  resizingCol = null;
+  document.removeEventListener('mousemove', handleResizeMove);
+  document.removeEventListener('mouseup', handleResizeEnd);
+  
+  document.querySelectorAll('#hosts-table th').forEach(th => {
+    th.setAttribute('draggable', 'true');
+  });
+}
+
+async function saveColumnSettings() {
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        scanner_column_widths: columnWidths,
+        scanner_column_order: columnOrder,
+        scanner_column_visibility: columnVisibilityState
+      })
+    });
+  } catch (e) {
+    console.error("Failed to save column settings:", e);
+  }
+}
+
+function saveColumnWidth(colId, width) {
+  columnWidths[colId] = width;
+  saveColumnSettings();
+}
+
+// --- Column Visibility ---
+function applyVisibilityState() {
+  columnOrder.forEach(colId => {
+    const isVisible = columnVisibilityState[colId] !== false;
+    const disp = isVisible ? '' : 'none';
+    
+    const colEl = colgroup ? colgroup.querySelector(`col[data-col-id="${colId}"]`) : null;
+    if (colEl) colEl.style.display = disp;
+    
+    const thEl1 = firstHeaderRow ? firstHeaderRow.querySelector(`th[data-col-id="${colId}"]`) : null;
+    if (thEl1) thEl1.style.display = disp;
+    
+    const thEl2 = filterHeaderRow ? filterHeaderRow.querySelector(`th[data-col-id="${colId}"]`) : null;
+    if (thEl2) thEl2.style.display = disp;
+    
+    if (tableBody) {
+      tableBody.querySelectorAll(`td[data-col-id="${colId}"]`).forEach(td => {
+        td.style.display = disp;
+      });
+    }
+  });
+  
+  const visibleCount = columnOrder.filter(colId => columnVisibilityState[colId] !== false).length;
+  if (tableBody) {
+    tableBody.querySelectorAll('td[colspan]').forEach(td => {
+      td.colSpan = visibleCount || 12;
+    });
+  }
+}
+
+function handleVisibilityToggle(e) {
+  const colId = e.target.dataset.colId;
+  columnVisibilityState[colId] = e.target.checked;
+  applyVisibilityState();
+  renderTable(filterHostData(allHostsData, getFilterValues()));
+  saveColumnSettings();
+}
+
+function generateVisibilityToggles() {
+  if (!columnToggleList) return;
+  columnToggleList.innerHTML = '';
+  
+  columnOrder.forEach(colId => {
+    if (colId === 'del') return;
+    const label = COLUMN_DEFS[colId].label;
+    const isVisible = columnVisibilityState[colId] !== false;
+    
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <label class="col-toggle-label">
+        <input type="checkbox" data-col-id="${colId}" ${isVisible ? 'checked' : ''}>
+        ${label}
+      </label>
+    `;
+    li.querySelector('input').addEventListener('change', handleVisibilityToggle);
+    columnToggleList.appendChild(li);
+  });
+  
+  applyVisibilityState();
+}
+
+// --- Initialization ---
+document.addEventListener('DOMContentLoaded', () => {
+  table = document.getElementById('hosts-table');
+  tableBody = document.getElementById('hosts-tbody');
+  autoRefreshCheckbox = document.getElementById('auto-refresh-checkbox');
+  refreshIntervalInput = document.getElementById('refresh-interval-input');
+  columnToggleList = document.getElementById('column-toggle-list');
+  liveDot = document.getElementById('live-dot');
+  liveText = document.getElementById('live-text');
+
+  if (!table || !tableBody || !autoRefreshCheckbox || !refreshIntervalInput || !columnToggleList) {
+    console.error("Critical elements missing");
+    return;
+  }
+
+  // Setup UI
+  loadSettings();
+  fetchScannerConfigAndStatus();
+  
+  initTableHeaders();
+  generateVisibilityToggles();
+  loadInitialRefreshState();
+
+  tableBody.addEventListener('click', (e) => {
+    if (e.target.classList.contains('delete-icon')) {
+      handleDeleteHost(e.target);
+    }
+  });
+
+  tableBody.addEventListener('dblclick', (e) => {
+    const td = e.target.closest('td.editable-cell');
+    if (td) makeCellEditable(td);
+  });
+
+  tableBody.addEventListener('change', (e) => {
+    if (e.target.classList.contains('known-switch-checkbox')) {
+      handleKnownSwitchChange(e);
+    }
+  });
+
+  autoRefreshCheckbox.addEventListener('change', handleRefreshToggleChange);
+  refreshIntervalInput.addEventListener('change', handleRefreshIntervalChange);
+
+  // Initial scan data fetch
+  fetchHosts().then(() => {
+    if (isAutoRefreshEnabled) startAutoRefresh();
+  });
+});
+</script>
+</body>
+</html>

@@ -28,18 +28,26 @@
 
   .header {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 16px 24px; background: rgba(22, 27, 34, 0.7); border-radius: 16px;
-    border: 1px solid rgba(48, 54, 61, 0.6); margin-bottom: 24px;
+    padding: 18px 28px; background: rgba(22, 27, 34, 0.7); border-radius: 16px;
+    border: 1px solid rgba(48, 54, 61, 0.6); margin-bottom: 28px;
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   }
-  .header h1 { font-size: 20px; font-weight: 600; color: #f0f6fc; display: flex; align-items: center; gap: 8px; }
-  .header a {
-    color: #8b949e; text-decoration: none; font-size: 13px; padding: 8px 16px;
-    border-radius: 8px; transition: all .2s; border: 1px solid transparent;
-    background: rgba(255, 255, 255, 0.03);
+  .header h1 { font-size: 22px; font-weight: 600; color: #f0f6fc; display: flex; align-items: center; gap: 14px; }
+  .header .nav-links { display: flex; gap: 12px; align-items: center; }
+  .header .nav-links a {
+    color: #b1bac4; text-decoration: none; font-size: 13px; padding: 8px 14px;
+    border-radius: 8px; transition: all .2s;
+    background: rgba(33, 38, 45, 0.5); border: 1px solid rgba(48, 54, 61, 0.8);
+    display: inline-flex; align-items: center; gap: 6px;
   }
-  .header a:hover { color: #e1e4e8; background: rgba(255, 255, 255, 0.08); border-color: rgba(255,255,255,0.1); }
+  .header .nav-links a:hover {
+    color: #ffffff; background: #1c2128; border-color: #58a6ff;
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.2); transform: translateY(-1px);
+  }
+  .header .nav-links a.active {
+    color: #58a6ff; border-color: rgba(56, 139, 253, 0.5); background: rgba(56, 139, 253, 0.1);
+  }
 
   /* Premium Split-Pane Grid */
   .layout-container {
@@ -351,8 +359,18 @@
 </head>
 <body>
 <div class="header">
-  <h1>&#9881; Node Settings</h1>
-  <a href="/">&larr; Back to Dashboard</a>
+  <div style="display: flex; align-items: center; gap: 14px;">
+    <img src="/static/logo.png" alt="Horaco Logo" style="height: 38px; width: 38px; border-radius: 8px; object-fit: cover; border: 1px solid #30363d; box-shadow: 0 0 10px rgba(88, 166, 255, 0.15);">
+    <h1>&#9881; Node Settings</h1>
+  </div>
+  <div class="nav-links">
+    <a href="/">📊 Dashboard</a>
+    <a href="/map">🕸️ Network Map</a>
+    <a href="/scanner">🌐 Scanner</a>
+    <a href="/config" class="active">&#9881; Config</a>
+    <a href="/backups">💾 Backups</a>
+    <a href="/logs">📋 Logs</a>
+  </div>
 </div>
 
 {% if saved %}
@@ -408,6 +426,75 @@
           <label>Ignored MACs (comma-separated wildcards, e.g. FA:CE:*)</label>
           <input type="text" name="ignored_macs" value="{{ ignored_macs }}" placeholder="e.g. FA:CE:*, 00:11:22:33:*">
           <span class="note" style="display:block; margin-top:2px;">Specify MAC address patterns to completely exclude from the dashboard (clients, tables, maps). Support wildcards (e.g. FA:CE:*).</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Subnet Discovery & Port Scanner Settings</h2>
+        <span class="note" style="display:block; margin-bottom:12px;">Configure active IP and TCP port scanning for local host discovery.</span>
+        
+        <div class="global-row">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" name="scanner_enabled" value="true" {% if scanner_enabled %}checked{% endif %} style="width: auto;">
+            Enable Subnet Discovery Scanner
+          </label>
+          <span class="note" style="display:block; margin-top:2px;">If enabled, the dashboard performs active ARP discovery on the specified subnet.</span>
+        </div>
+        
+        <div class="global-row">
+          <label>Discovery Subnet Range (CIDR)</label>
+          <input type="text" name="scanner_network_range" value="{{ scanner_network_range }}" placeholder="e.g. 192.168.1.0/24">
+          <span class="note" style="display:block; margin-top:2px;">CIDR subnet to scan (e.g. 192.168.1.0/24).</span>
+        </div>
+        
+        <div class="global-row">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" name="scanner_port_scan_enabled" value="true" {% if scanner_port_scan_enabled %}checked{% endif %} style="width: auto;">
+            Enable Port Scanner
+          </label>
+          <span class="note" style="display:block; margin-top:2px;">If enabled, the scanner will check for open TCP ports on discovered active hosts.</span>
+        </div>
+        
+        <div class="global-row">
+          <label>TCP Ports to Scan (comma-separated or ranges)</label>
+          <input type="text" name="scanner_port_scan_range" value="{{ scanner_port_scan_range }}" placeholder="e.g. 22,80,443,8080">
+          <span class="note" style="display:block; margin-top:2px;">Ports or ranges to check (e.g., '22,80,443,1000-2000').</span>
+        </div>
+        
+        <div class="global-row">
+          <label>Scan Interval (seconds)</label>
+          <input type="number" name="scanner_interval" value="{{ scanner_interval }}" min="10" max="86400" style="max-width:120px">
+          <span class="note" style="display:block; margin-top:2px;">Main subnet discovery interval.</span>
+        </div>
+        
+        <div class="global-row">
+          <label>Port Scan Interval (seconds)</label>
+          <input type="number" name="scanner_port_scan_interval" value="{{ scanner_port_scan_interval }}" min="30" max="86400" style="max-width:120px">
+          <span class="note" style="display:block; margin-top:2px;">TCP port scan execution interval.</span>
+        </div>
+        
+        <div class="global-row">
+          <label>Purge Connection History (hours)</label>
+          <input type="number" name="scanner_purge_history_hours" value="{{ scanner_purge_history_hours }}" min="0" max="87600" style="max-width:120px">
+          <span class="note" style="display:block; margin-top:2px;">Delete connection status history logs older than this threshold. Set to 0 to disable purging.</span>
+        </div>
+
+        <div class="global-row">
+          <label>Host Scan Concurrency (Parallel Hosts)</label>
+          <input type="number" name="scanner_host_scan_threads" value="{{ scanner_host_scan_threads }}" min="1" max="50" style="max-width:120px">
+          <span class="note" style="display:block; margin-top:2px;">Number of hosts to scan for open ports in parallel.</span>
+        </div>
+
+        <div class="global-row">
+          <label>Port Scan Concurrency (Parallel Ports per Host)</label>
+          <input type="number" name="scanner_port_scan_threads" value="{{ scanner_port_scan_threads }}" min="1" max="100" style="max-width:120px">
+          <span class="note" style="display:block; margin-top:2px;">Number of TCP ports to scan in parallel per individual host.</span>
+        </div>
+
+        <div class="global-row">
+          <label>Port Scan Timeout (milliseconds)</label>
+          <input type="number" name="scanner_port_scan_timeout_ms" value="{{ scanner_port_scan_timeout_ms }}" min="10" max="5000" style="max-width:120px">
+          <span class="note" style="display:block; margin-top:2px;">Timeout in milliseconds for TCP port connection attempts (default: 500 ms).</span>
         </div>
       </div>
 

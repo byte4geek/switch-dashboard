@@ -26,10 +26,31 @@
   .fs-btn:hover { color: #e1e4e8; background: #1c2128; }
   .fs-btn.fs-active { color: #58a6ff; background: #1c2128; }
   .header .nav-links a, .header .nav-links button {
-    color: #b1bac4; text-decoration: none; font-size: 13px; padding: 6px 12px;
-    border-radius: 6px; transition: all .2s; background: none; border: none; cursor: pointer;
+    color: #b1bac4;
+    text-decoration: none;
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    transition: all .2s;
+    background: rgba(33, 38, 45, 0.5);
+    border: 1px solid rgba(48, 54, 61, 0.8);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
   }
-  .header .nav-links a:hover, .header .nav-links button:hover { color: #e1e4e8; background: #1c2128; }
+  .header .nav-links a:hover, .header .nav-links button:hover {
+    color: #ffffff;
+    background: #1c2128;
+    border-color: #58a6ff;
+    box-shadow: 0 0 12px rgba(88, 166, 255, 0.2);
+    transform: translateY(-1px);
+  }
+  .header .nav-links a.active {
+    color: #58a6ff;
+    border-color: rgba(56, 139, 253, 0.5);
+    background: rgba(56, 139, 253, 0.1);
+  }
   .header .status { font-size: 13px; color: #b1bac4; }
   .header .status .dot {
     display: inline-block; width: 8px; height: 8px; border-radius: 50%;
@@ -555,7 +576,9 @@
       <button class="fs-btn" data-size="lg" onclick="setFontSize('lg')">L</button>
       <button class="fs-btn" data-size="xl" onclick="setFontSize('xl')">XL</button>
     </span>
+    <a href="/" class="active">📊 Dashboard</a>
     <a href="/map">🕸️ Network Map</a>
+    <a href="/scanner">🌐 Scanner</a>
     <a href="/config">&#9881; Config</a>
     <a href="/backups">💾 Backups</a>
     <a href="/logs">📋 Logs</a>
@@ -654,6 +677,47 @@ let currentGraphSwitchName = '';
 let currentGraphPortLabel = '';
 let speedUnit = 'Bps'; // 'bps' or 'Bps' (bytes per second)
 let pollingPaused = false;
+let countdownSeconds = REFRESH_SECONDS;
+let countdownInterval = null;
+
+function resetCountdown() {
+  countdownSeconds = REFRESH_SECONDS;
+  const liveText = document.getElementById('live-text');
+  if (liveText) {
+    if (pollingPaused) {
+      liveText.textContent = 'Paused';
+    } else {
+      liveText.textContent = `Live (update in ${countdownSeconds}s)`;
+    }
+  }
+}
+
+function startCountdown() {
+  if (countdownInterval) clearInterval(countdownInterval);
+  countdownInterval = setInterval(() => {
+    const liveText = document.getElementById('live-text');
+    const liveDot = document.getElementById('live-dot');
+    if (!liveText || !liveDot) return;
+    
+    if (pollingPaused) {
+      liveText.textContent = 'Paused';
+      liveDot.style.background = '#d29922';
+      return;
+    }
+    
+    countdownSeconds--;
+    if (countdownSeconds <= 0) {
+      liveText.textContent = 'Updating...';
+      liveDot.style.background = '#d29922';
+      countdownSeconds = REFRESH_SECONDS;
+      updateDashboard();
+    } else {
+      liveText.textContent = `Live (update in ${countdownSeconds}s)`;
+      liveDot.style.background = '#3fb950';
+    }
+  }, 1000);
+}
+
 
 const defaultOrder = ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes'];
 let columnOrder = [];
@@ -1012,7 +1076,7 @@ function focusMacSearch() {
 function blurMacSearch() {
   pollingPaused = false;
   document.getElementById('live-dot').style.background = '#3fb950';
-  document.getElementById('live-text').textContent = 'Live';
+  resetCountdown();
 }
 
 let scrollSaveTimeout = null;
@@ -1296,7 +1360,7 @@ async function saveHost(input, mac) {
   }
   pollingPaused = false;
   document.getElementById('live-dot').style.background = '#3fb950';
-  document.getElementById('live-text').textContent = 'Live';
+  resetCountdown();
   updateDashboard();
 }
 
@@ -1316,7 +1380,7 @@ async function saveNote(input) {
   });
   pollingPaused = false;
   document.getElementById('live-dot').style.background = '#3fb950';
-  document.getElementById('live-text').textContent = 'Live';
+  resetCountdown();
   updateDashboard();
 }
 
@@ -1712,7 +1776,7 @@ async function updateDashboard() {
       renderGraph(currentGraphIp, currentGraphPort);
     }
     liveDot.style.background = '#3fb950';
-    liveText.textContent = 'Live';
+    resetCountdown();
   } catch (e) {
     document.getElementById('app').innerHTML =
       `<div style="text-align:center;padding:40px;color:#f85149">Connection error: ${e.message}</div>`;
@@ -2232,7 +2296,7 @@ async function loadSettings() {
 
 loadSettings();
 updateDashboard();
-setInterval(updateDashboard, REFRESH_SECONDS * 1000);
+startCountdown();
 window.addEventListener('resize', () => {
   if (document.getElementById('graph-overlay').classList.contains('open') && currentGraphIp && currentGraphPort) {
     renderGraph(currentGraphIp, currentGraphPort);
