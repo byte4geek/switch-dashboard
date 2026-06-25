@@ -109,7 +109,7 @@ os.makedirs(DEVICE_TEMPLATES_DIR, exist_ok=True)
 VENDORS_TXT_PATH = os.path.join(DATA_DIR, "mac_vendors.txt")
 OUI36_TXT_PATH = os.path.join(DATA_DIR, "oui36.txt")
 OUI_TXT_PATH = os.path.join(DATA_DIR, "oui.txt")
-VERSION = "2026.6.4"
+VERSION = "2026.6.4.1"
 
 
 ieee_vendors_cache = {}

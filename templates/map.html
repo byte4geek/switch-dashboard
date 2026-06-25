@@ -186,14 +186,15 @@
   .link-10g .link-line { stroke: #1f6feb; }
   .link-10g .link-marching { stroke: #58a6ff; }
   
-  .link-2500m .link-line { stroke: #58a6ff; }
-  .link-2500m .link-marching { stroke: #8b949e; }
+  .link-2_5g .link-line, .link-2\.5g .link-line, .link-2500m .link-line { stroke: #58a6ff; }
+  .link-2_5g .link-marching, .link-2\.5g .link-marching, .link-2500m .link-marching { stroke: #8b949e; }
   
-  .link-1000m .link-line { stroke: #3fb950; }
-  .link-1000m .link-marching { stroke: #56d364; }
+  .link-1g .link-line, .link-1000m .link-line { stroke: #3fb950; }
+  .link-1g .link-marching, .link-1000m .link-marching { stroke: #56d364; }
   
-  .link-100m .link-line { stroke: #f08a24; }
-  .link-100m .link-marching { stroke: #f1aa5a; }
+  .link-100m .link-line, .link-10m .link-line { stroke: #f08a24; }
+  .link-100m .link-marching, .link-10m .link-marching { stroke: #f1aa5a; }
+
 
   .link-down .link-line, .link-unknown .link-line { stroke: #484f58; stroke-dasharray: 4, 4; }
   .link-down .link-marching, .link-unknown .link-marching { display: none; }
@@ -965,7 +966,7 @@
       const midY = (y1 + y2) / 2;
       const pathData = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
 
-      const speedClass = `link-${(link.speed || '').toLowerCase().replace('/', '')}`;
+      const speedClass = `link-${(link.speed || '').toLowerCase().replace('/', '').replace('.', '_')}`;
       
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       g.setAttribute('class', `link-group ${speedClass}`);
