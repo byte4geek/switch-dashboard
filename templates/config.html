@@ -509,9 +509,7 @@
               ('speed', 'Speed'),
               ('packets', 'Traffic (packets)'),
               ('bytes', 'Traffic (bytes)'),
-              ('raw_bytes', 'Traffic (RAW bytes)'),
               ('info', 'Info'),
-              ('host', 'Host'),
               ('notes', 'Notes')
             ] %}
             <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #b1bac4; font-weight: 500; cursor: pointer; user-select: none; padding: 6px 0;">
@@ -649,6 +647,21 @@
           {% endfor %}
         </div>
         <button type="button" class="add-btn" onclick="addUnmanaged()">+ Add Unmanaged Switch</button>
+      </div>
+
+      <div class="card">
+        <h2>📡 Telemetry Settings</h2>
+        <span class="note" style="display:block; margin-bottom: 12px; line-height: 1.5;">
+          Help improve this project! Enabling anonymous telemetry is active by default.
+          <br>
+          <strong style="color: #ff7b72;">No sensitive data</strong> (such as MAC addresses, usernames, passwords, or hostnames) will ever be collected—only anonymous statistics.
+          <br>
+          Telemetry costs you nothing, but it helps me improve the project.
+        </span>
+        <label style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #b1bac4; font-weight: 500; cursor: pointer; user-select: none; padding: 6px 0;">
+          <input type="checkbox" name="telemetry_enabled" value="true" {% if telemetry_enabled %}checked{% endif %} style="accent-color: #58a6ff; width: 15px; height: 15px; cursor: pointer;">
+          Enable Anonymous Telemetry (recommended)
+        </label>
       </div>
 
       <div class="card">

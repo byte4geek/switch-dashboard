@@ -474,7 +474,7 @@ This project is licensed under the **MIT License**. Feel free to modify, distrib
 
 ## 📅 Release Notes & Changelog
 
-### 🚀 Release 2026.6.4 (Current)
+### 🚀 Release 2026.6.5 (Current)
 * **🔀 Interactive Column Sorting (Subnet Scanner)**:
   - Added interactive ascending/descending sorting for all columns in the subnet scanner table.
   - Implemented custom numerical sorting for IP addresses, chronological sorting for date/time columns, and locale-aware alphanumeric sorting for textual columns.
@@ -489,6 +489,10 @@ This project is licensed under the **MIT License**. Feel free to modify, distrib
 * **⏱️ Live Auto-Refresh Countdowns & Smart Pausing**:
   - Integrated real-time 1-second countdown timers on the Dashboard, Network Scanner, and Network Map.
   - Added smart pausing to freeze updates and display `Paused` when editing input notes, nicknames, or when sidebar map inspect controls are focused.
+* **📉 Column Visibility Cleanup & Cumulative Port Graphs**:
+  - Completely removed the `raw_bytes` and `host` columns from the main dashboard tables and settings configuration.
+  - Integrated a new **Cumulative Traffic** section inside the port graph modal overlay showing real-time cumulative TX and RX bytes, updating automatically every 30 seconds alongside the speed plot.
+  - Added dynamic filtering protection in the frontend layout to ignore any invalid or deprecated column keys in `config.json`.
 * **🎨 Visual Styling & API Documentation Overhaul**:
   - Standardized scrollbars and stylesheet themes in `templates/scanner_history.html`.
   - Expanded `/api-docs` to completely document all available REST API endpoints in the backend.

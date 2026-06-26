@@ -240,6 +240,9 @@
   .graph-stats { display: flex; gap: 20px; margin-top: 16px; font-size: 12px; flex-wrap: wrap; }
   .graph-stats div { color: #b1bac4; background: #0d1117; padding: 8px 12px; border-radius: 6px; border: 1px solid #21262d; }
   .graph-stats .val { color: #e1e4e8; font-weight: 600; font-family: 'SF Mono', Monaco, monospace; margin-left: 4px; }
+  .graph-cumulative-stats { display: flex; gap: 20px; margin-top: 12px; font-size: 12px; flex-wrap: wrap; border-top: 1px solid #21262d; padding-top: 12px; }
+  .graph-cumulative-stats div { color: #b1bac4; background: #0d1117; padding: 8px 12px; border-radius: 6px; border: 1px solid #21262d; }
+  .graph-cumulative-stats .val { font-weight: 600; font-family: 'SF Mono', Monaco, monospace; margin-left: 4px; }
   
   /* Tabs design */
   .graph-tabs {
@@ -635,6 +638,11 @@
       <div>Current TX <span class="val" id="graph-now-tx">0</span></div>
       <div>Current RX <span class="val" id="graph-now-rx">0</span></div>
     </div>
+    
+    <div class="graph-cumulative-stats">
+      <div>Cumulative TX <span class="val" id="graph-total-tx" style="color: #58a6ff;">0 bytes</span></div>
+      <div>Cumulative RX <span class="val" id="graph-total-rx" style="color: #2ea043;">0 bytes</span></div>
+    </div>
   </div>
 </div>
 
@@ -667,7 +675,7 @@
 
 <script>
 const REFRESH_SECONDS = {{ refresh }};
-const enabledColumns = {{ enabled_columns|tojson }} || ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes'];
+const enabledColumns = {{ enabled_columns|tojson }} || ['port', 'status', 'speed', 'packets', 'bytes', 'info', 'notes'];
 const PORTS_WRAP_THRESHOLD = {{ ports_wrap_threshold|default(0)|tojson }};
 
 let currentGraphIp = null;
@@ -719,7 +727,7 @@ function startCountdown() {
 }
 
 
-const defaultOrder = ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes'];
+const defaultOrder = ['port', 'status', 'speed', 'packets', 'bytes', 'info', 'notes'];
 let columnOrder = [];
 
 const serverColumnWidths = {{ column_widths|tojson }};
@@ -868,7 +876,7 @@ const COLUMN_DEFS = {
       }
       return `
         <div style="display: flex; align-items: center;">
-          <span class="status-badge ${status}" onclick="openGraph('${sw.ip}','${p.port}','${sw.name}','Port ${p.port}')"><span class="status-dot ${status}"></span>${status.toUpperCase()}</span>
+          <span class="status-badge ${status}" onclick="openGraph('${sw.ip}','${p.port}','${sw.name}','Port ${p.port}', ${p.cum_tx || p.tx_bytes || 0}, ${p.cum_rx || p.rx_bytes || 0})"><span class="status-dot ${status}"></span>${status.toUpperCase()}</span>
           ${trustBadgeHtml}
         </div>
       `;
@@ -909,17 +917,6 @@ const COLUMN_DEFS = {
       const cumTx = p.cum_tx || p.tx_bytes || 0;
       const cumRx = p.cum_rx || p.rx_bytes || 0;
       return `${formatBytes(cumTx)}<br>${formatBytes(cumRx)}`;
-    }
-  },
-  raw_bytes: {
-    label: 'TRAFFIC<br><span style="font-weight:400;color:#8b949e">(RAW bytes)</span>',
-    thStyle: 'width:110px',
-    tdClass: 'mono',
-    tdTitle: 'RAW cumulative bytes',
-    render: (p, sw) => {
-      const cumTx = p.cum_tx || p.tx_bytes || 0;
-      const cumRx = p.cum_rx || p.rx_bytes || 0;
-      return `${cumTx.toLocaleString()}<br>${cumRx.toLocaleString()}`;
     }
   },
   info: {
@@ -1496,7 +1493,7 @@ function renderSwitch(sw) {
     return `
       <div style="display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;" 
            title="${titleText}"
-           onclick="openGraph('${sw.ip}','${p.port}','${sw.name}','Port ${p.port}')">
+           onclick="openGraph('${sw.ip}','${p.port}','${sw.name}','Port ${p.port}', ${p.cum_tx || p.tx_bytes || 0}, ${p.cum_rx || p.rx_bytes || 0})">
         <span style="font-size: 10px; color: #8b949e; font-weight: 700; margin-bottom: 2px;">${p.port}</span>
         <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: ${color}; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4)); transition: all 0.15s ease-in-out; transform: scale(1);"
              onmouseover="this.style.transform='scale(1.2)';"
@@ -1531,7 +1528,9 @@ function renderSwitch(sw) {
     </div>
   ` : '';
 
-  const theadCols = columnOrder.map(colId => {
+  const activeColumnOrder = columnOrder.filter(colId => COLUMN_DEFS[colId]);
+
+  const theadCols = activeColumnOrder.map(colId => {
     const colDef = COLUMN_DEFS[colId];
     const label = colDef.getLabel ? colDef.getLabel() : colDef.label;
     const savedWidth = columnWidths[colId];
@@ -1553,7 +1552,7 @@ function renderSwitch(sw) {
   }).join('');
 
   const portRows = (sw.ports || []).map(p => {
-    const cells = columnOrder.map(colId => {
+    const cells = activeColumnOrder.map(colId => {
       const colDef = COLUMN_DEFS[colId];
       const content = colDef.render(p, sw);
       const tdClass = colDef.tdClassFn ? colDef.tdClassFn(p) : (colDef.tdClass || '');
@@ -1720,7 +1719,7 @@ function renderSwitch(sw) {
       <thead><tr>
         ${theadCols}
       </tr></thead>
-      <tbody>${portRows || `<tr><td colspan="${columnOrder.length}" style="padding:20px;text-align:center;color:#b1bac4">No data</td></tr>`}</tbody>
+      <tbody>${portRows || `<tr><td colspan="${activeColumnOrder.length}" style="padding:20px;text-align:center;color:#b1bac4">No data</td></tr>`}</tbody>
     </table>
     ${errorBlock}
     ${macSectionHtml}
@@ -1774,6 +1773,16 @@ async function updateDashboard() {
 
     if (document.getElementById('graph-overlay').classList.contains('open') && currentGraphIp && currentGraphPort) {
       renderGraph(currentGraphIp, currentGraphPort);
+      const currentSw = data.find(sw => sw.ip === currentGraphIp);
+      if (currentSw) {
+        const currentPortObj = (currentSw.ports || []).find(p => p.port === currentGraphPort);
+        if (currentPortObj) {
+          const totalTx = currentPortObj.cum_tx || currentPortObj.tx_bytes || 0;
+          const totalRx = currentPortObj.cum_rx || currentPortObj.rx_bytes || 0;
+          document.getElementById('graph-total-tx').innerHTML = `${totalTx.toLocaleString()} bytes <span style="font-weight:400;color:#8b949e">(${formatBytes(totalTx)})</span>`;
+          document.getElementById('graph-total-rx').innerHTML = `${totalRx.toLocaleString()} bytes <span style="font-weight:400;color:#8b949e">(${formatBytes(totalRx)})</span>`;
+        }
+      }
     }
     liveDot.style.background = '#3fb950';
     resetCountdown();
@@ -1786,7 +1795,7 @@ async function updateDashboard() {
 }
 
 /* ---- Graph ---- */
-function openGraph(ip, port, name, label) {
+function openGraph(ip, port, name, label, totalTx = 0, totalRx = 0) {
   currentGraphIp = ip;
   currentGraphPort = port;
   currentGraphSwitchName = name;
@@ -1794,6 +1803,11 @@ function openGraph(ip, port, name, label) {
   
   document.getElementById('graph-title').textContent = label + ' Speed (' + name + ')';
   document.getElementById('graph-overlay').classList.add('open');
+  
+  // Update cumulative traffic display
+  document.getElementById('graph-total-tx').innerHTML = `${totalTx.toLocaleString()} bytes <span style="font-weight:400;color:#8b949e">(${formatBytes(totalTx)})</span>`;
+  document.getElementById('graph-total-rx').innerHTML = `${totalRx.toLocaleString()} bytes <span style="font-weight:400;color:#8b949e">(${formatBytes(totalRx)})</span>`;
+  
   setGraphRange(currentGraphRange); // trigger render
 }
 

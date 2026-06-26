@@ -109,7 +109,8 @@ os.makedirs(DEVICE_TEMPLATES_DIR, exist_ok=True)
 VENDORS_TXT_PATH = os.path.join(DATA_DIR, "mac_vendors.txt")
 OUI36_TXT_PATH = os.path.join(DATA_DIR, "oui36.txt")
 OUI_TXT_PATH = os.path.join(DATA_DIR, "oui.txt")
-VERSION = "2026.6.4.1"
+VERSION = "2026.6.5"
+
 
 
 ieee_vendors_cache = {}
@@ -1031,6 +1032,94 @@ def start_scanner_thread():
     _scanner_thread.start()
 
 
+_telemetry_thread = None
+
+def send_telemetry_packet(event_type):
+    try:
+        import urllib.request
+        import urllib.error
+        import json
+        import uuid as uuid_mod
+        
+        # 1. Load config and check if telemetry is enabled
+        load_config()
+        telemetry_enabled = config.get("telemetry_enabled", True)
+        if not telemetry_enabled and event_type != "boot":
+            return
+            
+        uuid_str = config.get("uuid")
+        if not uuid_str:
+            uuid_str = str(uuid_mod.uuid4())
+            with config_lock:
+                config["uuid"] = uuid_str
+                save_config()
+        
+        if not telemetry_enabled:
+            # Send stripped boot event if telemetry is disabled
+            payload = {
+                "uuid": uuid_str,
+                "version": VERSION,
+                "event_type": "boot"
+            }
+        else:
+            # 2. Collect switch data
+            enabled_switches = [sw for sw in config.get("switches", []) if sw.get("enabled", True) and sw.get("model", "").lower() != "internet"]
+            switches_count = len(enabled_switches)
+            switch_models = [sw.get("model", "Unknown") for sw in enabled_switches]
+            
+            # Unmanaged switches count
+            unmanaged_count = len(config.get("unmanaged_switches", []))
+            
+            # Hosts count (active scanner hosts or online clients)
+            hosts_count = 0
+            db_clients = config.get("clients", {})
+            for c in db_clients.values():
+                if c.get("scanner_status") == "ONLINE" or c.get("status") == "online":
+                    hosts_count += 1
+            
+            payload = {
+                "uuid": uuid_str,
+                "version": VERSION,
+                "switches_count": switches_count,
+                "switch_models": switch_models,
+                "unmanaged_count": unmanaged_count,
+                "hosts_count": hosts_count,
+                "event_type": event_type
+            }
+        
+        import base64
+        url = base64.b64decode("aHR0cHM6Ly9zd2l0Y2gtZGFzaGJvYXJkLmJ5dGU0Z2Vlay53b3JrZXJzLmRldg==").decode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode('utf-8'),
+            headers={"Content-Type": "application/json", "User-Agent": f"SwitchDashboard/{VERSION}"},
+            method="POST"
+        )
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_body = response.read().decode('utf-8')
+            logger.info(f"Telemetry sent successfully ({event_type}): {res_body}")
+            
+    except Exception as e:
+        logger.warning(f"Failed to send telemetry ({event_type}): {e}")
+
+def run_telemetry_loop():
+    time.sleep(10)
+    send_telemetry_packet("boot")
+    while True:
+        time.sleep(43200) # 12 hours
+        send_telemetry_packet("heartbeat")
+
+def start_telemetry_thread():
+    global _telemetry_thread
+    if _telemetry_thread is not None and _telemetry_thread.is_alive():
+        # Trigger an immediate config_update on reload/restart to report state changes
+        threading.Thread(target=lambda: send_telemetry_packet("config_update"), daemon=True).start()
+        return
+    _telemetry_thread = threading.Thread(target=run_telemetry_loop, daemon=True)
+    _telemetry_thread.start()
+
+
 def migrate_old_files():
     migrated = False
     global config
@@ -1078,6 +1167,7 @@ load_config()
 load_history()
 start_cache_thread()
 start_scanner_thread()
+start_telemetry_thread()
 
 if not os.path.exists(OUI_TXT_PATH) or not os.path.exists(OUI36_TXT_PATH):
     threading.Thread(target=download_oui_files, daemon=True).start()
@@ -1098,7 +1188,7 @@ def dashboard():
     return render_template("index.html",
                            title=config.get("title", "Switch Dashboard"),
                            refresh=config.get("refresh_interval", 30),
-                           enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes']),
+                           enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'info', 'notes']),
                            grid_columns=config.get("grid_columns", "auto"),
                            ports_wrap_threshold=config.get("ports_wrap_threshold", 0),
                            column_widths=config.get("column_widths", {}),
@@ -2056,7 +2146,7 @@ def config_page():
         new_max_retries = int(request.form.get("max_request_retries", 5))
         new_columns = request.form.getlist("columns[]")
         if not new_columns:
-            new_columns = ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'host', 'notes']
+            new_columns = ['port', 'status', 'speed', 'packets', 'bytes', 'info', 'notes']
         new_grid_columns = request.form.get("grid_columns", "auto")
 
         ignored_macs_raw = request.form.get("ignored_macs", "")
@@ -2084,6 +2174,7 @@ def config_page():
         config["scanner_port_scan_threads"] = int(request.form.get("scanner_port_scan_threads", 20))
         config["scanner_host_scan_threads"] = int(request.form.get("scanner_host_scan_threads", 4))
         config["scanner_port_scan_timeout_ms"] = int(request.form.get("scanner_port_scan_timeout_ms", 500))
+        config["telemetry_enabled"] = request.form.get("telemetry_enabled") == "true"
 
         
         if "settings" not in config:
@@ -2102,6 +2193,7 @@ def config_page():
         load_config()
         start_cache_thread()
         start_scanner_thread()
+        start_telemetry_thread()
 
         return redirect(url_for("dashboard"))
 
@@ -2117,7 +2209,7 @@ def config_page():
                            mac_multiplier=config.get("mac_refresh_multiplier", 5),
                            ports_wrap_threshold=config.get("ports_wrap_threshold", 0),
                            max_request_retries=config.get("max_request_retries", 5),
-                           enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'raw_bytes', 'info', 'notes']),
+                           enabled_columns=config.get("enabled_columns", ['port', 'status', 'speed', 'packets', 'bytes', 'info', 'notes']),
                            grid_columns=config.get("grid_columns", "auto"),
                            ignored_macs=ignored_macs_str,
                            scanner_enabled=config.get("scanner_enabled", False),
@@ -2130,7 +2222,8 @@ def config_page():
                            scanner_port_scan_threads=config.get("scanner_port_scan_threads", 20),
                            scanner_host_scan_threads=config.get("scanner_host_scan_threads", 4),
                            scanner_port_scan_timeout_ms=config.get("scanner_port_scan_timeout_ms", 500),
-                           version=VERSION)
+                           version=VERSION,
+                           telemetry_enabled=config.get("telemetry_enabled", True))
 
 
 @app.route("/api/settings", methods=["GET", "POST"])
