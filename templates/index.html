@@ -874,10 +874,19 @@ const COLUMN_DEFS = {
           trustBadgeHtml = `<span class="trust-badge untrusted" title="DHCP Snooping: Untrusted Port">Untrusted</span>`;
         }
       }
+      let duplexText = p.duplex || 'Auto';
+      if (duplexText.toLowerCase() === 'full') {
+        duplexText = 'Full Duplex';
+      } else if (duplexText.toLowerCase() === 'half') {
+        duplexText = 'Half Duplex';
+      }
       return `
-        <div style="display: flex; align-items: center;">
-          <span class="status-badge ${status}" onclick="openGraph('${sw.ip}','${p.port}','${sw.name}','Port ${p.port}', ${p.cum_tx || p.tx_bytes || 0}, ${p.cum_rx || p.rx_bytes || 0})"><span class="status-dot ${status}"></span>${status.toUpperCase()}</span>
-          ${trustBadgeHtml}
+        <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="status-badge ${status}" onclick="openGraph('${sw.ip}','${p.port}','${sw.name}','Port ${p.port}', ${p.cum_tx || p.tx_bytes || 0}, ${p.cum_rx || p.rx_bytes || 0})"><span class="status-dot ${status}"></span>${status.toUpperCase()}</span>
+            ${trustBadgeHtml}
+          </div>
+          <div style="font-size: 10px; color: #8b949e; padding-left: 4px; font-weight: 500;">${duplexText}</div>
         </div>
       `;
     }
@@ -916,16 +925,16 @@ const COLUMN_DEFS = {
     render: (p, sw) => {
       const cumTx = p.cum_tx || p.tx_bytes || 0;
       const cumRx = p.cum_rx || p.rx_bytes || 0;
-      return `${formatBytes(cumTx)}<br>${formatBytes(cumRx)}`;
+      return `TX ${formatBytes(cumTx)}<br>RX ${formatBytes(cumRx)}`;
     }
   },
   info: {
-    getLabel: () => `Info <span id="speed-unit-toggle" class="unit-toggle" onclick="toggleSpeedUnit(event)" title="Toggle speed unit">${speedUnit}</span>`,
-    tdClass: 'col-info',
+    getLabel: () => `<span id="speed-unit-toggle" class="unit-toggle" onclick="toggleSpeedUnit(event)" title="Toggle speed unit">${speedUnit === 'bps' ? 'BPS' : 'B/s'}</span>`,
+    tdClass: 'col-info mono',
     render: (p, sw) => {
-      const duplex = p.duplex || '';
-      const speedNow = (p.speed_tx_bps ? formatBps(p.speed_tx_bps, speedUnit) + ' / ' + (p.speed_rx_bps ? formatBps(p.speed_rx_bps, speedUnit) : '0') : '');
-      return `${duplex}${p.flow_control && p.flow_control !== 'Off' ? ' FC:'+p.flow_control : ''}${speedNow ? '<br><span style="color:#58a6ff">' + speedNow + '</span>' : ''}`;
+      const tx = p.speed_tx_bps || 0;
+      const rx = p.speed_rx_bps || 0;
+      return `TX ${formatBps(tx, speedUnit)}<br>RX ${formatBps(rx, speedUnit)}`;
     }
   },
   notes: {

@@ -109,7 +109,7 @@ os.makedirs(DEVICE_TEMPLATES_DIR, exist_ok=True)
 VENDORS_TXT_PATH = os.path.join(DATA_DIR, "mac_vendors.txt")
 OUI36_TXT_PATH = os.path.join(DATA_DIR, "oui36.txt")
 OUI_TXT_PATH = os.path.join(DATA_DIR, "oui.txt")
-VERSION = "2026.6.5"
+VERSION = "2026.7.1"
 
 
 
@@ -354,8 +354,19 @@ def load_history():
                     for k, v in raw.items():
                         parts = k.split(":")
                         if len(parts) == 2:
-                            history_hourly[(parts[0], parts[1])] = v
-                logger.info("Loaded hourly history successfully.")
+                            cleaned_v = []
+                            for pt in v:
+                                tx_val = pt.get("tx", 0)
+                                rx_val = pt.get("rx", 0)
+                                if tx_val > 12_500_000_000:
+                                    tx_val = 0
+                                if rx_val > 12_500_000_000:
+                                    rx_val = 0
+                                pt["tx"] = tx_val
+                                pt["rx"] = rx_val
+                                cleaned_v.append(pt)
+                            history_hourly[(parts[0], parts[1])] = cleaned_v
+                logger.info("Loaded hourly history successfully (scrubbed spikes).")
             except Exception as e:
                 logger.error(f"Error loading hourly history: {e}")
                 
@@ -366,8 +377,19 @@ def load_history():
                     for k, v in raw.items():
                         parts = k.split(":")
                         if len(parts) == 2:
-                            history_daily[(parts[0], parts[1])] = v
-                logger.info("Loaded daily history successfully.")
+                            cleaned_v = []
+                            for pt in v:
+                                tx_val = pt.get("tx", 0)
+                                rx_val = pt.get("rx", 0)
+                                if tx_val > 12_500_000_000:
+                                    tx_val = 0
+                                if rx_val > 12_500_000_000:
+                                    rx_val = 0
+                                pt["tx"] = tx_val
+                                pt["rx"] = rx_val
+                                cleaned_v.append(pt)
+                            history_daily[(parts[0], parts[1])] = cleaned_v
+                logger.info("Loaded daily history successfully (scrubbed spikes).")
             except Exception as e:
                 logger.error(f"Error loading daily history: {e}")
 
@@ -549,14 +571,37 @@ def update_cache():
                 cur_tx = p.get("tx_bytes", 0)
                 cur_rx = p.get("rx_bytes", 0)
 
-                if cur_tx >= last["tx"]:
-                    delta_tx = cur_tx - last["tx"]
+                # Determine baseline or calculation delta
+                ts_exists = (last.get("ts") is not None)
+                
+                if not ts_exists:
+                    # First poll of this dashboard instance: establish baseline
+                    delta_tx = 0
+                    delta_rx = 0
                 else:
-                    delta_tx = cur_tx
-                if cur_rx >= last["rx"]:
-                    delta_rx = cur_rx - last["rx"]
-                else:
-                    delta_rx = cur_rx
+                    # Calculate delta for TX
+                    if cur_tx >= last["tx"]:
+                        delta_tx = cur_tx - last["tx"]
+                    else:
+                        # Counter wrapped or switch rebooted
+                        if last["tx"] > 2_000_000_000:
+                            # Highly likely 32-bit counter wrap
+                            delta_tx = (4_294_967_296 - last["tx"]) + cur_tx
+                        else:
+                            # Likely switch reboot, counter reset to 0
+                            delta_tx = cur_tx
+                    
+                    # Calculate delta for RX
+                    if cur_rx >= last["rx"]:
+                        delta_rx = cur_rx - last["rx"]
+                    else:
+                        # Counter wrapped or switch rebooted
+                        if last["rx"] > 2_000_000_000:
+                            # Highly likely 32-bit counter wrap
+                            delta_rx = (4_294_967_296 - last["rx"]) + cur_rx
+                        else:
+                            # Likely switch reboot, counter reset to 0
+                            delta_rx = cur_rx
 
                 # Sanity check: prevent impossible speed spikes from counter rollovers/glitches
                 last_ts = last.get("ts")
@@ -1088,6 +1133,7 @@ def send_telemetry_packet(event_type):
             }
         
         import base64
+        
         url = base64.b64decode("aHR0cHM6Ly9zd2l0Y2gtZGFzaGJvYXJkLmJ5dGU0Z2Vlay53b3JrZXJzLmRldg==").decode("utf-8")
         req = urllib.request.Request(
             url,
@@ -1185,6 +1231,7 @@ def _format_bps(bps):
 
 @app.route("/")
 def dashboard():
+    load_config()
     return render_template("index.html",
                            title=config.get("title", "Switch Dashboard"),
                            refresh=config.get("refresh_interval", 30),
@@ -2197,6 +2244,7 @@ def config_page():
 
         return redirect(url_for("dashboard"))
 
+    load_config()
     settings = config.get("settings", {})
     ignored_macs_list = settings.get("ignored_macs", [])
     ignored_macs_str = ", ".join(ignored_macs_list)
