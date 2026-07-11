@@ -21,6 +21,7 @@ settings.json
 history_hourly.json
 history_daily.json
 backup_test_temp/
+data/
 
 # Switch configuration backups
 backup/

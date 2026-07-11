@@ -1088,8 +1088,8 @@ def send_telemetry_packet(event_type):
         
         # 1. Load config and check if telemetry is enabled
         load_config()
-        telemetry_enabled = config.get("telemetry_enabled", True)
-        if not telemetry_enabled and event_type != "boot":
+        telemetry_enabled = config.get("telemetry_enabled", False)
+        if not telemetry_enabled:
             return
             
         uuid_str = config.get("uuid")
@@ -1098,43 +1098,33 @@ def send_telemetry_packet(event_type):
             with config_lock:
                 config["uuid"] = uuid_str
                 save_config()
+    
+        # 2. Collect switch data
+        enabled_switches = [sw for sw in config.get("switches", []) if sw.get("enabled", True) and sw.get("model", "").lower() != "internet"]
+        switches_count = len(enabled_switches)
+        switch_models = [sw.get("model", "Unknown") for sw in enabled_switches]
         
-        if not telemetry_enabled:
-            # Send stripped boot event if telemetry is disabled
-            payload = {
-                "uuid": uuid_str,
-                "version": VERSION,
-                "event_type": "boot"
-            }
-        else:
-            # 2. Collect switch data
-            enabled_switches = [sw for sw in config.get("switches", []) if sw.get("enabled", True) and sw.get("model", "").lower() != "internet"]
-            switches_count = len(enabled_switches)
-            switch_models = [sw.get("model", "Unknown") for sw in enabled_switches]
-            
-            # Unmanaged switches count
-            unmanaged_count = len(config.get("unmanaged_switches", []))
-            
-            # Hosts count (active scanner hosts or online clients)
-            hosts_count = 0
-            db_clients = config.get("clients", {})
-            for c in db_clients.values():
-                if c.get("scanner_status") == "ONLINE" or c.get("status") == "online":
-                    hosts_count += 1
-            
-            payload = {
-                "uuid": uuid_str,
-                "version": VERSION,
-                "switches_count": switches_count,
-                "switch_models": switch_models,
-                "unmanaged_count": unmanaged_count,
-                "hosts_count": hosts_count,
-                "event_type": event_type
-            }
+        # Unmanaged switches count
+        unmanaged_count = len(config.get("unmanaged_switches", []))
         
-        import base64
+        # Hosts count (active scanner hosts or online clients)
+        hosts_count = 0
+        db_clients = config.get("clients", {})
+        for c in db_clients.values():
+            if c.get("scanner_status") == "ONLINE" or c.get("status") == "online":
+                hosts_count += 1
         
-        url = base64.b64decode("aHR0cHM6Ly9zd2l0Y2gtZGFzaGJvYXJkLmJ5dGU0Z2Vlay53b3JrZXJzLmRldg==").decode("utf-8")
+        payload = {
+            "uuid": uuid_str,
+            "version": VERSION,
+            "switches_count": switches_count,
+            "switch_models": switch_models,
+            "unmanaged_count": unmanaged_count,
+            "hosts_count": hosts_count,
+            "event_type": event_type
+        }
+               
+        url = "https://switch-dashboard.byte4geek.workers.dev"
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode('utf-8'),
@@ -2271,7 +2261,7 @@ def config_page():
                            scanner_host_scan_threads=config.get("scanner_host_scan_threads", 4),
                            scanner_port_scan_timeout_ms=config.get("scanner_port_scan_timeout_ms", 500),
                            version=VERSION,
-                           telemetry_enabled=config.get("telemetry_enabled", True))
+                           telemetry_enabled=config.get("telemetry_enabled", False))
 
 
 @app.route("/api/settings", methods=["GET", "POST"])
