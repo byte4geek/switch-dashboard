@@ -1,0 +1,61 @@
+# Configuration file for KP-9000-9XHML-X from h_m_b user
+model: "KP-9000-9XHML-X"
+manufacturer: "KeepLiNK"
+
+device_info:
+  url: "/info.cgi"
+  method: "key_value_grid"
+  mappings:
+    mac: "MAC Address"
+    ip: "IP Address"
+    firmware: "Firmware Version"
+    model: "Device Model"
+
+# KeepLiNK parses active ports configuration directly from /port.cgi
+ports:
+  url: "/port.cgi"
+  source: "port_table"
+  port_table_match: "Actual"  # searches for standard port status table
+  columns:
+    port: 0
+    admin_state: 1
+    actual_link: 3
+    flow_control: 5
+
+statistics:
+  url: "/port.cgi?page=stats"
+  method: "header_aware"
+  terms:
+    tx_packets: ["txgood"]
+    rx_packets: ["rxgood"]
+
+igmp:
+  url: "/igmp.cgi?page=dump"
+  enable_input_name: "enable_igmp"
+  table_header_keywords: ["IP Address", "Port", "VLAN ID"]
+
+jumbo_frame:
+  url: "/fwd.cgi?page=jumboframe"
+  enable_input_name: "enable_jumbo"
+  select_name: "jumboframe"
+
+# MAC Address Table settings
+mac_table:
+  url: "/mac.cgi?page=fwd_tbl"
+  page_parameter: "pageidx"
+  perpage_parameter: "perpage"
+  perpage_value: "3"
+  cmd_parameter: "cmd"
+  cmd_value: "goto"
+
+backup:
+  url: "/config_back.cgi?cmd=conf_backup"
+  referer_path: "/config_back.cgi"
+  method: "GET"
+
+reboot:
+  url: "/reboot.cgi"
+  referer_path: "/reboot.cgi"
+  method: "POST"
+  post_data:
+    cmd: "reboot"
