@@ -1,0 +1,73 @@
+model: "TL-SG108E"
+manufacturer: "TP-Link"
+
+login:
+  required: true
+  url: "/logon.cgi"
+  method: "POST"
+  referer_path: "/logon.cgi"
+  post_data:
+    username: "{{username}}"
+    password: "{{password}}"
+    logon: "Login"
+
+device_info:
+  url: "/SystemInfoRpm.htm"
+  method: "key_value_grid"
+  mappings:
+    mac: "MAC Address"
+    ip: "IP Address"
+    firmware: "Firmware Version"
+
+ports:
+  url: "/PortSettingRpm.htm"
+  format: "javascript_arrays"
+  arrays:
+    state: "state"
+    speed: "spd_act"
+    flow_control: "fc_act"
+  speed_values:
+    ["Link Down", "Auto", "10MH", "10MF", "100MH", "100MF", "1000MF", ""]
+  flow_values: ["Off", "On"]
+
+igmp:
+  url: "/IgmpSnoopingRpm.htm"
+  format: "javascript_object"
+  state: "state"
+  suppression_state: "suppressionState"
+  count: "count"
+  arrays:
+    ip: "ipStr"
+    vlan: "vlanStr"
+    ports: "portStr"
+    lag_members: "lagMbrs"
+  enable_input_name: "igmp_mode"
+  enable_value: "1"
+  suppression_input_name: "reportSu_mode"
+  suppression_value: "1"
+  table_header_keywords: ["IP Address", "VLAN ID", "Ports"]
+
+statistics:
+  url: "/PortStatisticsRpm.htm"
+  format: "javascript_arrays"
+  arrays:
+    state: "state"
+    link_status: "link_status"
+    counters: "pkts"
+  link_values:
+    [
+      "Link Down",
+      "Auto",
+      "10Half",
+      "10Full",
+      "100Half",
+      "100Full",
+      "1000Full",
+      "",
+    ]
+  counter_stride: 4
+  tx_packets_offset: 0
+  rx_packets_offset: 2
+
+mac_table:
+  enabled: false

@@ -8,10 +8,13 @@ NOTE: This software is created in vibe coding using Antigravity/Gemini
 
 ![Dashboard](https://raw.githubusercontent.com/byte4geek/switch-dashboard/refs/heads/main/images/dashboard.png)
 
-This dashboarb support these device:
+Supported devices include:
  - [HORACO HC-SWTGW218AS](https://s.click.aliexpress.com/e/_c31NG1u1)
  - [HORACO HC-SWTGW215AS](https://s.click.aliexpress.com/e/_c3hKfeLJ)
  - [keepLink KP9000-9XH-X](https://s.click.aliexpress.com/e/_c4UKLfOv)
+ - TP-Link TL-SG108E (port telemetry, packet counters, IGMP state, and report-message suppression)
+
+> **Important operational warning:** While switch scraping is running, the switch's embedded web interface may not be usable because the scraper continuously occupies the device's HTTP session. Stop or disable dashboard polling before using the switch's normal web pages. This is especially important for the TP-Link TL-SG108E.
 
 This tool support [RTLPlaygroung firmware](https://github.com/logicog/RTLPlayground) too.
 
@@ -47,6 +50,7 @@ This tool support [RTLPlaygroung firmware](https://github.com/logicog/RTLPlaygro
 * **Flexible Search & Filtering**: Multi-column text filtering makes searching by VLAN, Port, MAC, or status trivial.
 * **Interactive Height Controls**: Dynamically drag to resize table heights (saves user preference to `settings.json` on disk).
 * **Manual Re-indexing**: On-demand POST request scraper forces active switches to dump fresh bridge routing entries.
+* **TP-Link TL-SG108E limitation**: MAC forwarding-table scraping is not currently supported for this model. Port telemetry and packet counters remain supported.
 
 ![MAC_TABLE](https://raw.githubusercontent.com/byte4geek/switch-dashboard/refs/heads/main/images/mac_table.png)
 
@@ -63,6 +67,7 @@ This tool support [RTLPlaygroung firmware](https://github.com/logicog/RTLPlaygro
 * **Global Configuration Tracking**: Scrapes global enable state for DHCP Snooping and IGMP Snooping, rendering status badges directly on the dashboard.
 * **Port-Level Trust Badges**: Real-time port trust classifications are fetched from `/port.cgi` to show customized untrusted and trusted labels.
 * **IGMP Multicast Tables**: Fully parsed multicast group database extracted from `/igmp.cgi?page=dump` displayed in an expandable glassmorphic table.
+* **TP-Link TL-SG108E**: IGMP state is read from its JavaScript-backed `/IgmpSnoopingRpm.htm` page, including multicast groups and report-message suppression.
 
 ### 8. Jumbo Frame Configuration Status & Size
 * **Frame Size Scraper**: Inspects `/fwd.cgi?page=jumboframe` to retrieve Jumbo Frame configuration status and parse the exact selected frame size (e.g. `9216Bytes`).
@@ -284,6 +289,8 @@ To run the container manually with the Docker CLI:
 ## 🔌 Customizing with YAML Device Templates
 
 The dashboard supports template-driven scraping. This enables users to add support for any managed switch model simply by writing a declarative YAML blueprint and placing it in the `./device-templates/` directory.
+
+The TP-Link TL-SG108E is supported through `device-templates/TL-SG108E.yaml`. Its firmware exposes port and IGMP data through JavaScript-generated page data, which the scraper decodes directly. MAC forwarding-table scraping is not supported for this model.
 
 ### How to Create a Template
 A switch template is named `<model_name>.yaml` (where `<model_name>` matches the **model** field configured for the switch in `/config` or `config.json`).

@@ -282,10 +282,12 @@ class HCSwitchScraper:
             req = urllib.request.Request(f"{self.base_url}{login_url}", data=data, headers=headers, method=method)
             try:
                 r = self._open_request_with_retry(req, timeout=45, max_retries=5)
-                r.read()
-                if "login.html" in r.geturl():
-                    logger.warning(f"[_login] Custom login redirect returned login.html on {self.ip}. Login failed!")
-                    raise Exception("Login redirected to login.html")
+                response_body = r.read().decode("utf-8", errors="replace")
+                if "login.html" in r.geturl() or self._looks_like_login_page(response_body):
+                    if not self._cj or not any(self._cj):
+                        logger.warning(f"[_login] Custom login request returned the login page without a session cookie on {self.ip}. Trying fallback.")
+                        raise Exception("Login returned the login page without a session cookie")
+                    logger.debug(f"[_login] Login page body returned with an established session cookie on {self.ip}; continuing.")
                 logger.debug(f"[_login] Custom template-driven login response read successfully")
                 return
             except Exception as e:
@@ -407,6 +409,17 @@ class HCSwitchScraper:
         try:
             r = self._open_request_with_retry(req, timeout=45, max_retries=5)
             res = r.read().decode("utf-8", errors="replace")
+            if self._looks_like_login_page(res):
+                logger.warning(f"[_fetch] Login page returned for {path} on {self.ip}. Re-authenticating once.")
+                self._opener = None
+                self._cj = None
+                self._login()
+                retry_req = urllib.request.Request(f"{self.base_url}{path}", headers=headers)
+                retry_response = self._open_request_with_retry(retry_req, timeout=45, max_retries=2)
+                res = retry_response.read().decode("utf-8", errors="replace")
+                if self._looks_like_login_page(res):
+                    logger.error(f"[_fetch] Re-authentication still returned the login page for {path} on {self.ip}.")
+                    return None
             logger.debug(f"[_fetch] Path {path} successfully fetched (size: {len(res)} characters)")
             return res
         except Exception as e:
@@ -444,6 +457,112 @@ class HCSwitchScraper:
             return int(val)
         except ValueError:
             return 0
+
+    def _extract_javascript_array(self, html, name):
+        if not html or not name:
+            return []
+
+        name_pattern = re.escape(name)
+        patterns = [
+            rf"\bvar\s+{name_pattern}\s*=\s*\[([^\]]*)\]",
+            rf"\b{name_pattern}\s*:\s*\[([^\]]*)\]",
+            rf"\b{name_pattern}\s*=\s*\[([^\]]*)\]",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, html, re.IGNORECASE)
+            if not match:
+                continue
+
+            values = []
+            for raw_value in match.group(1).split(","):
+                value = raw_value.strip().strip("'\"")
+                if not value:
+                    continue
+                try:
+                    values.append(int(value))
+                except ValueError:
+                    try:
+                        values.append(int(value, 0))
+                    except ValueError:
+                        values.append(value)
+            return values
+        return []
+
+    def _extract_javascript_scalar(self, html, name):
+        if not html or not name:
+            return None
+
+        match = re.search(rf"\b{re.escape(name)}\s*:\s*([^,}}\s]+)", html, re.IGNORECASE)
+        if not match:
+            return None
+
+        value = match.group(1).strip().strip("'\"")
+        try:
+            return int(value, 0)
+        except ValueError:
+            return value
+
+    def _decode_igmp_port_bitmap(self, bitmap, lag_members=None):
+        try:
+            bitmap = int(bitmap)
+        except (TypeError, ValueError):
+            return str(bitmap or "")
+
+        lag_ports = 0
+        lag_names = []
+        for index, mask in enumerate(lag_members or []):
+            try:
+                mask = int(mask)
+            except (TypeError, ValueError):
+                continue
+            if bitmap & mask:
+                bitmap &= ~mask
+                lag_ports |= 1 << index
+
+        port_names = []
+        port = 0
+        while port < 32:
+            if bitmap & (1 << port):
+                start = port + 1
+                end = start
+                while port + 1 < 32 and bitmap & (1 << (port + 1)):
+                    port += 1
+                    end = port + 1
+                port_names.append(str(start) if start == end else f"{start}-{end}")
+            port += 1
+
+        for index in range(32):
+            if lag_ports & (1 << index):
+                lag_names.append(f"LAG{index + 1}")
+
+        return ",".join(lag_names + port_names)
+
+    def _decode_javascript_link_mode(self, mode):
+        mode = str(mode or "").strip()
+        normalized = mode.lower()
+        if normalized in ("", "link down", "down", "disabled"):
+            return "down", "Link Down", "Auto", ""
+
+        if normalized == "auto":
+            return "up", "Link Up", "Auto", ""
+
+        match = re.match(r"^(\d+)([mMgG]?)(Half|Full|[hHfF])$", mode, re.IGNORECASE)
+        if match:
+            speed = match.group(1) + (match.group(2).upper() or "M")
+            duplex = "Half" if match.group(3).lower().startswith("h") else "Full"
+            return "up", "Link Up", speed, duplex
+
+        return "up", "Link Up", mode, ""
+
+    def _looks_like_login_page(self, html):
+        if not html:
+            return False
+        normalized = html.lower()
+        return (
+            "user name:" in normalized
+            and "logon.cgi" in normalized
+            and "name=\"username\"" in normalized
+        )
 
     def scrape(self):
         with get_switch_lock(self.ip):
@@ -1158,6 +1277,9 @@ class HCSwitchScraper:
             template = self._load_template()
             if template:
                 mac_cfg = template.get("mac_table", {})
+                if mac_cfg.get("enabled", True) is False:
+                    logger.debug(f"MAC table scraping is disabled for {self.ip}")
+                    return []
                 if mac_cfg:
                     try:
                         res = self._scrape_mac_table_with_template(mac_cfg)
@@ -1406,7 +1528,52 @@ class HCSwitchScraper:
             
             html = self._fetch(url)
             if html:
-                if ports_cfg.get("format") == "json" or template.get("format") == "json":
+                if ports_cfg.get("format") == "javascript_arrays":
+                    arrays = ports_cfg.get("arrays", {})
+                    speed_values = ports_cfg.get("speed_values", [])
+                    flow_values = ports_cfg.get("flow_values", [])
+                    state_array = self._extract_javascript_array(html, arrays.get("state", "state"))
+                    speed_array = self._extract_javascript_array(html, arrays.get("speed", "spd_act"))
+                    flow_array = self._extract_javascript_array(html, arrays.get("flow_control", "fc_act"))
+                    port_total = min(self.port_count, len(state_array))
+
+                    for index in range(port_total):
+                        state_code = state_array[index]
+                        speed_code = speed_array[index] if index < len(speed_array) else 0
+                        flow_code = flow_array[index] if index < len(flow_array) else 0
+                        enabled = state_code != 0
+                        speed_mode = (
+                            speed_values[speed_code]
+                            if isinstance(speed_code, int) and 0 <= speed_code < len(speed_values)
+                            else str(speed_code)
+                        )
+
+                        if not enabled:
+                            status_val = "disable"
+                            link_val = "Disabled"
+                            speed_val = "Disabled"
+                            duplex_val = "Disabled"
+                        else:
+                            status_val, link_val, speed_val, duplex_val = self._decode_javascript_link_mode(speed_mode)
+
+                        flow_val = (
+                            flow_values[flow_code]
+                            if isinstance(flow_code, int) and 0 <= flow_code < len(flow_values)
+                            else str(flow_code)
+                        )
+                        ports.append({
+                            "port": str(index + 1),
+                            "status": status_val,
+                            "link": link_val,
+                            "speed": speed_val,
+                            "duplex": duplex_val,
+                            "flow_control": flow_val,
+                            "tx_packets": 0,
+                            "rx_packets": 0,
+                            "tx_bytes": 0,
+                            "rx_bytes": 0,
+                        })
+                elif ports_cfg.get("format") == "json" or template.get("format") == "json":
                     try:
                         import json
                         port_list = json.loads(html)
@@ -1598,7 +1765,43 @@ class HCSwitchScraper:
         if stats_cfg and not has_stats:
             url = stats_cfg.get("url", "/port.cgi?page=stats")
             stats_html = self._fetch(url)
-            if stats_html:
+            if stats_html and stats_cfg.get("format") == "javascript_arrays":
+                arrays = stats_cfg.get("arrays", {})
+                state_array = self._extract_javascript_array(stats_html, arrays.get("state", "state"))
+                link_array = self._extract_javascript_array(stats_html, arrays.get("link_status", "link_status"))
+                counter_array = self._extract_javascript_array(stats_html, arrays.get("counters", "pkts"))
+                stride = int(stats_cfg.get("counter_stride", 4))
+                tx_offset = int(stats_cfg.get("tx_packets_offset", 0))
+                rx_offset = int(stats_cfg.get("rx_packets_offset", 2))
+                speed_values = stats_cfg.get("link_values", [])
+
+                for index, port in enumerate(ports):
+                    if index < len(state_array) and state_array[index] == 0:
+                        port["status"] = "disable"
+                        port["link"] = "Disabled"
+                        continue
+
+                    link_code = link_array[index] if index < len(link_array) else 0
+                    link_mode = (
+                        speed_values[link_code]
+                        if isinstance(link_code, int) and 0 <= link_code < len(speed_values)
+                        else str(link_code)
+                    )
+                    status_val, link_val, speed_val, duplex_val = self._decode_javascript_link_mode(link_mode)
+                    port["status"] = status_val
+                    port["link"] = link_val
+                    port["speed"] = speed_val
+                    port["duplex"] = duplex_val
+
+                    tx_index = index * stride + tx_offset
+                    rx_index = index * stride + rx_offset
+                    tx_packets = self._parse_counter(str(counter_array[tx_index])) if tx_index < len(counter_array) else 0
+                    rx_packets = self._parse_counter(str(counter_array[rx_index])) if rx_index < len(counter_array) else 0
+                    port["tx_packets"] = tx_packets
+                    port["rx_packets"] = rx_packets
+                    port["tx_bytes"] = tx_packets * 800
+                    port["rx_bytes"] = rx_packets * 800
+            elif stats_html:
                 soup = BeautifulSoup(stats_html, "html.parser")
                 stats_table = soup.find("table")
                 if stats_table:
@@ -1694,35 +1897,78 @@ class HCSwitchScraper:
             html = self._fetch(url)
             if html:
                 soup = BeautifulSoup(html, "html.parser")
-                
-                enable_input_name = igmp_cfg.get("enable_input_name", "enable_igmp")
-                enable_input = soup.find("input", {"name": enable_input_name})
-                if enable_input and enable_input.has_attr("checked"):
-                    igmp["enabled"] = True
+
+                if igmp_cfg.get("format") == "javascript_object":
+                    state_name = igmp_cfg.get("state", "state")
+                    suppression_name = igmp_cfg.get("suppression_state", "suppressionState")
+                    count_name = igmp_cfg.get("count", "count")
+                    arrays = igmp_cfg.get("arrays", {})
+                    state = self._extract_javascript_scalar(html, state_name)
+                    suppression_state = self._extract_javascript_scalar(html, suppression_name)
+                    count = self._extract_javascript_scalar(html, count_name)
+                    ip_values = self._extract_javascript_array(html, arrays.get("ip", "ipStr"))
+                    vlan_values = self._extract_javascript_array(html, arrays.get("vlan", "vlanStr"))
+                    port_values = self._extract_javascript_array(html, arrays.get("ports", "portStr"))
+                    lag_values = self._extract_javascript_array(html, arrays.get("lag_members", "lagMbrs"))
+                    igmp["enabled"] = bool(state)
+                    igmp["report_suppression"] = bool(suppression_state)
+                    entry_count = int(count) if isinstance(count, (int, float)) else 0
+                    for index in range(min(entry_count, len(ip_values))):
+                        ip_value = int(ip_values[index])
+                        ip_address = ".".join(str((ip_value >> shift) & 0xff) for shift in (24, 16, 8, 0))
+                        vlan = str(vlan_values[index]) if index < len(vlan_values) else ""
+                        bitmap = port_values[index] if index < len(port_values) else 0
+                        igmp["entries"].append({
+                            "vlan": vlan,
+                            "ip": ip_address,
+                            "ports": self._decode_igmp_port_bitmap(bitmap, lag_values),
+                        })
+                else:
+                    enable_input_name = igmp_cfg.get("enable_input_name", "enable_igmp")
+                    enable_inputs = soup.find_all("input", {"name": enable_input_name})
+                    enable_value = igmp_cfg.get("enable_value")
+                    for enable_input in enable_inputs:
+                        if enable_input.has_attr("checked") and (
+                            enable_value is None or str(enable_input.get("value", "")) == str(enable_value)
+                        ):
+                            igmp["enabled"] = True
+                            break
+
+                    suppression_input_name = igmp_cfg.get("suppression_input_name")
+                    if suppression_input_name:
+                        suppression_value = igmp_cfg.get("suppression_value")
+                        suppression_enabled = False
+                        for suppression_input in soup.find_all("input", {"name": suppression_input_name}):
+                            if suppression_input.has_attr("checked") and (
+                                suppression_value is None or str(suppression_input.get("value", "")) == str(suppression_value)
+                            ):
+                                suppression_enabled = True
+                                break
+                        igmp["report_suppression"] = suppression_enabled
                     
-                entries = []
-                table = None
-                keywords = igmp_cfg.get("table_header_keywords", ["IP Address", "Port", "VLAN ID"])
-                for t in soup.find_all("table"):
-                    text_content = t.get_text()
-                    if all(k in text_content for k in keywords):
-                        table = t
-                        break
-                        
-                if table:
-                    rows = table.find_all("tr")[1:]
-                    for row in rows:
-                        cells = row.find_all("td")
-                        if len(cells) >= 3:
-                            ip_addr = cells[0].get_text(strip=True)
-                            ports_text = cells[1].get_text(strip=True)
-                            vlan = cells[2].get_text(strip=True)
-                            entries.append({
-                                "vlan": vlan,
-                                "ip": ip_addr,
-                                "ports": ports_text
-                            })
-                igmp["entries"] = entries
+                    entries = []
+                    table = None
+                    keywords = igmp_cfg.get("table_header_keywords", ["IP Address", "Port", "VLAN ID"])
+                    for t in soup.find_all("table"):
+                        text_content = t.get_text()
+                        if all(k in text_content for k in keywords):
+                            table = t
+                            break
+
+                    if table:
+                        rows = table.find_all("tr")[1:]
+                        for row in rows:
+                            cells = row.find_all("td")
+                            if len(cells) >= 3:
+                                ip_addr = cells[0].get_text(strip=True)
+                                ports_text = cells[1].get_text(strip=True)
+                                vlan = cells[2].get_text(strip=True)
+                                entries.append({
+                                    "vlan": vlan,
+                                    "ip": ip_addr,
+                                    "ports": ports_text
+                                })
+                    igmp["entries"] = entries
 
         # 6. Scraping Jumbo Frame
         jumbo_frame = {"enabled": False, "size": "Disabled"}
